@@ -1,0 +1,126 @@
+# Production stack for self-hosting (TrueNAS SCALE) behind an existing Cloudflare
+# Tunnel. Standalone — run on its own, NOT layered over docker-compose.yml:
+#
+#   cp .env.prod.example .env   # then edit secrets/hostnames
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Only `caddy` publishes a host port (CADDY_HTTP_PORT). Point your already-running
+# cloudflared ingress at http://<nas-ip>:${CADDY_HTTP_PORT}. Postgres, Redis and
+# MinIO stay internal to the compose network (no host ports) — progress photos are
+# streamed through the owner-scoped API, never via public MinIO URLs.
+name: bbtracker-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bbtracker}
+      POSTGRES_USER: ${POSTGRES_USER:-bbtracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bbtracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - miniodata:/data
+    # Internal only. The bucket is auto-created on the first photo upload. To reach
+    # the MinIO console for admin, temporarily uncomment (bound to localhost only):
+    # ports:
+    #   - "127.0.0.1:9001:9001"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.prod}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      # gunicorn is listening once a TCP connect to :8000 succeeds (avoids the
+      # HTTP host/SSL-redirect machinery).
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('127.0.0.1', 8000), timeout=3).close()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # SSR talks to Django directly on the internal network.
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:8000}
+      # Public origin so adapter-node validates request origins behind the proxy.
+      ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env, e.g. https://bbtracker.example.com}
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-20M}
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      # Static asset → served without SSR (no backend call), so this never deadlocks.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/icon-192.png || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    # The only outward-facing port. Choose a host port NOT already in use on the NAS
+    # (avoid 32400, 3000, 81, 444). Point cloudflared at http://<nas-ip>:${CADDY_HTTP_PORT}.
+    ports:
+      - "${CADDY_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  caddy_data:
+  caddy_config:

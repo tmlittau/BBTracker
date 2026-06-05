@@ -118,7 +118,7 @@
 	<form onsubmit={saveResults}>
 		<label class="flex flex-col text-xs text-neutral-500">
 			Date (required)
-			<input type="date" required bind:value={resultsDate} class="mt-1 w-44 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100" />
+			<input type="date" required bind:value={resultsDate} class="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 sm:w-44" />
 		</label>
 		<p class="mt-3 text-xs text-neutral-500">Enter only what you have — blank markers are skipped.</p>
 		<div class="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-2">

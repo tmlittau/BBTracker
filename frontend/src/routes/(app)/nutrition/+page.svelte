@@ -256,7 +256,7 @@
 						<div class="flex items-center gap-2">
 							<span class="cursor-grab select-none text-neutral-600" aria-hidden="true">⠿</span>
 							<input
-								class="w-48 rounded bg-transparent font-medium text-neutral-100 outline-none focus:bg-neutral-900 focus:px-2 focus:py-1"
+								class="w-full rounded bg-transparent font-medium text-neutral-100 outline-none focus:bg-neutral-900 focus:px-2 focus:py-1 sm:w-48"
 								value={m.name}
 								aria-label="Meal name"
 								onchange={(e) => renameMeal(m, e.currentTarget.value)}
