@@ -1,0 +1,145 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import {
+		protocolsApi,
+		FREQUENCIES,
+		type DoseLog,
+		type Protocol,
+		type ProtocolItem
+	} from '$lib/protocols/api';
+
+	let protocols = $state<Protocol[]>([]);
+	let recentDoses = $state<DoseLog[]>([]);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
+	let logging = $state<number | null>(null);
+
+	const active = $derived(protocols.find((p) => p.is_active) ?? null);
+
+	async function load() {
+		[protocols, recentDoses] = await Promise.all([protocolsApi.protocols(), protocolsApi.doses()]);
+	}
+
+	onMount(async () => {
+		try {
+			await load();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			loading = false;
+		}
+	});
+
+	// One-tap log of an item's planned dose against the active protocol.
+	async function quickLog(item: ProtocolItem) {
+		logging = item.id;
+		error = null;
+		try {
+			await protocolsApi.logDose({
+				protocol_item: item.id,
+				compound: item.compound,
+				supplement: item.supplement,
+				taken_at: new Date().toISOString(),
+				amount: item.dose_amount ?? '0',
+				unit: item.dose_unit,
+				route: item.route || undefined
+			});
+			recentDoses = await protocolsApi.doses();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			logging = null;
+		}
+	}
+
+	const freqLabel = (k: string) => FREQUENCIES.find((f) => f.key === k)?.label ?? k;
+</script>
+
+<div class="flex items-center justify-between">
+	<h1 class="text-xl font-semibold">Protocols</h1>
+	<a
+		href="/protocols/log"
+		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+	>
+		Log a dose
+	</a>
+</div>
+
+<p class="mt-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-300">
+	⚠️ Personal tracking only — not medical advice. BBTracker does not recommend any substance, dose,
+	or protocol. Monitor your health with a qualified professional and regular bloodwork.
+</p>
+
+{#if loading}
+	<p class="mt-6 text-neutral-400">Loading…</p>
+{:else if error}
+	<p class="mt-6 text-red-400">{error}</p>
+{:else}
+	<!-- Active protocol only (full list lives under Manage) -->
+	<section class="mt-6">
+		{#if active}
+			<div class="flex items-center justify-between">
+				<h2 class="font-medium">
+					{active.name}
+					<span class="ml-1 rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Active</span>
+				</h2>
+				<a class="text-sm text-indigo-400 hover:text-indigo-300" href={`/protocols/manage/${active.id}`}>Edit →</a>
+			</div>
+			{#if active.items.length === 0}
+				<p class="mt-2 text-sm text-neutral-500">
+					No items yet. <a class="text-indigo-400" href={`/protocols/manage/${active.id}`}>Add some →</a>
+				</p>
+			{:else}
+				<div class="mt-3 space-y-2">
+					{#each active.items as item (item.id)}
+						<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
+							<div>
+								<span class="font-medium">{item.item_name}</span>
+								<span class="text-xs text-neutral-500">
+									· {item.dose_amount ?? '—'}{item.dose_unit} · {freqLabel(item.frequency)}
+									{#if item.times_of_day?.length}· {item.times_of_day.join(', ')}{/if}
+								</span>
+							</div>
+							<button
+								class="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+								disabled={logging === item.id}
+								onclick={() => quickLog(item)}
+							>
+								{logging === item.id ? '…' : 'Log now'}
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else}
+			<p class="text-sm text-neutral-500">
+				No active protocol.
+				<a class="text-indigo-400" href="/protocols/manage">Activate or create one →</a>
+			</p>
+		{/if}
+	</section>
+
+	<!-- Recent loggings + management entry point -->
+	<section class="mt-8">
+		<div class="flex items-center justify-between">
+			<h2 class="font-medium">Recent loggings</h2>
+			<a class="text-sm text-indigo-400 hover:text-indigo-300" href="/protocols/manage">Manage protocols →</a>
+		</div>
+		{#if recentDoses.length === 0}
+			<p class="mt-2 text-sm text-neutral-500">No doses logged yet.</p>
+		{:else}
+			<div class="mt-3 space-y-2">
+				{#each recentDoses.slice(0, 8) as d (d.id)}
+					<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
+						<span>{d.item_name}</span>
+						<span class="text-xs text-neutral-500">
+							{d.amount}{d.unit}
+							{#if d.site_name}· {d.site_name}{/if}
+							· {new Date(d.taken_at).toLocaleDateString()}
+						</span>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</section>
+{/if}

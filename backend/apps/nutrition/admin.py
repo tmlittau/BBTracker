@@ -1,0 +1,66 @@
+from django.contrib import admin
+
+from .models import (
+    DiaryEntry,
+    Food,
+    FoodNutrient,
+    Nutrient,
+    NutrientTarget,
+    NutritionTarget,
+    Recipe,
+    RecipeItem,
+    ServingSize,
+)
+
+
+@admin.register(Nutrient)
+class NutrientAdmin(admin.ModelAdmin):
+    list_display = ["name", "category", "unit", "rda", "display_order"]
+    list_filter = ["category"]
+    search_fields = ["name"]
+
+
+class FoodNutrientInline(admin.TabularInline):
+    model = FoodNutrient
+    extra = 0
+
+
+class ServingSizeInline(admin.TabularInline):
+    model = ServingSize
+    extra = 0
+
+
+@admin.register(Food)
+class FoodAdmin(admin.ModelAdmin):
+    list_display = ["name", "brand", "source", "owner", "is_verified"]
+    list_filter = ["source", "is_verified"]
+    search_fields = ["name", "brand", "barcode"]
+    inlines = [ServingSizeInline, FoodNutrientInline]
+
+
+class NutrientTargetInline(admin.TabularInline):
+    model = NutrientTarget
+    extra = 0
+
+
+@admin.register(NutritionTarget)
+class NutritionTargetAdmin(admin.ModelAdmin):
+    list_display = ["name", "owner", "is_active", "calories", "protein_g"]
+    inlines = [NutrientTargetInline]
+
+
+class RecipeItemInline(admin.TabularInline):
+    model = RecipeItem
+    extra = 0
+
+
+@admin.register(Recipe)
+class RecipeAdmin(admin.ModelAdmin):
+    list_display = ["name", "owner", "servings"]
+    inlines = [RecipeItemInline]
+
+
+@admin.register(DiaryEntry)
+class DiaryEntryAdmin(admin.ModelAdmin):
+    list_display = ["date", "meal", "owner", "food", "recipe", "quantity", "grams"]
+    list_filter = ["meal", "date"]

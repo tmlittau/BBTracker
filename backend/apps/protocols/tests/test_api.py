@@ -1,0 +1,281 @@
+from datetime import timedelta
+
+import pytest
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.accounts.models import User
+from apps.nutrition.models import Nutrient
+from apps.protocols.models import (
+    BloodMarker,
+    Compound,
+    DoseLog,
+    InjectionSite,
+    Protocol,
+    Supplement,
+)
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def user(db):
+    return User.objects.create_user(email="a@example.com", password="x")
+
+
+@pytest.fixture
+def other(db):
+    return User.objects.create_user(email="b@example.com", password="x")
+
+
+@pytest.fixture
+def api(user):
+    c = APIClient()
+    c.force_authenticate(user)
+    return c
+
+
+@pytest.fixture
+def test_e(db):
+    """A global injectable compound with a 7-day half-life (testosterone enanthate-like)."""
+    return Compound.objects.create(
+        name="Testosterone Enanthate", compound_class="anabolic",
+        default_unit="mg", default_route="im",
+        half_life_hours="168", ester="enanthate", active_fraction="0.700",
+    )
+
+
+def test_requires_auth():
+    assert APIClient().get("/api/v1/protocols/compounds/").status_code in (401, 403)
+
+
+def test_global_compound_visible(api, test_e):
+    names = [c["name"] for c in api.get("/api/v1/protocols/compounds/").json()["results"]]
+    assert "Testosterone Enanthate" in names
+
+
+def test_compound_search(api, test_e):
+    assert api.get("/api/v1/protocols/compounds/?q=enanth").json()["count"] == 1
+    assert api.get("/api/v1/protocols/compounds/?q=zzz").json()["count"] == 0
+
+
+def test_custom_compound_owned(api, user):
+    resp = api.post(
+        "/api/v1/protocols/compounds/",
+        {"name": "My Peptide", "compound_class": "peptide", "default_unit": "mcg"},
+        format="json",
+    )
+    assert resp.status_code == 201
+    assert Compound.objects.get(name="My Peptide").owner == user
+
+
+def test_cannot_edit_global_compound(api, test_e):
+    resp = api.patch(
+        f"/api/v1/protocols/compounds/{test_e.id}/", {"name": "x"}, format="json"
+    )
+    assert resp.status_code == 403
+
+
+def test_create_supplement_with_nutrients(api, user, db):
+    vit_d = Nutrient.objects.create(
+        name="Vitamin D", slug="vitamin_d", category="vitamin", unit="mcg", rda=20
+    )
+    resp = api.post(
+        "/api/v1/protocols/supplements/",
+        {
+            "name": "Vitamin D3", "serving_label": "1 softgel",
+            "supplement_nutrients": [
+                {"nutrient": vit_d.id, "amount_per_serving": "125.0000"}
+            ],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.content
+    supp = Supplement.objects.get(name="Vitamin D3")
+    assert supp.owner == user
+    assert supp.supplement_nutrients.count() == 1
+
+
+def test_build_protocol_and_log_dose(api, user, test_e):
+    pid = api.post(
+        "/api/v1/protocols/protocols/",
+        {"name": "TRT", "started_on": "2026-01-01"},
+        format="json",
+    ).json()["id"]
+    item = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": pid, "compound": test_e.id, "dose_amount": "125",
+         "dose_unit": "mg", "route": "im", "frequency": "2x_week"},
+        format="json",
+    )
+    assert item.status_code == 201, item.content
+
+    dose = api.post(
+        "/api/v1/protocols/dose-logs/",
+        {"protocol_item": item.json()["id"], "compound": test_e.id,
+         "taken_at": timezone.now().isoformat(), "amount": "125", "unit": "mg", "route": "im"},
+        format="json",
+    )
+    assert dose.status_code == 201, dose.content
+
+
+def test_protocol_item_needs_compound_or_supplement(api, user):
+    pid = api.post("/api/v1/protocols/protocols/", {"name": "P"}, format="json").json()["id"]
+    resp = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": pid, "dose_amount": "100"},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+def test_cannot_attach_item_to_others_protocol(api, other, test_e):
+    theirs = Protocol.objects.create(owner=other, name="Theirs")
+    resp = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": theirs.id, "compound": test_e.id, "dose_amount": "100"},
+        format="json",
+    )
+    assert resp.status_code == 403
+
+
+def test_protocol_activate_exclusive(api):
+    p1 = api.post("/api/v1/protocols/protocols/", {"name": "A"}, format="json").json()["id"]
+    p2 = api.post("/api/v1/protocols/protocols/", {"name": "B"}, format="json").json()["id"]
+    api.post(f"/api/v1/protocols/protocols/{p1}/activate/")
+    api.post(f"/api/v1/protocols/protocols/{p2}/activate/")
+    assert Protocol.objects.get(id=p1).is_active is False
+    assert Protocol.objects.get(id=p2).is_active is True
+
+
+def test_concentration_curve(api, user, test_e):
+    # Two doses, 7 days apart; curve should be non-empty and decreasing after last dose.
+    now = timezone.now()
+    DoseLog.objects.create(
+        owner=user, compound=test_e, taken_at=now - timedelta(days=7),
+        amount=125, unit="mg", route="im",
+    )
+    DoseLog.objects.create(
+        owner=user, compound=test_e, taken_at=now, amount=125, unit="mg", route="im",
+    )
+    resp = api.get(f"/api/v1/protocols/concentration/?compound={test_e.id}&days=14")
+    assert resp.status_code == 200, resp.content
+    points = resp.json()
+    assert len(points) > 0
+    assert all("t" in p and "value" in p for p in points)
+    assert max(p["value"] for p in points) > 0
+
+
+def test_injection_site_recency_and_suggest(api, user, test_e, db):
+    glute_l = InjectionSite.objects.create(
+        name="Left glute", slug="left-glute", region="glute", side="left"
+    )
+    InjectionSite.objects.create(
+        name="Right glute", slug="right-glute", region="glute", side="right"
+    )
+    # Use only the left glute recently.
+    DoseLog.objects.create(
+        owner=user, compound=test_e, taken_at=timezone.now(),
+        amount=125, unit="mg", route="im", injection_site=glute_l,
+    )
+    recency = api.get("/api/v1/protocols/injection-sites/recency/").json()
+    by_name = {r["name"]: r for r in recency}
+    assert by_name["Left glute"]["status"] == "fresh"
+    assert by_name["Right glute"]["status"] == "rested"  # never used
+
+    # Suggestion should avoid the freshly-used left glute.
+    suggestion = api.get("/api/v1/protocols/injection-sites/suggest/").json()
+    assert suggestion["name"] != "Left glute"
+
+
+def test_suggest_site_with_no_doses(api, db):
+    """A brand-new user (no doses → all sites never-used) must not 500.
+
+    Regression: the suggestion sort used a tuple key that could fall through to
+    comparing row dicts when every site tied as never-used.
+    """
+    InjectionSite.objects.create(name="Left glute", slug="left-glute", region="glute", side="left")
+    InjectionSite.objects.create(name="Right quad", slug="right-quad", region="quad", side="right")
+    resp = api.get("/api/v1/protocols/injection-sites/suggest/")
+    assert resp.status_code == 200
+    assert resp.json()["name"] in {"Left glute", "Right quad"}
+
+
+def test_adherence(api, user, test_e):
+    pid = api.post("/api/v1/protocols/protocols/", {"name": "TRT"}, format="json").json()["id"]
+    item = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": pid, "compound": test_e.id, "dose_amount": "125", "frequency": "2x_week"},
+        format="json",
+    ).json()
+    # Expect 2/week × 4 weeks = 8; log 4 → 50%.
+    now = timezone.now()
+    for i in range(4):
+        DoseLog.objects.create(
+            owner=user, protocol_item_id=item["id"], compound=test_e,
+            taken_at=now - timedelta(days=i * 3), amount=125, unit="mg",
+        )
+    rows = api.get(f"/api/v1/protocols/protocols/{pid}/adherence/?window_days=28").json()
+    assert rows[0]["expected"] == 8.0
+    assert rows[0]["actual"] == 4
+    assert rows[0]["adherence"] == 50
+
+
+def test_bloodwork_trend_with_flags(api, user, db):
+    marker = BloodMarker.objects.create(
+        name="Total Testosterone", slug="total-t", unit="ng/dL",
+        category="hormone", ref_low=300, ref_high=1000,
+    )
+    api.post(
+        "/api/v1/protocols/blood-results/",
+        {"marker": marker.id, "value": "250", "measured_on": "2026-01-01"},
+        format="json",
+    )
+    api.post(
+        "/api/v1/protocols/blood-results/",
+        {"marker": marker.id, "value": "650", "measured_on": "2026-03-01"},
+        format="json",
+    )
+    trend = api.get(f"/api/v1/protocols/blood-results/trend/?marker={marker.id}").json()
+    assert len(trend) == 2
+    assert trend[0]["flag"] == "low"        # 250 < 300
+    assert trend[1]["flag"] == "in_range"   # 650 in [300,1000]
+
+
+def test_bp_log(api, user):
+    resp = api.post(
+        "/api/v1/protocols/bp-logs/",
+        {"systolic": 122, "diastolic": 78, "pulse": 60,
+         "measured_at": timezone.now().isoformat()},
+        format="json",
+    )
+    assert resp.status_code == 201
+
+
+def test_compound_owner_isolation(api, other, test_e):
+    Compound.objects.create(owner=None, name="Global one")  # visible to all
+    Compound.objects.create(owner=other, name="Their custom")  # not visible
+    listed = api.get("/api/v1/protocols/compounds/").json()["results"]
+    names = {c["name"] for c in listed}
+    assert "Global one" in names
+    assert "Their custom" not in names
+
+
+def test_supplement_feeds_nutrition_summary(api, user, db):
+    """A logged supplement dose contributes its micros to the nutrition summary."""
+    vit_c = Nutrient.objects.create(
+        name="Vitamin C", slug="vitamin_c", category="vitamin", unit="mg", rda=90
+    )
+    supp = Supplement.objects.create(name="Vitamin C 500", owner=user)
+    supp.supplement_nutrients.create(nutrient=vit_c, amount_per_serving=500)
+
+    DoseLog.objects.create(
+        owner=user, supplement=supp,
+        taken_at=timezone.make_aware(timezone.datetime(2026, 5, 30, 8, 0)),
+        amount=1, unit="capsule",
+    )
+    resp = api.get("/api/v1/nutrition/summary/?date=2026-05-30")
+    assert resp.status_code == 200
+    by_slug = {n["slug"]: n for n in resp.json()["nutrients"]}
+    # 500 mg from the supplement should show up against Vitamin C.
+    assert float(by_slug["vitamin_c"]["amount"]) == 500.0

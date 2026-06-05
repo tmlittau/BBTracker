@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bbtracker
+          POSTGRES_USER: bbtracker
+          POSTGRES_PASSWORD: bbtracker
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U bbtracker"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DJANGO_SECRET_KEY: ci-secret-key
+      DJANGO_DEBUG: 'true'
+      DATABASE_URL: postgres://bbtracker:bbtracker@localhost:5432/bbtracker
+      REDIS_URL: redis://localhost:6379/0
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Check migrations are committed
+        run: python manage.py makemigrations --check --dry-run
+      - name: Run tests
+        run: pytest -q
+      - name: Check committed OpenAPI client is in sync
+        run: |
+          python manage.py spectacular --format openapi-json --file /tmp/schema.json
+          npx -y openapi-typescript@^7 /tmp/schema.json -o /tmp/schema.d.ts
+          diff -u ../frontend/src/lib/api/schema.d.ts /tmp/schema.d.ts
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci
+      - name: Type-check
+        run: npm run check
+      - name: Unit tests
+        run: npm run test
+      - name: Build
+        run: npm run build

@@ -1,0 +1,24 @@
+[project]
+name = "bbtracker-backend"
+version = "0.1.0"
+description = "BBTracker backend API (Django + DRF)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false
+exclude = ['(^|/)migrations/', '^manage\.py$']
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+python_files = ["test_*.py", "tests.py"]
+addopts = "-q"
