@@ -50,6 +50,14 @@ be measured in **g or ml**; and the bloodwork catalogue now covers a full **~57-
 iron, liver, lipids incl. ApoA/B, glucose/HbA1c, renal, electrolytes, vitamins, thyroid, and the full
 sex-hormone panel) with sex-specific reference ranges.
 
+**Bloodwork PDF import.** Upload a lab PDF and the markers, values, units, and reference ranges are
+extracted into an editable review table before anything is saved — the file is parsed **in memory and
+never stored**. Lab names are matched to the catalogue via per-marker aliases (incl. Dutch lab terms);
+each imported result keeps the **exact unit + reference range from its report**, so out-of-range values
+are flagged faithfully even if a marker's default changes. Marker reference units are **SI** throughout
+(e.g. testosterone nmol/L, cholesterol mmol/L, hemoglobin mmol/L). Born-digital text PDFs only (no
+OCR); best-effort transcription gated behind review — not medical advice.
+
 **Mobile & PWA.** The app is responsive and touch-first: a **bottom tab bar** on phones (the desktop
 top nav stays at `md+`), an **account sheet** for the secondary items, 16px form controls (no iOS
 focus-zoom), and safe-area handling. The **workout logger** is reworked for one-handed gym use —
@@ -179,10 +187,18 @@ cd frontend && npm run gen:api      # writes src/lib/api/schema.d.ts
 - **Tailwind v4 native binary.** Platform `@tailwindcss/oxide-*` binaries are pinned in
   `frontend/package.json` `optionalDependencies` (lockstep with `tailwindcss`) to dodge the
   npm optional-deps bug; install with `npm ci`.
-- **Frontend deps in Docker.** The `frontend` service mounts an anonymous `node_modules` volume
-  baked at image build, so a new dependency (e.g. `svelte-dnd-action` for drag-reorder) needs either
-  `docker compose build frontend` or `docker compose exec frontend npm install` + a restart before
-  the dev server (and Playwright) can see it.
+- **Frontend deps in Docker.** The `frontend` service mounts an anonymous `node_modules` volume baked
+  at image build **and reused across `up` runs**, so it goes stale when you add a dependency (e.g.
+  `svelte-dnd-action`, `@vite-pwa/sveltekit`). Symptom: `vite` exits with
+  `Error [ERR_MODULE_NOT_FOUND]: Cannot find package '…'`. Because the persistent volume *masks* the
+  image, a plain `docker compose build frontend` is **not** enough — the rebuilt `node_modules` stays
+  hidden behind the old volume. Rebuild **and** renew the volume in one go:
+
+  ```bash
+  docker compose up -d --build --renew-anon-volumes frontend
+  ```
+
+  (`docker compose exec frontend npm install` + a restart also works as a one-off.)
 
 ### Fast backend iteration (no Docker)
 

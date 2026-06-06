@@ -154,11 +154,18 @@ class VialSerializer(serializers.ModelSerializer):
 
 class BloodResultSerializer(serializers.ModelSerializer):
     marker_name = serializers.CharField(source="marker.name", read_only=True)
-    unit = serializers.CharField(source="marker.unit", read_only=True)
+    unit = serializers.SerializerMethodField()
 
     class Meta:
         model = BloodResult
-        fields = ["id", "marker", "marker_name", "unit", "value", "measured_on", "notes"]
+        fields = [
+            "id", "marker", "marker_name", "unit", "value",
+            "ref_low", "ref_high", "source", "measured_on", "notes",
+        ]
+
+    def get_unit(self, obj) -> str:
+        """Effective unit: the result's own, else the marker's default."""
+        return obj.unit or (obj.marker.unit if obj.marker_id else "")
 
 
 class BloodPressureLogSerializer(serializers.ModelSerializer):
@@ -170,9 +177,30 @@ class BloodPressureLogSerializer(serializers.ModelSerializer):
 # --- Computed read-only payloads ---
 
 
-class ConcentrationPointSerializer(serializers.Serializer):
-    t = serializers.CharField()
-    value = serializers.FloatField()
+class ReleasePointSerializer(serializers.Serializer):
+    day = serializers.IntegerField()
+    date = serializers.CharField()
+    rate = serializers.FloatField()
+    projected = serializers.BooleanField()
+
+
+class ReleaseCompoundSerializer(serializers.Serializer):
+    compound_id = serializers.IntegerField()
+    name = serializers.CharField()
+    unit = serializers.CharField()
+    half_life_hours = serializers.FloatField()
+    active_fraction = serializers.FloatField()
+    points = ReleasePointSerializer(many=True)
+
+
+class ProtocolReleaseSerializer(serializers.Serializer):
+    now = serializers.CharField()
+    today_day = serializers.IntegerField()
+    start = serializers.CharField(allow_null=True)
+    end = serializers.CharField(allow_null=True)
+    unit = serializers.CharField()
+    compounds = ReleaseCompoundSerializer(many=True)
+    excluded = serializers.ListField(child=serializers.CharField())
 
 
 class SiteRecencySerializer(serializers.Serializer):
@@ -200,4 +228,5 @@ class AdherenceRowSerializer(serializers.Serializer):
 class MarkerTrendPointSerializer(serializers.Serializer):
     date = serializers.CharField()
     value = serializers.DecimalField(max_digits=10, decimal_places=3)
+    unit = serializers.CharField()
     flag = serializers.CharField()

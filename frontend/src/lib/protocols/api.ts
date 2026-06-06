@@ -88,6 +88,7 @@ export interface ProtocolItem {
 
 export interface BloodMatrixCell {
 	value: string;
+	unit: string;
 	pct_change: number | null;
 	flag: string;
 }
@@ -161,9 +162,28 @@ export interface BloodPressureLog {
 	notes: string;
 }
 
-export interface ConcentrationPoint {
-	t: string;
-	value: number;
+export interface ReleasePoint {
+	day: number;
+	date: string;
+	rate: number;
+	projected: boolean;
+}
+export interface ReleaseCompound {
+	compound_id: number;
+	name: string;
+	unit: string;
+	half_life_hours: number;
+	active_fraction: number;
+	points: ReleasePoint[];
+}
+export interface ProtocolRelease {
+	now: string;
+	today_day: number;
+	start: string | null;
+	end: string | null;
+	unit: string;
+	compounds: ReleaseCompound[];
+	excluded: string[];
 }
 
 export interface AdherenceRow {
@@ -178,7 +198,36 @@ export interface AdherenceRow {
 export interface MarkerTrendPoint {
 	date: string;
 	value: string;
+	unit: string;
 	flag: string;
+}
+
+export interface ParsedRow {
+	raw_name: string;
+	value: string;
+	unit: string;
+	ref_low: string | null;
+	ref_high: string | null;
+	lab_flag: string | null;
+	raw_line: string;
+	marker: number | null;
+	marker_name: string | null;
+	matched: boolean;
+	confidence: number;
+}
+
+export interface ParsedReport {
+	measured_on: string | null;
+	rows: ParsedRow[];
+}
+
+export interface BulkResultInput {
+	marker: number;
+	value: string;
+	unit?: string;
+	ref_low?: string | null;
+	ref_high?: string | null;
+	source?: string;
 }
 
 interface Paginated<T> {
@@ -252,8 +301,8 @@ export const protocolsApi = {
 	vials: () => req<Paginated<Vial>>('GET', '/vials/').then(list),
 	createVial: (data: Partial<Vial> & { compound: number }) => req<Vial>('POST', '/vials/', data),
 
-	concentration: (compound: number, days = 30) =>
-		req<ConcentrationPoint[]>('GET', `/concentration/?compound=${compound}&days=${days}`),
+	releaseCurves: (id: number, horizonDays = 84) =>
+		req<ProtocolRelease>('GET', `/protocols/${id}/release/?horizon_days=${horizonDays}`),
 
 	updateItem: (id: number, data: Partial<ProtocolItem>) =>
 		req<ProtocolItem>('PATCH', `/protocol-items/${id}/`, data),
@@ -265,8 +314,26 @@ export const protocolsApi = {
 		).then(list),
 	logBloodResult: (data: { marker: number; value: string; measured_on: string }) =>
 		req<BloodResult>('POST', '/blood-results/', data),
-	bulkBloodResults: (measured_on: string, results: { marker: number; value: string }[]) =>
+	bulkBloodResults: (measured_on: string, results: BulkResultInput[]) =>
 		req<BloodResult[]>('POST', '/blood-results/bulk/', { measured_on, results }),
+	parsePdf: async (file: File): Promise<ParsedReport> => {
+		// Multipart upload (FormData sets its own Content-Type) — parsed in memory,
+		// nothing stored. Review the returned rows before POSTing them to bulk.
+		const csrf = await ensureCsrf();
+		const fd = new FormData();
+		fd.append('file', file);
+		const res = await fetch(`${BASE}/blood-results/parse_pdf/`, {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'X-CSRFToken': csrf },
+			body: fd
+		});
+		if (!res.ok) {
+			const detail = await res.text().catch(() => '');
+			throw new Error(`parse_pdf → ${res.status} ${detail}`);
+		}
+		return res.json() as Promise<ParsedReport>;
+	},
 	bloodworkMatrix: () => req<BloodMatrix>('GET', '/blood-results/matrix/'),
 	markerTrend: (marker: number) =>
 		req<MarkerTrendPoint[]>('GET', `/blood-results/trend/?marker=${marker}`),

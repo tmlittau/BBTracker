@@ -1,10 +1,10 @@
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import permissions, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.core.viewsets import OwnerScopedViewSet
 
@@ -26,11 +26,11 @@ from .serializers import (
     BloodPressureLogSerializer,
     BloodResultSerializer,
     CompoundSerializer,
-    ConcentrationPointSerializer,
     DoseLogSerializer,
     InjectionSiteSerializer,
     MarkerTrendPointSerializer,
     ProtocolItemSerializer,
+    ProtocolReleaseSerializer,
     ProtocolSerializer,
     SiteRecencySerializer,
     SupplementSerializer,
@@ -38,10 +38,10 @@ from .serializers import (
 )
 from .services import (
     bloodwork_matrix,
-    compound_concentration,
     injection_site_recency,
     marker_trend,
     protocol_adherence,
+    protocol_release_curves,
     suggest_next_site,
 )
 
@@ -151,6 +151,17 @@ class ProtocolViewSet(viewsets.ModelViewSet):
         protocol = self.get_object()
         window = _int_param(request, "window_days", 28)
         return Response(protocol_adherence(request.user, protocol, window_days=window))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("horizon_days", int)],
+        responses=ProtocolReleaseSerializer,
+    )
+    @action(detail=True, methods=["get"])
+    def release(self, request, pk=None):
+        """Per-compound active-release (mg/day) curves: logged actuals + projected future."""
+        protocol = self.get_object()
+        horizon = _int_param(request, "horizon_days", 84)
+        return Response(protocol_release_curves(request.user, protocol, horizon_days=horizon))
 
 
 @extend_schema(tags=["protocols"])
@@ -275,9 +286,20 @@ class BloodResultViewSet(viewsets.ModelViewSet):
     def bulk(self, request):
         """Create many results for one date; blank/invalid markers are skipped.
 
-        Body: {"measured_on": "YYYY-MM-DD", "results": [{"marker": id, "value": "x"}, …]}.
+        Body: {"measured_on": "YYYY-MM-DD", "results": [{"marker": id, "value": "x",
+        "unit"?: "", "ref_low"?: n, "ref_high"?: n, "source"?: "manual"|"pdf"}, …]}.
+        Per-result unit/ranges (e.g. from a PDF import) are stored verbatim, so each
+        reading flags against the exact range it came with.
         """
         from decimal import Decimal, InvalidOperation
+
+        def _dec(v):
+            if v in (None, ""):
+                return None
+            try:
+                return Decimal(str(v))
+            except (InvalidOperation, ValueError):
+                return None
 
         measured_on = request.data.get("measured_on")
         if not measured_on:
@@ -285,20 +307,53 @@ class BloodResultViewSet(viewsets.ModelViewSet):
         valid_markers = set(BloodMarker.objects.values_list("id", flat=True))
         created = []
         for r in request.data.get("results") or []:
-            value = r.get("value")
             marker_id = r.get("marker")
-            if value in (None, "") or marker_id not in valid_markers:
+            value = _dec(r.get("value"))
+            if value is None or marker_id not in valid_markers:
                 continue
-            try:
-                value = Decimal(str(value))
-            except (InvalidOperation, ValueError):
-                continue
+            source = r.get("source") if r.get("source") in ("manual", "pdf") else "manual"
             created.append(
                 BloodResult.objects.create(
-                    owner=request.user, marker_id=marker_id, value=value, measured_on=measured_on
+                    owner=request.user, marker_id=marker_id, value=value,
+                    unit=(r.get("unit") or "")[:20],
+                    ref_low=_dec(r.get("ref_low")), ref_high=_dec(r.get("ref_high")),
+                    source=source, measured_on=measured_on,
                 )
             )
         return Response(BloodResultSerializer(created, many=True).data, status=201)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def parse_pdf(self, request):
+        """Extract reviewable rows from an uploaded lab PDF (multipart `file`).
+
+        Stateless: nothing is persisted and the bytes are dropped after parsing — the
+        client reviews/edits the rows and POSTs the confirmed set to `bulk/`.
+        """
+        from .bloodwork_pdf import extract_text, match_marker, parse_report
+
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise ValidationError({"file": "required"})
+        if upload.size and upload.size > 20 * 1024 * 1024:
+            raise ValidationError({"file": "file too large (max 20 MB)"})
+        try:
+            text = extract_text(upload.read())
+        except Exception as exc:  # noqa: BLE001 - any extraction failure → 400
+            raise ValidationError({"file": "could not read this PDF"}) from exc
+        parsed = parse_report(text)
+        markers = list(BloodMarker.objects.all())
+        rows = []
+        for r in parsed["rows"]:
+            marker, conf = match_marker(r["raw_name"], markers)
+            rows.append({
+                **r,
+                "marker": marker.id if marker else None,
+                "marker_name": marker.name if marker else None,
+                "matched": marker is not None,
+                "confidence": round(conf, 2),
+            })
+        return Response({"measured_on": parsed["measured_on"], "rows": rows})
 
 
 @extend_schema(tags=["protocols"])
@@ -310,30 +365,6 @@ class BloodPressureLogViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
-
-
-@extend_schema(
-    tags=["protocols"],
-    parameters=[
-        OpenApiParameter("compound", int, required=True),
-        OpenApiParameter("days", int),
-    ],
-    responses=ConcentrationPointSerializer(many=True),
-)
-class ConcentrationView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        compound_id = request.query_params.get("compound")
-        if not compound_id:
-            raise ValidationError({"compound": "required"})
-        compound = Compound.objects.filter(
-            Q(owner=request.user) | Q(owner__isnull=True), pk=compound_id
-        ).first()
-        if compound is None:
-            raise ValidationError({"compound": "unknown compound"})
-        days = _int_param(request, "days", 30)
-        return Response(compound_concentration(request.user, compound, days=days))
 
 
 def _int_param(request, name, default):

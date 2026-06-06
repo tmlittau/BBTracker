@@ -283,6 +283,9 @@ class BloodMarker(models.Model):
     ref_low_female = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     ref_high_female = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     display_order = models.PositiveIntegerField(default=100)
+    # Alternate names (lab / Dutch synonyms) used to match this marker when importing
+    # a lab PDF, e.g. ["hemoglobine", "Hb"].
+    aliases = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["display_order", "name"]
@@ -299,6 +302,15 @@ class BloodResult(TimeStampedModel):
     )
     marker = models.ForeignKey(BloodMarker, on_delete=models.PROTECT, related_name="results")
     value = models.DecimalField(max_digits=10, decimal_places=3)
+    # Result's own unit + reference range, captured verbatim from its source (e.g. a
+    # lab PDF). Blank/null falls back to the marker's defaults — so each reading flags
+    # against the exact range it shipped with, even if the marker default changes.
+    unit = models.CharField(max_length=20, blank=True)
+    ref_low = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    ref_high = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    source = models.CharField(
+        max_length=8, choices=[("manual", "Manual"), ("pdf", "PDF import")], default="manual"
+    )
     measured_on = models.DateField()
     notes = models.CharField(max_length=255, blank=True)
 

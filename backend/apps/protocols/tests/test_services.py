@@ -1,14 +1,17 @@
-from datetime import UTC, datetime, timedelta
+from datetime import date
 from types import SimpleNamespace
 
 from apps.protocols.services import (
     active_amount,
     adherence_pct,
-    concentration_series,
+    decay_constant_per_day,
     expected_doses,
     marker_in_range,
+    release_rate_series,
     remaining_fraction,
+    scheduled_dose_dates,
     site_status,
+    times_per_day_count,
 )
 
 
@@ -40,20 +43,63 @@ class TestActiveAmount:
         assert active_amount(None, 1, 0, 24) == 0.0
 
 
-class TestConcentrationSeries:
-    def test_builds_points_and_accumulates(self):
-        base = datetime(2026, 1, 1, tzinfo=UTC)
-        doses = [(base, 100), (base + timedelta(days=3), 100)]
-        end = base + timedelta(days=6)
-        pts = concentration_series(doses, half_life_hours=72, active_fraction=1,
-                                   start=base, end=end, step_hours=24)
-        assert len(pts) == 7  # day 0..6 inclusive
-        assert pts[0]["value"] == 100.0
-        assert 149 <= pts[3]["value"] <= 151
+class TestReleaseRate:
+    def test_single_dose_peaks_then_halves(self):
+        # 100 mg, f=1, t½=24h (k = ln2 per day). Release rate at the dose = D·k; one
+        # half-life (1 day) later it has halved.
+        pts = release_rate_series([(0, 100)], half_life_hours=24, active_fraction=1,
+                                  start_day=0, end_day=2, step_days=1)
+        assert [d for d, _ in pts] == [0, 1, 2]
+        k = decay_constant_per_day(24)
+        assert pts[0][1] == round(100 * k, 5)
+        assert pts[1][1] == round(pts[0][1] * 0.5, 5)
+
+    def test_active_fraction_scales(self):
+        full = release_rate_series([(0, 100)], 24, 1.0, 0, 0)[0][1]
+        half = release_rate_series([(0, 100)], 24, 0.5, 0, 0)[0][1]
+        assert round(half, 6) == round(full * 0.5, 6)
+
+    def test_accumulates_across_doses(self):
+        one = release_rate_series([(0, 100)], 72, 1, 5, 5)[0][1]
+        two = release_rate_series([(0, 100), (3, 100)], 72, 1, 5, 5)[0][1]
+        assert two > one
 
     def test_no_half_life_empty(self):
-        base = datetime(2026, 1, 1, tzinfo=UTC)
-        assert concentration_series([(base, 100)], 0, 1, base, base) == []
+        assert release_rate_series([(0, 100)], 0, 1, 0, 5) == []
+        assert release_rate_series([(0, 100)], None, 1, 0, 5) == []
+
+
+class TestScheduledDoses:
+    anchor = date(2026, 1, 5)  # a Monday
+
+    def test_daily_every_day(self):
+        days = scheduled_dose_dates("daily", [], date(2026, 1, 5), date(2026, 1, 11), self.anchor)
+        assert len(days) == 7
+
+    def test_eod_phased_to_anchor(self):
+        days = scheduled_dose_dates("eod", [], date(2026, 1, 5), date(2026, 1, 11), self.anchor)
+        assert days == [date(2026, 1, 5), date(2026, 1, 7), date(2026, 1, 9), date(2026, 1, 11)]
+
+    def test_weekly(self):
+        days = scheduled_dose_dates("weekly", [], date(2026, 1, 5), date(2026, 1, 26), self.anchor)
+        assert days == [date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 19), date(2026, 1, 26)]
+
+    def test_specific_weekdays(self):
+        # Mon (0) and Thu (3) within one week.
+        days = scheduled_dose_dates("specific_days", [0, 3], date(2026, 1, 5),
+                                    date(2026, 1, 11), self.anchor)
+        assert days == [date(2026, 1, 5), date(2026, 1, 8)]
+
+    def test_prn_not_projectable(self):
+        assert scheduled_dose_dates("prn", [], date(2026, 1, 5), date(2026, 1, 30),
+                                    self.anchor) == []
+
+
+class TestTimesPerDay:
+    def test_defaults_and_multi(self):
+        assert times_per_day_count([], "daily") == 1
+        assert times_per_day_count(["am", "pm"], "daily") == 2
+        assert times_per_day_count([], "2x_day") == 2
 
 
 class TestSiteStatus:
@@ -114,3 +160,32 @@ class TestMarkerInRange:
         # Only sex-specific ranges + unknown sex → cannot judge → in_range.
         tt = self._marker(ref_low_male=300, ref_high_male=1000)
         assert marker_in_range(250, tt, sex=None) == "in_range"
+
+
+class TestResultRange:
+    """Per-result reference ranges (e.g. captured from a PDF) drive flagging."""
+
+    def _marker(self, **kw):
+        defaults = dict(
+            ref_low=None, ref_high=None, ref_low_male=None, ref_high_male=None,
+            ref_low_female=None, ref_high_female=None,
+        )
+        defaults.update(kw)
+        return SimpleNamespace(**defaults)
+
+    def test_flag_value(self):
+        from apps.protocols.services import flag_value
+
+        assert flag_value(5, 10, 20) == "low"
+        assert flag_value(15, 10, 20) == "in_range"
+        assert flag_value(25, 10, 20) == "high"
+        assert flag_value(25, None, None) == "in_range"
+
+    def test_result_range_prefers_result_over_marker(self):
+        from apps.protocols.services import result_range
+
+        marker = self._marker(ref_low=1, ref_high=2)
+        with_own = SimpleNamespace(ref_low=10, ref_high=20, marker=marker)
+        without = SimpleNamespace(ref_low=None, ref_high=None, marker=marker)
+        assert result_range(with_own) == (10, 20)
+        assert result_range(without) == (1, 2)

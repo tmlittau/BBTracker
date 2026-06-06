@@ -11,6 +11,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import LineChart from '$lib/components/ui/LineChart.svelte';
+	import PdfImportModal from '$lib/protocols/PdfImportModal.svelte';
 
 	let markers = $state<BloodMarker[]>([]);
 	let matrix = $state<BloodMatrix | null>(null);
@@ -20,7 +21,8 @@
 
 	let view = $state<'table' | 'chart'>('table');
 
-	// Add-results modal (full panel: every marker optional, only date required).
+	// PDF import (parse → review → save) + add-results modal (full panel).
+	let showImport = $state(false);
 	let showResults = $state(false);
 	let resultsDate = $state(new Date().toISOString().slice(0, 10));
 	let resultValues = $state<Record<number, string>>({});
@@ -70,6 +72,11 @@
 		} finally {
 			savingResults = false;
 		}
+	}
+
+	async function onImported() {
+		await loadMatrix();
+		if (chartMarker != null) await loadTrend();
 	}
 
 	async function loadTrend() {
@@ -139,11 +146,18 @@
 	</form>
 </Modal>
 
-<div class="flex items-center justify-between">
+<PdfImportModal bind:open={showImport} {markers} onsaved={onImported} />
+
+<div class="flex items-center justify-between gap-2">
 	<h1 class="text-xl font-semibold">Bloodwork &amp; vitals</h1>
-	<button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => (showResults = true)}>
-		Add bloodwork results
-	</button>
+	<div class="flex gap-2">
+		<button class="rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:border-neutral-500" onclick={() => (showImport = true)}>
+			Import PDF
+		</button>
+		<button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => (showResults = true)}>
+			Add results
+		</button>
+	</div>
 </div>
 
 {#if loading}

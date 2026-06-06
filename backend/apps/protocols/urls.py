@@ -1,4 +1,3 @@
-from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -6,7 +5,6 @@ from .views import (
     BloodPressureLogViewSet,
     BloodResultViewSet,
     CompoundViewSet,
-    ConcentrationView,
     DoseLogViewSet,
     InjectionSiteViewSet,
     ProtocolItemViewSet,
@@ -27,7 +25,4 @@ router.register("vials", VialViewSet, basename="vial")
 router.register("blood-results", BloodResultViewSet, basename="bloodresult")
 router.register("bp-logs", BloodPressureLogViewSet, basename="bploh")
 
-urlpatterns = [
-    path("concentration/", ConcentrationView.as_view(), name="concentration"),
-    *router.urls,
-]
+urlpatterns = router.urls
