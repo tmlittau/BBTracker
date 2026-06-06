@@ -50,9 +50,17 @@ jobs:
       - name: Run tests
         run: pytest -q
       - name: Check committed OpenAPI client is in sync
+        # Generate the client from the *served* schema endpoint — exactly how
+        # `npm run gen:api` produces the committed file — so the diff is apples-to-apples.
+        # drf-spectacular's served output differs cosmetically from its `spectacular`
+        # management command, so we generate the schema the same way the project does.
         run: |
-          python manage.py spectacular --format openapi-json --file /tmp/schema.json
-          npx -y openapi-typescript@^7 /tmp/schema.json -o /tmp/schema.d.ts
+          python manage.py migrate --noinput
+          python manage.py runserver 127.0.0.1:8000 --noreload &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/schema/ -o /dev/null && break || sleep 1
+          done
+          npx -y openapi-typescript@^7 http://127.0.0.1:8000/api/schema/ -o /tmp/schema.d.ts
           diff -u ../frontend/src/lib/api/schema.d.ts /tmp/schema.d.ts
 
   frontend:
