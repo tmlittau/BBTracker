@@ -12,6 +12,7 @@ from apps.protocols.models import (
     DoseLog,
     InjectionSite,
     Protocol,
+    ProtocolItem,
     Supplement,
 )
 
@@ -148,22 +149,100 @@ def test_protocol_activate_exclusive(api):
     assert Protocol.objects.get(id=p2).is_active is True
 
 
-def test_concentration_curve(api, user, test_e):
-    # Two doses, 7 days apart; curve should be non-empty and decreasing after last dose.
-    now = timezone.now()
-    DoseLog.objects.create(
-        owner=user, compound=test_e, taken_at=now - timedelta(days=7),
-        amount=125, unit="mg", route="im",
+def test_protocol_release_curve(api, user, test_e):
+    # A protocol with a daily Test E item + one logged dose → a per-compound release
+    # curve carrying both logged (past) and projected (future) points.
+    p = Protocol.objects.create(
+        owner=user, name="Cycle", started_on=timezone.now().date() - timedelta(days=7)
+    )
+    ProtocolItem.objects.create(
+        protocol=p, compound=test_e, dose_amount=50, dose_unit="mg", frequency="daily"
     )
     DoseLog.objects.create(
-        owner=user, compound=test_e, taken_at=now, amount=125, unit="mg", route="im",
+        owner=user, compound=test_e, taken_at=timezone.now() - timedelta(days=1),
+        amount=50, unit="mg", route="im",
     )
-    resp = api.get(f"/api/v1/protocols/concentration/?compound={test_e.id}&days=14")
+    resp = api.get(f"/api/v1/protocols/protocols/{p.id}/release/?horizon_days=28")
     assert resp.status_code == 200, resp.content
-    points = resp.json()
-    assert len(points) > 0
-    assert all("t" in p and "value" in p for p in points)
-    assert max(p["value"] for p in points) > 0
+    data = resp.json()
+    assert data["unit"] == "mg/day"
+    assert len(data["compounds"]) == 1
+    series = data["compounds"][0]
+    assert series["compound_id"] == test_e.id
+    assert series["points"]
+    assert max(pt["rate"] for pt in series["points"]) > 0
+    # Past points are solid (not projected); future points are projected.
+    assert any(pt["projected"] for pt in series["points"])
+    assert any(not pt["projected"] for pt in series["points"])
+
+
+def test_protocol_release_excludes_non_mass_units(api, user):
+    # An IU-dosed compound (hCG) can't share the mg/day axis → excluded, not plotted.
+    hcg = Compound.objects.create(
+        name="hCG", compound_class="ancillary", default_unit="iu",
+        default_route="subq", half_life_hours="33", active_fraction="1.000",
+    )
+    p = Protocol.objects.create(owner=user, name="Support")
+    ProtocolItem.objects.create(
+        protocol=p, compound=hcg, dose_amount=250, dose_unit="iu", frequency="eod"
+    )
+    data = api.get(f"/api/v1/protocols/protocols/{p.id}/release/").json()
+    assert data["compounds"] == []
+    assert "hCG" in data["excluded"]
+
+
+def test_parse_pdf(api, monkeypatch):
+    # Stub the bytes→text step so no binary PDF fixture is needed; exercise the
+    # endpoint + marker matching against a seeded marker.
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.protocols import bloodwork_pdf
+
+    BloodMarker.objects.create(
+        name="Testosterone", slug="testosterone", unit="nmol/L",
+        category="hormone", aliases=["testosteron"],
+    )
+    sample = (
+        "Afname : 21.05.26 09:20\n"
+        "testosteron ECLIA ↑ 79.90 nmol/l 8.64 - 29.00\n"
+    )
+    monkeypatch.setattr(bloodwork_pdf, "extract_text", lambda _b: sample)
+    upload = SimpleUploadedFile("report.pdf", b"%PDF-1.4 dummy", content_type="application/pdf")
+    resp = api.post(
+        "/api/v1/protocols/blood-results/parse_pdf/", {"file": upload}, format="multipart"
+    )
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["measured_on"] == "2026-05-21"
+    row = data["rows"][0]
+    assert row["raw_name"] == "testosteron"
+    assert row["value"] == "79.90" and row["unit"] == "nmol/l"
+    assert row["lab_flag"] == "high"
+    assert row["matched"] is True and row["marker"] is not None
+
+
+def test_bulk_stores_per_result_unit_and_range(api):
+    marker = BloodMarker.objects.create(
+        name="Testosterone", slug="testosterone", unit="nmol/L", category="hormone"
+    )
+    resp = api.post(
+        "/api/v1/protocols/blood-results/bulk/",
+        {
+            "measured_on": "2026-05-21",
+            "results": [
+                {"marker": marker.id, "value": "79.9", "unit": "nmol/l",
+                 "ref_low": "8.64", "ref_high": "29.00", "source": "pdf"},
+            ],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.content
+    created = resp.json()[0]
+    assert created["unit"] == "nmol/l" and created["source"] == "pdf"
+    # The matrix flags it via the per-result range (79.9 > 29) and reports the cell unit.
+    matrix = api.get("/api/v1/protocols/blood-results/matrix/").json()
+    cell = matrix["rows"][0]["cells"][0]
+    assert cell["flag"] == "high" and cell["unit"] == "nmol/l"
 
 
 def test_injection_site_recency_and_suggest(api, user, test_e, db):

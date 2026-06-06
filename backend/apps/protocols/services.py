@@ -7,7 +7,8 @@ user's own logged data.
 """
 from __future__ import annotations
 
-from datetime import timedelta
+import math
+from datetime import datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.utils import timezone
@@ -43,26 +44,92 @@ def active_amount(dose_amount, active_fraction, hours_elapsed, half_life_hours) 
     return float(dose_amount) * frac * remaining_fraction(hours_elapsed, half_life_hours)
 
 
-def concentration_series(doses, half_life_hours, active_fraction, start, end, step_hours=12):
-    """Active-amount time series over [start, end].
+# --- Pure: depot release-rate model (whole-protocol curve) --------------------
 
-    `doses` is an iterable of (taken_at_datetime, amount). Returns a list of
-    {t, value} with `t` ISO datetimes and `value` summed active amount.
+# Legacy per-week frequencies → representative weekdays for projection.
+LEGACY_WEEKDAY_MAP = {
+    "2x_week": {0, 3},     # Mon, Thu
+    "3x_week": {0, 2, 4},  # Mon, Wed, Fri
+}
+
+
+def decay_constant_per_day(half_life_hours) -> float | None:
+    """First-order rate constant k (per day) from a half-life. None if unusable."""
+    if not half_life_hours or float(half_life_hours) <= 0:
+        return None
+    return math.log(2) / (float(half_life_hours) / 24.0)
+
+
+def release_rate_series(doses, half_life_hours, active_fraction, start_day, end_day,
+                        step_days=1):
+    """Active-drug release rate (mass/day) over day-offsets [start_day, end_day].
+
+    Single-compartment depot: a dose D deposited on day dᵢ releases active drug at
+    rate f·D·k·e^(−k·(t−dᵢ))  (k = ln2 / half-life, f = active fraction). Each point
+    sums every dose with dᵢ ≤ t. At steady daily dosing the rate tends to dose×f per
+    day (mass conservation). `doses` = iterable of (day_offset, amount). Returns
+    [(day, rate)].
     """
-    if not half_life_hours or half_life_hours <= 0:
+    k = decay_constant_per_day(half_life_hours)
+    if k is None:
         return []
+    f = 1.0 if active_fraction is None else float(active_fraction)
+    ds = sorted((float(d), float(a)) for d, a in doses if a is not None)
     points = []
-    cursor = start
-    step = timedelta(hours=step_hours)
-    while cursor <= end:
+    n = 0
+    t = start_day
+    while t <= end_day + 1e-9:
         total = 0.0
-        for taken_at, amount in doses:
-            if taken_at <= cursor:
-                hours = (cursor - taken_at).total_seconds() / 3600.0
-                total += active_amount(amount, active_fraction, hours, float(half_life_hours))
-        points.append({"t": cursor.isoformat(), "value": round(total, 3)})
-        cursor += step
+        for d_i, a_i in ds:
+            if d_i > t:
+                break
+            total += f * a_i * k * math.exp(-k * (t - d_i))
+        points.append((round(t, 4), round(total, 5)))
+        n += 1
+        t = start_day + n * step_days
     return points
+
+
+def times_per_day_count(times_of_day, frequency) -> int:
+    """Administrations per dosing day (multi-select times, or legacy 2×/day)."""
+    n = len(times_of_day) if times_of_day else 0
+    if n == 0:
+        return 2 if frequency == "2x_day" else 1
+    return n
+
+
+def scheduled_dose_dates(frequency, days_of_week, start_date, end_date, anchor_date):
+    """Dates in [start_date, end_date] on which an item is dosed (one per dosing day).
+
+    Mirrors the adherence cadence: interval cadences (eod / every-3 / weekly) are
+    phased to `anchor_date`; `specific_days` matches weekdays; PRN can't be projected
+    (returns []). Legacy 2×/3× per week map to fixed weekdays.
+    """
+    if frequency in ("prn", "as_needed"):
+        return []
+    wanted = set(days_of_week or [])
+    out = []
+    d = start_date
+    while d <= end_date:
+        delta = (d - anchor_date).days
+        if frequency in ("daily", "2x_day"):
+            keep = True
+        elif frequency == "eod":
+            keep = delta % 2 == 0
+        elif frequency == "every_3_days":
+            keep = delta % 3 == 0
+        elif frequency == "weekly":
+            keep = delta % 7 == 0
+        elif frequency == "specific_days":
+            keep = d.weekday() in wanted
+        elif frequency in LEGACY_WEEKDAY_MAP:
+            keep = d.weekday() in LEGACY_WEEKDAY_MAP[frequency]
+        else:
+            keep = True
+        if keep:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
 
 
 # --- Pure: rotation & adherence ----------------------------------------------
@@ -116,25 +183,125 @@ def expected_for_item(frequency, days_of_week, times_of_day, window_days, end_da
 # --- DB-aware wrappers --------------------------------------------------------
 
 
-def compound_concentration(owner, compound, days=30, step_hours=12):
-    """Concentration series for a compound from the owner's dose history."""
+# Mass-dose units we can place on a shared mg/day axis (others are excluded).
+_MG_PER_UNIT = {"mg": 1.0, "mcg": 0.001}
+
+
+def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
+                            step_days=1, max_history_days=365):
+    """Per-compound active-release (mg/day) curves for a whole protocol.
+
+    The past (≤ today) uses the owner's actual `DoseLog`s for each compound; the
+    future (> today) is projected from each item's schedule (frequency + days/times).
+    One line per compound — each ester keeps its own half-life / active fraction.
+    Compounds with no half-life, dosed in non-mass units (iu/ml/tablet), or with no
+    doses at all are omitted (the first two are named in `excluded`). Returns
+    {now, today_day, start, end, unit, compounds:[…], excluded:[…]}.
+    """
     from .models import DoseLog
 
-    end = timezone.now()
-    start = end - timedelta(days=days)
-    # Include doses from up to 5 half-lives before the window so the curve is
-    # correct at `start` (older doses have decayed to ~3%).
-    lookback = start
-    if compound.half_life_hours:
-        lookback = start - timedelta(hours=float(compound.half_life_hours) * 5)
-    doses = list(
-        DoseLog.objects.filter(
-            owner=owner, compound=compound, taken_at__gte=lookback, taken_at__lte=end
-        ).values_list("taken_at", "amount")
+    now = now or timezone.now()
+    if timezone.is_naive(now):
+        now = timezone.make_aware(now)
+    today = timezone.localtime(now).date()
+
+    # Group compound items; skip supplements, missing half-life, non-mass units.
+    grouped: dict[int, dict] = {}
+    excluded: list[str] = []
+    for it in protocol.items.select_related("compound").filter(compound__isnull=False):
+        c = it.compound
+        factor = _MG_PER_UNIT.get(c.default_unit)
+        if not c.half_life_hours or float(c.half_life_hours) <= 0 or factor is None:
+            if c.name not in excluded:
+                excluded.append(c.name)
+            continue
+        grouped.setdefault(
+            c.id, {"compound": c, "factor": factor, "items": []}
+        )["items"].append(it)
+
+    empty = {"now": today.isoformat(), "today_day": 0, "start": None, "end": None,
+             "unit": "mg/day", "compounds": [], "excluded": excluded}
+    if not grouped:
+        return empty
+
+    cids = list(grouped)
+    first_dose = (
+        DoseLog.objects.filter(owner=owner, compound_id__in=cids)
+        .order_by("taken_at").values_list("taken_at", flat=True).first()
     )
-    return concentration_series(
-        doses, compound.half_life_hours, compound.active_fraction, start, end, step_hours
-    )
+
+    # Plot window: start at the protocol start (or first dose, or today), clamped.
+    start_date = protocol.started_on or (first_dose.date() if first_dose else today)
+    start_date = max(start_date, today - timedelta(days=max_history_days))
+    anchor = protocol.started_on or start_date
+
+    dosing_end = protocol.ended_on or (today + timedelta(days=horizon_days))
+    max_hl_days = max(float(g["compound"].half_life_hours) / 24.0 for g in grouped.values())
+    if protocol.ended_on:           # show the wash-out tail after dosing stops
+        plot_end = protocol.ended_on + timedelta(days=min(120, int(math.ceil(5 * max_hl_days))))
+    else:                           # open-ended → plateau to the horizon
+        plot_end = dosing_end
+    plot_end = max(plot_end, start_date)
+
+    start_dt = datetime.combine(start_date, time.min, tzinfo=now.tzinfo)
+    total_days = (plot_end - start_date).days
+    today_day = (today - start_date).days
+    proj_start = max(start_date, today + timedelta(days=1))
+
+    compounds_out = []
+    for g in grouped.values():
+        c, factor = g["compound"], g["factor"]
+        hl = c.half_life_hours
+
+        # Actual doses up to now (with a pre-window lookback so the left edge is
+        # correct), as (day_offset, mg).
+        lookback = start_dt - timedelta(days=min(120, 5 * float(hl) / 24.0))
+        doses = [
+            ((ta - start_dt).total_seconds() / 86400.0, float(amt) * factor)
+            for ta, amt in DoseLog.objects.filter(
+                owner=owner, compound_id=c.id, taken_at__lte=now, taken_at__gte=lookback
+            ).values_list("taken_at", "amount")
+            if amt is not None
+        ]
+
+        # Projected future doses (> today) from each item's schedule.
+        for it in g["items"]:
+            if it.dose_amount is None:
+                continue
+            per = times_per_day_count(it.times_of_day, it.frequency)
+            amt_mg = float(it.dose_amount) * factor * per
+            for d in scheduled_dose_dates(
+                it.frequency, it.days_of_week, proj_start, dosing_end, anchor
+            ):
+                doses.append(((d - start_date).days + 0.5, amt_mg))
+
+        if not doses:               # nothing logged or planned → no meaningful line
+            continue
+
+        series = release_rate_series(doses, hl, c.active_fraction, 0, total_days, step_days)
+        compounds_out.append({
+            "compound_id": c.id,
+            "name": c.name,
+            "unit": "mg/day",
+            "half_life_hours": float(hl),
+            "active_fraction": float(c.active_fraction),
+            "points": [
+                {"day": int(day), "date": (start_date + timedelta(days=int(day))).isoformat(),
+                 "rate": rate, "projected": day > today_day}
+                for day, rate in series
+            ],
+        })
+
+    compounds_out.sort(key=lambda x: x["name"])
+    return {
+        "now": today.isoformat(),
+        "today_day": today_day,
+        "start": start_date.isoformat(),
+        "end": plot_end.isoformat(),
+        "unit": "mg/day",
+        "compounds": compounds_out,
+        "excluded": excluded,
+    }
 
 
 def injection_site_recency(owner, days=30):
@@ -235,34 +402,56 @@ def supplement_nutrient_contribution(owner, date):
     return totals
 
 
-def marker_in_range(value, marker, sex=None) -> str:
-    """Flag a value as low / in_range / high using sex-specific ranges if present."""
+def flag_value(value, low, high) -> str:
+    """low / in_range / high for a value against an explicit reference range."""
+    v = Decimal(str(value))
+    if low is not None and v < Decimal(str(low)):
+        return "low"
+    if high is not None and v > Decimal(str(high)):
+        return "high"
+    return "in_range"
+
+
+def marker_range(marker, sex=None):
+    """The marker's reference (low, high), preferring sex-specific bounds when set."""
     low, high = marker.ref_low, marker.ref_high
     if sex == "male" and marker.ref_low_male is not None:
         low, high = marker.ref_low_male, marker.ref_high_male
     elif sex == "female" and marker.ref_low_female is not None:
         low, high = marker.ref_low_female, marker.ref_high_female
-    v = Decimal(str(value))
-    if low is not None and v < low:
-        return "low"
-    if high is not None and v > high:
-        return "high"
-    return "in_range"
+    return low, high
+
+
+def result_range(result, sex=None):
+    """A result's effective range: its own ref if present, else the marker's."""
+    if result.ref_low is not None or result.ref_high is not None:
+        return result.ref_low, result.ref_high
+    return marker_range(result.marker, sex)
+
+
+def marker_in_range(value, marker, sex=None) -> str:
+    """Flag a value using the marker's (sex-specific) reference range."""
+    low, high = marker_range(marker, sex)
+    return flag_value(value, low, high)
 
 
 def marker_trend(owner, marker, sex=None):
-    """Time series of a marker's results with reference-range flags."""
+    """Time series of a marker's results with per-result unit + reference-range flags."""
     from .models import BloodResult
 
     results = BloodResult.objects.filter(owner=owner, marker=marker).order_by("measured_on")
-    return [
-        {
-            "date": r.measured_on.isoformat(),
-            "value": r.value,
-            "flag": marker_in_range(r.value, marker, sex),
-        }
-        for r in results
-    ]
+    out = []
+    for r in results:
+        low, high = result_range(r, sex)
+        out.append(
+            {
+                "date": r.measured_on.isoformat(),
+                "value": r.value,
+                "unit": r.unit or marker.unit,
+                "flag": flag_value(r.value, low, high),
+            }
+        )
+    return out
 
 
 def bloodwork_matrix(owner, sex=None):
@@ -282,25 +471,29 @@ def bloodwork_matrix(owner, sex=None):
     by_marker: dict[int, dict] = {}
     for r in results:
         markers[r.marker_id] = r.marker
-        by_marker.setdefault(r.marker_id, {})[r.measured_on] = r.value
+        by_marker.setdefault(r.marker_id, {})[r.measured_on] = r
 
     rows = []
     for mid, marker in sorted(markers.items(), key=lambda kv: (kv[1].display_order, kv[1].name)):
         series = by_marker[mid]
         cells = []
-        prev = None
+        prev = None  # (value, unit)
         for d in dates:
-            val = series.get(d)
-            if val is None:
+            r = series.get(d)
+            if r is None:
                 cells.append(None)
                 continue
+            unit = r.unit or marker.unit
+            low, high = result_range(r, sex)
+            # %-change only between consecutive readings in the same unit.
             pct = None
-            if prev is not None and prev != 0:
-                pct = round(float((val - prev) / prev) * 100, 1)
+            if prev is not None and prev[0] != 0 and prev[1] == unit:
+                pct = round(float((r.value - prev[0]) / prev[0]) * 100, 1)
             cells.append(
-                {"value": str(val), "pct_change": pct, "flag": marker_in_range(val, marker, sex)}
+                {"value": str(r.value), "unit": unit, "pct_change": pct,
+                 "flag": flag_value(r.value, low, high)}
             )
-            prev = val
+            prev = (r.value, unit)
         rows.append(
             {
                 "marker": marker.name,

@@ -50,6 +50,24 @@ be measured in **g or ml**; and the bloodwork catalogue now covers a full **~57-
 iron, liver, lipids incl. ApoA/B, glucose/HbA1c, renal, electrolytes, vitamins, thyroid, and the full
 sex-hormone panel) with sex-specific reference ranges.
 
+**Bloodwork PDF import.** Upload a lab PDF and the markers, values, units, and reference ranges are
+extracted into an editable review table before anything is saved — the file is parsed **in memory and
+never stored**. Lab names are matched to the catalogue via per-marker aliases (incl. Dutch lab terms);
+each imported result keeps the **exact unit + reference range from its report**, so out-of-range values
+are flagged faithfully even if a marker's default changes. Marker reference units are **SI** throughout
+(e.g. testosterone nmol/L, cholesterol mmol/L, hemoglobin mmol/L). Born-digital text PDFs only (no
+OCR); best-effort transcription gated behind review — not medical advice.
+
+**Mobile & PWA.** The app is responsive and touch-first: a **bottom tab bar** on phones (the desktop
+top nav stays at `md+`), an **account sheet** for the secondary items, 16px form controls (no iOS
+focus-zoom), and safe-area handling. The **workout logger** is reworked for one-handed gym use —
+stacked set rows, **±2.5 kg / ±1 rep steppers**, a full-width Log button, and a **sticky rest
+countdown** pinned above the tab bar. It's also an **installable PWA** (`@vite-pwa/sveltekit`): web
+manifest (standalone, dumbbell icons incl. maskable, indigo theme), a service worker with an SSR-safe
+offline shell (NetworkFirst for pages + `/api`; auth never cached). Regenerate icons with
+`backend/.venv/bin/python scripts/gen_pwa_icons.py`. Installability needs HTTPS in production — which
+the Cloudflare Tunnel deployment provides.
+
 **Self-coaching layer** (`apps/core/`) — the integration that makes this one app, not five:
 
 - **`Phase` + adjustment timeline** — a phase ("Off-season bulk", "Prep", "Cruise") spans a date
@@ -91,7 +109,8 @@ which stay unflagged while sex is "unspecified".
 
 **Verification:** backend **175 tests** pass (sqlite via `backend/.venv` or in-container Postgres),
 ruff clean; frontend **type-check (0 errors) + 32 unit tests** pass; **Playwright** drives the real
-UI for auth, training, nutrition, protocols, settings, diary, and coaching (**9/9**, run under
+UI for auth, training, nutrition, protocols, settings, diary, and coaching, plus a mobile-viewport
+spec (Pixel 5: bottom-nav + touch logger) (**10/10** across `desktop` + `mobile` projects, run under
 Node ≥ 20 against the live stack); and browser-equivalent cookie-jar scripts pass — `verify_auth.py`
 12/12, `verify_training.py` 30/30, `verify_nutrition.py` 32/32 (incl. a live OFF barcode import),
 `verify_protocols.py` 32/32, `verify_profile.py` 14/14, `verify_diary.py` 22/22 (real MinIO
@@ -121,8 +140,10 @@ nvm use 20   # or otherwise put Node ≥ 18.19 first on PATH
 npx playwright test
 ```
 
-> Specs live in `frontend/tests/e2e/` (auth, training, nutrition, protocols, settings, diary,
-> coaching) — **9 tests, all passing** against the running stack under Node ≥ 20. The equivalent
+> Specs live in `frontend/tests/e2e/` — a **`desktop`** project (auth, training, nutrition,
+> protocols, settings, diary, coaching) plus a **`mobile`** project (Pixel 5 viewport:
+> `mobile.spec.ts` — bottom-nav shell + touch-first set logging). `npx playwright test` runs
+> both: **10 tests, all passing** against the running stack under Node ≥ 20. The equivalent
 > flows are also covered headlessly by the `scripts/verify_*.py` checks.
 
 ### End-to-end verification scripts
@@ -166,10 +187,18 @@ cd frontend && npm run gen:api      # writes src/lib/api/schema.d.ts
 - **Tailwind v4 native binary.** Platform `@tailwindcss/oxide-*` binaries are pinned in
   `frontend/package.json` `optionalDependencies` (lockstep with `tailwindcss`) to dodge the
   npm optional-deps bug; install with `npm ci`.
-- **Frontend deps in Docker.** The `frontend` service mounts an anonymous `node_modules` volume
-  baked at image build, so a new dependency (e.g. `svelte-dnd-action` for drag-reorder) needs either
-  `docker compose build frontend` or `docker compose exec frontend npm install` + a restart before
-  the dev server (and Playwright) can see it.
+- **Frontend deps in Docker.** The `frontend` service mounts an anonymous `node_modules` volume baked
+  at image build **and reused across `up` runs**, so it goes stale when you add a dependency (e.g.
+  `svelte-dnd-action`, `@vite-pwa/sveltekit`). Symptom: `vite` exits with
+  `Error [ERR_MODULE_NOT_FOUND]: Cannot find package '…'`. Because the persistent volume *masks* the
+  image, a plain `docker compose build frontend` is **not** enough — the rebuilt `node_modules` stays
+  hidden behind the old volume. Rebuild **and** renew the volume in one go:
+
+  ```bash
+  docker compose up -d --build --renew-anon-volumes frontend
+  ```
+
+  (`docker compose exec frontend npm install` + a restart also works as a one-off.)
 
 ### Fast backend iteration (no Docker)
 
@@ -179,3 +208,110 @@ A virtualenv at `backend/.venv` (Python 3.12) runs tests quickly against SQLite:
 cd backend
 DATABASE_URL='sqlite:////tmp/bbtracker_dev.sqlite3' DJANGO_SECRET_KEY=dev ./.venv/bin/python -m pytest
 ```
+
+## Deployment (self-hosted: TrueNAS SCALE + Cloudflare Tunnel)
+
+The production stack lives in **`docker-compose.prod.yml`** (separate from the dev compose) and is
+built for a homeserver behind a **Cloudflare Tunnel** — no inbound ports are opened on the NAS, and
+Cloudflare supplies the public HTTPS certificate (which also makes the PWA installable).
+
+```
+Phone/Browser ─https─▶ Cloudflare edge ─▶ cloudflared (already on the NAS)
+                                              │ http
+                                              ▼
+                                  Caddy  :${CADDY_HTTP_PORT}→:80      (only published port)
+                                   ├─ /api/* /_allauth/* /admin/* /static/* ─▶ backend  (gunicorn :8000)
+                                   └─ everything else                       ─▶ frontend (node :3000)
+                              db · redis · minio stay internal (no host ports)
+```
+
+Caddy serves **one same-origin host**, splitting it between Django and SvelteKit so session cookies +
+CSRF work without CORS (there is no vite dev proxy in production). It injects
+`X-Forwarded-Proto: https` so Django (via `SECURE_PROXY_SSL_HEADER`) treats requests as secure.
+
+**What's included:** `backend/Dockerfile.prod` (gunicorn + WhiteNoise + an entrypoint that runs
+`migrate`/`collectstatic`), `frontend/Dockerfile.prod` (`vite build` → `node build`, adapter-node),
+`infra/caddy/Caddyfile`, `docker-compose.prod.yml`, and `.env.prod.example`. The backend app code is
+unchanged from dev; `config/settings/prod.py` adds HTTPS/cookie hardening and WhiteNoise.
+
+### 1. Configure
+
+```bash
+cp .env.prod.example .env        # on the NAS, then edit:
+#  DJANGO_SECRET_KEY     → python -c "import secrets; print(secrets.token_urlsafe(64))"
+#  DJANGO_ALLOWED_HOSTS  → bbtracker.example.com,backend,localhost,127.0.0.1
+#  CSRF_TRUSTED_ORIGINS / PUBLIC_ORIGIN → https://bbtracker.example.com
+#  POSTGRES_PASSWORD (keep DATABASE_URL in sync), MINIO_ROOT_USER/PASSWORD
+#  CADDY_HTTP_PORT       → a free host port (see the port note below)
+```
+
+> **Host port.** Only **Caddy** is published, on `CADDY_HTTP_PORT` (default **8080**). Pick one that's
+> free on your NAS — in particular **not** `32400`, `3000`, `81`, or `444`, which are already routed to
+> other services. Everything else (Postgres, Redis, MinIO, backend, frontend) is internal to the
+> compose network.
+
+### 2. Build & start
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The backend entrypoint applies migrations and collects static on boot. Seed the reference data once
+(idempotent) — either set `RUN_SEED=1` in `.env` for the first boot, or run:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend python manage.py seed_training
+docker compose -f docker-compose.prod.yml exec backend python manage.py seed_nutrition
+docker compose -f docker-compose.prod.yml exec backend python manage.py seed_protocols
+docker compose -f docker-compose.prod.yml exec backend python manage.py seed_diary
+docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+```
+
+### 3. Point the existing cloudflared tunnel at Caddy
+
+`cloudflared` is already running on the NAS, so just add a public-hostname ingress for it — either in
+the **Zero Trust dashboard** (Tunnel → *Public Hostname* → Service `HTTP` → `<nas-ip>:8080`) or in its
+`config.yml`:
+
+```yaml
+ingress:
+  - hostname: bbtracker.example.com
+    service: http://<nas-ip>:8080      # CADDY_HTTP_PORT
+  - service: http_status:404
+```
+
+> Use the NAS **LAN IP** (not `localhost`) if cloudflared runs in its own container — its `localhost`
+> is the container, not the host. Alternatively attach cloudflared to this compose network and use
+> `http://caddy:80`.
+
+Then in Cloudflare: enable **Always Use HTTPS** (the edge HTTP→HTTPS redirect; Django's own redirect is
+intentionally off — see below), and make sure `/api/*` and `/_allauth/*` are **not cached** (the
+default ruleset doesn't cache them, but add a *Cache Rule → Bypass* to be safe).
+
+### 4. Verify
+
+From a phone on cellular, open `https://bbtracker.example.com` → register, enroll **TOTP**, log a
+workout, upload a progress photo (round-trips MinIO via the owner-scoped API), and **Add to Home
+Screen** to install the PWA. There should be no CSRF or mixed-content errors. Then:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend python manage.py check --deploy
+```
+
+> The only **deployment/security** finding is **`security.W008`** (SSL redirect disabled) — intentional:
+> HTTPS is enforced at the Cloudflare edge, and Django's redirect is left off so internal SSR traffic
+> (frontend → backend over http on the compose network) isn't redirected. (You'll also see a handful of
+> unrelated `drf_spectacular.W001` schema hints — harmless, and present in dev too.) Set
+> `DJANGO_SECURE_SSL_REDIRECT=1` only if you front the app without an edge that already redirects.
+
+### Operational notes
+- **Keep the NAS clock on NTP** — TOTP 2FA depends on accurate time.
+- **Back up** the `pgdata` volume (e.g. `pg_dump`) and the `miniodata` volume (progress photos).
+- **Only Caddy is reachable** from the tunnel; Postgres/Redis/MinIO have no host ports. Progress photos
+  are always streamed through the owner-scoped API — never via public MinIO URLs. The MinIO bucket is
+  auto-created on the first upload.
+- **Uploads:** Django caps progress photos at ~15 MB; Cloudflare's 100 MB request cap is not a concern.
+- **Email verification** is still `none` with a console email backend (fine for a personal instance).
+  Before opening signups to others, configure SMTP (`EMAIL_BACKEND`) and require real verification —
+  see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) §10.
+- Optional: put **Cloudflare Access** in front as an extra gate above the app's own auth.

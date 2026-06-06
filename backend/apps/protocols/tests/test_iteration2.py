@@ -1,13 +1,11 @@
 """Iteration-2 protocols: day-of-week + time-of-day scheduling adherence,
 and the bloodwork bulk-create + tabular matrix."""
-from datetime import timedelta
 
 import pytest
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.protocols.models import BloodMarker, BloodResult, Compound, DoseLog
+from apps.protocols.models import BloodMarker, BloodResult, Compound
 
 pytestmark = pytest.mark.django_db
 

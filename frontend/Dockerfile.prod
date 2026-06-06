@@ -1,0 +1,27 @@
+# Production image: build the SvelteKit app (adapter-node) and run `node build`.
+# Built by docker-compose.prod.yml. Dev still uses ./Dockerfile (vite dev server).
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+# Drop dev dependencies so only the runtime set is carried into the final image.
+RUN npm prune --omit=dev
+
+FROM node:20-alpine AS prod
+
+WORKDIR /app
+ENV NODE_ENV=production \
+    PORT=3000
+
+# Self-contained adapter-node output + pruned runtime deps.
+COPY --from=build /app/build ./build
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+
+EXPOSE 3000
+CMD ["node", "build"]

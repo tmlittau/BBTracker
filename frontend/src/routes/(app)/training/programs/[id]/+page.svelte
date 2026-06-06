@@ -207,7 +207,7 @@
 									</div>
 
 									<!-- Planned sets -->
-									<table class="mt-2 w-full text-sm">
+									<div class="mt-2 overflow-x-auto"><table class="w-full min-w-[30rem] text-sm">
 										<thead class="text-xs text-neutral-500">
 											<tr>
 												<th class="text-left font-normal">#</th>
@@ -254,7 +254,7 @@
 												</tr>
 											{/each}
 										</tbody>
-									</table>
+									</table></div>
 									<button class="mt-2 text-xs text-indigo-400 hover:text-indigo-300" onclick={() => addSet(slot)}>
 										+ Add set
 									</button>

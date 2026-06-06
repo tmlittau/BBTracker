@@ -80,9 +80,9 @@ def main():
 
     # Log a low and a high value.
     req("POST", f"{PROTO}/blood-results/",
-        {"marker": tt["id"], "value": "250", "measured_on": "2026-01-01"})   # < 300
+        {"marker": tt["id"], "value": "5", "measured_on": "2026-01-01"})    # < 8.64 (male low)
     req("POST", f"{PROTO}/blood-results/",
-        {"marker": tt["id"], "value": "1200", "measured_on": "2026-03-01"})  # > 1000
+        {"marker": tt["id"], "value": "40", "measured_on": "2026-03-01"})   # > 29 (male high)
 
     # Before setting sex: no applicable range → both in_range.
     _, trend = req("GET", f"{PROTO}/blood-results/trend/?marker={tt['id']}")
@@ -103,11 +103,11 @@ def main():
     _, me2 = req("GET", f"{AUTH}/me/")
     check("profile change persisted", me2["profile"]["sex"], "male")
 
-    # After setting sex=male: 250 flags low, 1200 flags high.
+    # After setting sex=male: 5 flags low, 40 flags high (SI male range 8.64–29 nmol/L).
     _, trend2 = req("GET", f"{PROTO}/blood-results/trend/?marker={tt['id']}")
     flags_after = [p["flag"] for p in trend2]
-    check("male sex → 250 flags low", flags_after[0], "low")
-    check("male sex → 1200 flags high", flags_after[1], "high")
+    check("male sex → 5 flags low", flags_after[0], "low")
+    check("male sex → 40 flags high", flags_after[1], "high")
     check("male sex → flags now differ from in_range", ",".join(flags_after), "low,high")
 
     # Email cannot be changed through the profile endpoint.

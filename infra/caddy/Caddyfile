@@ -1,0 +1,37 @@
+# BBTracker reverse proxy (production).
+#
+# TLS is terminated at the Cloudflare edge; the (already-running) cloudflared tunnel
+# forwards plain HTTP to this Caddy, which is the ONLY service published to a host
+# port. Caddy splits one same-origin host between Django and SvelteKit so session
+# cookies + CSRF work without CORS (there is no vite dev proxy in production).
+#
+# `header_up X-Forwarded-Proto https` tells Django (via SECURE_PROXY_SSL_HEADER) the
+# request is secure, so secure cookies are honoured and CSRF origin checks pass.
+
+{
+	# Cloudflare handles certificates; do not let Caddy try to provision its own.
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode gzip zstd
+
+	# Django (gunicorn): REST API, allauth headless, admin, and static files
+	# (served by WhiteNoise from gunicorn).
+	@backend path /api/* /_allauth/* /admin/* /static/*
+	handle @backend {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# Everything else: the SvelteKit app (adapter-node).
+	handle {
+		reverse_proxy frontend:3000 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
+	}
+}

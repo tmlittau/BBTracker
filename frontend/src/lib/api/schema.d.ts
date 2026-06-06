@@ -923,7 +923,10 @@ export interface paths {
         /**
          * @description Create many results for one date; blank/invalid markers are skipped.
          *
-         *     Body: {"measured_on": "YYYY-MM-DD", "results": [{"marker": id, "value": "x"}, …]}.
+         *     Body: {"measured_on": "YYYY-MM-DD", "results": [{"marker": id, "value": "x",
+         *     "unit"?: "", "ref_low"?: n, "ref_high"?: n, "source"?: "manual"|"pdf"}, …]}.
+         *     Per-result unit/ranges (e.g. from a PDF import) are stored verbatim, so each
+         *     reading flags against the exact range it came with.
          */
         post: operations["v1_protocols_blood_results_bulk_create"];
         delete?: never;
@@ -943,6 +946,28 @@ export interface paths {
         get: operations["v1_protocols_blood_results_matrix_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols/blood-results/parse_pdf/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Extract reviewable rows from an uploaded lab PDF (multipart `file`).
+         *
+         *     Stateless: nothing is persisted and the bytes are dropped after parsing — the
+         *     client reviews/edits the rows and POSTs the confirmed set to `bulk/`.
+         */
+        post: operations["v1_protocols_blood_results_parse_pdf_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1033,22 +1058,6 @@ export interface paths {
         head?: never;
         /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
         patch: operations["v1_protocols_compounds_partial_update"];
-        trace?: never;
-    };
-    "/api/v1/protocols/concentration/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["v1_protocols_concentration_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/protocols/dose-logs/": {
@@ -1307,6 +1316,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["v1_protocols_protocols_adherence_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols/protocols/{id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Per-compound active-release (mg/day) curves: logged actuals + projected future. */
+        get: operations["v1_protocols_protocols_release_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2179,9 +2205,15 @@ export interface components {
             readonly id: number;
             marker: number;
             readonly marker_name: string;
+            /** @description Effective unit: the result's own, else the marker's default. */
             readonly unit: string;
             /** Format: decimal */
             value: string;
+            /** Format: decimal */
+            ref_low?: string | null;
+            /** Format: decimal */
+            ref_high?: string | null;
+            source?: components["schemas"]["BloodResultSourceEnum"];
             /** Format: date */
             measured_on: string;
             notes?: string;
@@ -2190,10 +2222,21 @@ export interface components {
             marker: number;
             /** Format: decimal */
             value: string;
+            /** Format: decimal */
+            ref_low?: string | null;
+            /** Format: decimal */
+            ref_high?: string | null;
+            source?: components["schemas"]["BloodResultSourceEnum"];
             /** Format: date */
             measured_on: string;
             notes?: string;
         };
+        /**
+         * @description * `manual` - Manual
+         *     * `pdf` - PDF import
+         * @enum {string}
+         */
+        BloodResultSourceEnum: "manual" | "pdf";
         CheckIn: {
             readonly id: number;
             /** Format: date */
@@ -2280,11 +2323,6 @@ export interface components {
              */
             active_fraction?: string;
             notes?: string;
-        };
-        ConcentrationPoint: {
-            t: string;
-            /** Format: double */
-            value: number;
         };
         Csrf: {
             detail: string;
@@ -2465,7 +2503,7 @@ export interface components {
             readonly id: number;
             name: string;
             brand?: string;
-            readonly source: components["schemas"]["SourceEnum"];
+            readonly source: components["schemas"]["FoodSourceEnum"];
             barcode?: string;
             unit?: components["schemas"]["FoodUnitEnum"];
             readonly is_verified: boolean;
@@ -2495,6 +2533,14 @@ export interface components {
             servings?: components["schemas"]["ServingSizeRequest"][];
             food_nutrients?: components["schemas"]["FoodNutrientRequest"][];
         };
+        /**
+         * @description * `custom` - Custom
+         *     * `seed` - Seeded
+         *     * `off` - Open Food Facts
+         *     * `usda` - USDA FoodData Central
+         * @enum {string}
+         */
+        FoodSourceEnum: "custom" | "seed" | "off" | "usda";
         /**
          * @description * `g` - g
          *     * `ml` - ml
@@ -2605,6 +2651,7 @@ export interface components {
             date: string;
             /** Format: decimal */
             value: string;
+            unit: string;
             flag: string;
         };
         Meal: {
@@ -3171,6 +3218,11 @@ export interface components {
             marker?: number;
             /** Format: decimal */
             value?: string;
+            /** Format: decimal */
+            ref_low?: string | null;
+            /** Format: decimal */
+            ref_high?: string | null;
+            source?: components["schemas"]["BloodResultSourceEnum"];
             /** Format: date */
             measured_on?: string;
             notes?: string;
@@ -3642,6 +3694,15 @@ export interface components {
             notes?: string;
             order?: number;
         };
+        ProtocolRelease: {
+            now: string;
+            today_day: number;
+            start: string | null;
+            end: string | null;
+            unit: string;
+            compounds: components["schemas"]["ReleaseCompound"][];
+            excluded: string[];
+        };
         ProtocolRequest: {
             name: string;
             is_active?: boolean;
@@ -3693,6 +3754,23 @@ export interface components {
          * @enum {string}
          */
         RegionEnum: "glute" | "ventroglute" | "quad" | "delt" | "lat_delt" | "abdomen" | "pec" | "bicep" | "tricep" | "calf";
+        ReleaseCompound: {
+            compound_id: number;
+            name: string;
+            unit: string;
+            /** Format: double */
+            half_life_hours: number;
+            /** Format: double */
+            active_fraction: number;
+            points: components["schemas"]["ReleasePoint"][];
+        };
+        ReleasePoint: {
+            day: number;
+            date: string;
+            /** Format: double */
+            rate: number;
+            projected: boolean;
+        };
         /**
          * @description * `im` - Intramuscular
          *     * `subq` - Subcutaneous
@@ -3760,14 +3838,6 @@ export interface components {
             days_since: number | null;
             status: string;
         };
-        /**
-         * @description * `custom` - Custom
-         *     * `seed` - Seeded
-         *     * `off` - Open Food Facts
-         *     * `usda` - USDA FoodData Central
-         * @enum {string}
-         */
-        SourceEnum: "custom" | "seed" | "off" | "usda";
         SummaryNutrient: {
             id: number;
             name: string;
@@ -6127,6 +6197,24 @@ export interface operations {
             };
         };
     };
+    v1_protocols_blood_results_parse_pdf_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_protocols_blood_results_trend_list: {
         parameters: {
             query: {
@@ -6430,28 +6518,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Compound"];
-                };
-            };
-        };
-    };
-    v1_protocols_concentration_list: {
-        parameters: {
-            query: {
-                compound: number;
-                days?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConcentrationPoint"][];
                 };
             };
         };
@@ -7015,6 +7081,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedAdherenceRowList"];
+                };
+            };
+        };
+    };
+    v1_protocols_protocols_release_retrieve: {
+        parameters: {
+            query?: {
+                horizon_days?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolRelease"];
                 };
             };
         };

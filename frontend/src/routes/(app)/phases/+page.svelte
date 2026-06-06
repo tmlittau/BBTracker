@@ -157,7 +157,7 @@
 
 <form class="mt-6 max-w-2xl space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={save}>
 	<h2 class="text-sm font-medium">{editing ? `Edit "${editing.name}"` : 'New phase'}</h2>
-	<div class="flex gap-2">
+	<div class="flex flex-col gap-2 sm:flex-row">
 		<Input placeholder="Name (e.g. Summer prep)" bind:value={name} />
 		<select bind:value={phaseType} class="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100">
 			{#each PHASE_TYPES as t (t.key)}<option value={t.key}>{t.label}</option>{/each}

@@ -108,12 +108,16 @@ def main():
         })
     check("log doses", st, 201)
 
-    # Concentration curve.
-    _, curve = req("GET", f"{API}/concentration/?compound={test_e['id']}&days=14")
-    check("concentration curve non-empty", len(curve) > 0, True)
-    peak = max(p["value"] for p in curve) if curve else 0
-    # 2×125 mg @ 0.70 active fraction → peak well above one dose's active amount.
-    check("curve peak reflects ester fraction", 120 <= peak <= 200, True)
+    # Protocol release curve: per-compound active-release combining logged doses
+    # (past) with the schedule projection (future), split at today.
+    _, rel = req("GET", f"{API}/protocols/{pid}/release/?horizon_days=28")
+    series = next((c for c in rel["compounds"] if c["compound_id"] == test_e["id"]), None)
+    check("release curve includes the compound", series is not None, True)
+    pts = series["points"] if series else []
+    check("release curve non-empty", len(pts) > 0, True)
+    check("release rate positive", max((p["rate"] for p in pts), default=0) > 0, True)
+    check("release curve has projected (future) points", any(p["projected"] for p in pts), True)
+    check("release curve has logged (past) points", any(not p["projected"] for p in pts), True)
 
     # Site rotation: the used glute is 'fresh'; suggestion avoids it.
     _, recency = req("GET", f"{API}/injection-sites/recency/?days=30")
@@ -140,6 +144,18 @@ def main():
     check("bloodwork trend has 2 points", len(trend), 2)
     check("low value flagged", trend[0]["flag"], "low")          # 5 < 20
     check("mid value in range", trend[1]["flag"], "in_range")    # 30 in [20,45]
+
+    # Per-result range (e.g. from a PDF import) overrides the marker default for
+    # flagging, and the trend reports the per-result unit.
+    req("POST", f"{API}/blood-results/bulk/", {
+        "measured_on": "2026-04-01",
+        "results": [{"marker": gen["id"], "value": "30", "unit": "x",
+                     "ref_low": "50", "ref_high": "60", "source": "pdf"}],
+    })
+    _, trend_pr = req("GET", f"{API}/blood-results/trend/?marker={gen['id']}")
+    pr = next(p for p in trend_pr if p["date"] == "2026-04-01")
+    check("per-result range flags low (30 < 50)", pr["flag"], "low")
+    check("per-result unit surfaced", pr["unit"], "x")
 
     # Blood pressure.
     check("log BP", req("POST", f"{API}/bp-logs/", {
