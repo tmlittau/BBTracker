@@ -34,7 +34,6 @@ export interface PlannedSet {
 	target_reps_low: number | null;
 	target_reps_high: number | null;
 	target_weight: string | null;
-	target_rpe: string | null;
 	rest_seconds: number | null;
 }
 
@@ -74,7 +73,6 @@ export interface LoggedSet {
 	set_type: string;
 	reps: number | null;
 	weight: string | null;
-	rpe: string | null;
 	rir: number | null;
 	duration_seconds: number | null;
 	distance_m: string | null;

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { estimated1rm, formatDuration, platesPerSide, setVolume } from '../../src/lib/training/calc';
+import {
+	durationSeconds,
+	estimated1rm,
+	formatClock,
+	formatDuration,
+	formatHM,
+	platesPerSide,
+	setVolume
+} from '../../src/lib/training/calc';
 
 describe('estimated1rm', () => {
 	it('returns the weight for a single rep', () => {
@@ -63,5 +71,32 @@ describe('formatDuration', () => {
 		expect(formatDuration(9)).toBe('0:09');
 		expect(formatDuration(75)).toBe('1:15');
 		expect(formatDuration(600)).toBe('10:00');
+	});
+});
+
+describe('formatHM', () => {
+	it('formats compact hours/minutes', () => {
+		expect(formatHM(0)).toBe('0m');
+		expect(formatHM(45 * 60)).toBe('45m');
+		expect(formatHM(60 * 60)).toBe('1h 0m');
+		expect(formatHM(83 * 60)).toBe('1h 23m');
+	});
+});
+
+describe('formatClock', () => {
+	it('formats m:ss under an hour and h:mm:ss beyond', () => {
+		expect(formatClock(0)).toBe('0:00');
+		expect(formatClock(75)).toBe('1:15');
+		expect(formatClock(3675)).toBe('1:01:15');
+	});
+});
+
+describe('durationSeconds', () => {
+	it('computes whole seconds between ISO timestamps', () => {
+		expect(durationSeconds('2026-01-01T10:00:00Z', '2026-01-01T11:30:00Z')).toBe(5400);
+	});
+	it('is zero when end is null or precedes start', () => {
+		expect(durationSeconds('2026-01-01T10:00:00Z', null)).toBe(0);
+		expect(durationSeconds('2026-01-01T11:00:00Z', '2026-01-01T10:00:00Z')).toBe(0);
 	});
 });

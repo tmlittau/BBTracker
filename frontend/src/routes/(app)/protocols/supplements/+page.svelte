@@ -9,6 +9,7 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let showModal = $state(false);
+	let editing = $state<Supplement | null>(null);
 
 	async function load() {
 		supplements = await protocolsApi.supplements();
@@ -27,6 +28,11 @@
 	function onCreated(s: Supplement) {
 		supplements = [...supplements, s].sort((a, b) => a.name.localeCompare(b.name));
 	}
+	function onUpdated(s: Supplement) {
+		supplements = supplements
+			.map((x) => (x.id === s.id ? s : x))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	}
 
 	async function remove(id: number) {
 		if (!confirm('Delete this supplement?')) return;
@@ -35,13 +41,19 @@
 	}
 </script>
 
-<SupplementCreateModal bind:open={showModal} oncreated={onCreated} />
+<SupplementCreateModal
+	bind:open={showModal}
+	oncreated={onCreated}
+	onupdated={onUpdated}
+	edit={editing}
+	onclose={() => (editing = null)}
+/>
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Supplements</h1>
 	<button
 		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-		onclick={() => (showModal = true)}
+		onclick={() => { editing = null; showModal = true; }}
 	>
 		New supplement
 	</button>
@@ -74,7 +86,10 @@
 					</div>
 				</div>
 				{#if !s.is_global}
-					<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(s.id)}>Delete</button>
+					<div class="flex shrink-0 items-center gap-3">
+						<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = s; showModal = true; }}>Edit</button>
+						<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(s.id)}>Delete</button>
+					</div>
 				{/if}
 			</li>
 		{/each}

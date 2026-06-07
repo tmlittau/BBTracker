@@ -164,9 +164,6 @@ class PlannedSet(models.Model):
     target_pct_1rm = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )
-    target_rpe = models.DecimalField(
-        max_digits=3, decimal_places=1, null=True, blank=True
-    )
     target_rir = models.PositiveIntegerField(null=True, blank=True)
     tempo = models.CharField(max_length=12, blank=True, help_text="e.g. '3-1-1-0'")
     rest_seconds = models.PositiveIntegerField(null=True, blank=True)
@@ -240,7 +237,6 @@ class LoggedSet(models.Model):
     )
     reps = models.PositiveIntegerField(null=True, blank=True)
     weight = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
-    rpe = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     rir = models.PositiveIntegerField(null=True, blank=True)
     duration_seconds = models.PositiveIntegerField(null=True, blank=True)
     distance_m = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)

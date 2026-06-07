@@ -413,3 +413,45 @@ def import_food_from_barcode(user, barcode: str):
             ]
         )
     return food, True
+
+
+def lookup_barcode_draft(user, barcode: str) -> dict:
+    """Resolve a barcode to a New-Food draft WITHOUT persisting anything.
+
+    Prefers an existing global/owned Food (so the form starts from current data);
+    otherwise fetches + maps the Open Food Facts product. Returns
+    ``{name, brand, unit, barcode, nutrients}`` where ``nutrients`` maps our
+    canonical slug -> amount per 100 (string). Raises the same exceptions as
+    ``import_food_from_barcode`` (ProductNotFound / NoNutrimentsError /
+    UpstreamUnavailable) so the client can confirm before saving.
+    """
+    from .models import Nutrient
+
+    existing = find_existing_food_by_barcode(user, barcode)
+    if existing is not None:
+        return {
+            "name": existing.name,
+            "brand": existing.brand,
+            "unit": existing.unit,
+            "barcode": barcode,
+            "nutrients": {
+                fn.nutrient.slug: str(fn.amount_per_100g)
+                for fn in existing.food_nutrients.select_related("nutrient").all()
+            },
+        }
+
+    product = fetch_off_product(barcode)
+    if product is None:
+        raise ProductNotFound(f"No product found for barcode {barcode}.")
+    nutrients = {n.slug: n for n in Nutrient.objects.all()}
+    units_by_slug = {slug: n.unit for slug, n in nutrients.items()}
+    mapped = map_off_nutriments(product.get("nutriments") or {}, units_by_slug)
+    if not (mapped.keys() & REQUIRED_ANY):
+        raise NoNutrimentsError("That product has no usable nutrition data.")
+    return {
+        "name": _off_name(product, barcode),
+        "brand": _off_brand(product),
+        "unit": "g",
+        "barcode": barcode,
+        "nutrients": {slug: str(amount) for slug, amount in mapped.items()},
+    }

@@ -262,6 +262,9 @@ export const protocolsApi = {
 			list
 		),
 	createCompound: (data: Partial<Compound>) => req<Compound>('POST', '/compounds/', data),
+	updateCompound: (id: number, data: Partial<Compound>) =>
+		req<Compound>('PATCH', `/compounds/${id}/`, data),
+	deleteCompound: (id: number) => req<void>('DELETE', `/compounds/${id}/`),
 
 	supplements: (q = '') =>
 		req<Paginated<Supplement>>(
@@ -269,6 +272,8 @@ export const protocolsApi = {
 			`/supplements/${q ? `?q=${encodeURIComponent(q)}` : ''}`
 		).then(list),
 	createSupplement: (data: Partial<Supplement>) => req<Supplement>('POST', '/supplements/', data),
+	updateSupplement: (id: number, data: Partial<Supplement>) =>
+		req<Supplement>('PATCH', `/supplements/${id}/`, data),
 	deleteSupplement: (id: number) => req<void>('DELETE', `/supplements/${id}/`),
 
 	injectionSites: () => req<InjectionSite[]>('GET', '/injection-sites/'),
@@ -380,3 +385,29 @@ export const ROUTES = [
 	{ key: 'nasal', label: 'Nasal' },
 	{ key: 'other', label: 'Other' }
 ];
+
+// Whether a protocol item is scheduled for `on` (default today). Mirrors the
+// backend cadence in services.scheduled_dose_dates so the quick-log list can show
+// only what's due today. PRN/daily are always shown; specific_days matches the
+// weekday (Mon=0…Sun=6); interval cadences (eod / every-3 / weekly) are phased to
+// the protocol's start date (shown every day if that's unknown).
+export function isScheduledToday(
+	item: Pick<ProtocolItem, 'frequency' | 'days_of_week'>,
+	startedOn: string | null,
+	on: Date = new Date()
+): boolean {
+	const f = item.frequency;
+	if (f === 'prn' || f === 'as_needed' || f === 'daily' || f === '2x_day') return true;
+	const weekday = (on.getDay() + 6) % 7; // JS Sun=0 → our Mon=0…Sun=6
+	if (f === 'specific_days') return (item.days_of_week ?? []).includes(weekday);
+	if (f === 'eod' || f === 'every_3_days' || f === 'weekly') {
+		if (!startedOn) return true; // no anchor → don't hide it
+		const anchor = new Date(startedOn + 'T00:00:00');
+		const today0 = new Date(on.getFullYear(), on.getMonth(), on.getDate());
+		const delta = Math.round((today0.getTime() - anchor.getTime()) / 86_400_000);
+		if (delta < 0) return false;
+		const period = f === 'eod' ? 2 : f === 'every_3_days' ? 3 : 7;
+		return delta % period === 0;
+	}
+	return true; // unknown cadence → show
+}

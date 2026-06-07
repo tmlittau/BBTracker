@@ -15,7 +15,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.nutrition.models import Food, Nutrient
+from apps.nutrition.models import Food, FoodNutrient, Nutrient
 from apps.nutrition.services import (
     OFF_USER_AGENT,
     UpstreamUnavailable,
@@ -215,6 +215,56 @@ def test_invalid_barcode_returns_400(mock_fetch, api):
 
 def test_import_requires_auth():
     resp = APIClient().post(URL, {"barcode": "12345678"}, format="json")
+    assert resp.status_code in (401, 403)
+
+
+# --- Endpoint: lookup_barcode (draft only — nothing persisted) ----------------
+
+LOOKUP_URL = "/api/v1/nutrition/foods/lookup_barcode/"
+
+
+@mock.patch("apps.nutrition.services.fetch_off_product", return_value=OFF_PRODUCT)
+def test_lookup_returns_draft_without_saving(mock_fetch, api, nutrients):
+    resp = api.post(LOOKUP_URL, {"barcode": "3017620422003"}, format="json")
+
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["name"] == "Nutella"
+    assert data["brand"] == "Ferrero"
+    assert data["unit"] == "g"
+    assert data["barcode"] == "3017620422003"
+    # Nutrients keyed by our canonical slug, in our units (mass converted to mg).
+    assert data["nutrients"]["energy"] == "539.0000"
+    assert data["nutrients"]["sodium"] == "42.8000"  # 0.0428 g → 42.8 mg
+    # Crucially: nothing was persisted — the user confirms in the form first.
+    assert Food.objects.filter(barcode="3017620422003").count() == 0
+
+
+@mock.patch("apps.nutrition.services.fetch_off_product")
+def test_lookup_uses_existing_food(mock_fetch, api, user, nutrients):
+    food = Food.objects.create(
+        name="My snack", owner=user, source="custom", barcode="1234567890", unit="g"
+    )
+    FoodNutrient.objects.create(
+        food=food, nutrient=nutrients["protein"], amount_per_100g=Decimal("12.5")
+    )
+    resp = api.post(LOOKUP_URL, {"barcode": "1234567890"}, format="json")
+
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["name"] == "My snack"
+    assert data["nutrients"]["protein"] == "12.5000"
+    mock_fetch.assert_not_called()
+
+
+@mock.patch("apps.nutrition.services.fetch_off_product", return_value=None)
+def test_lookup_not_found_returns_404(mock_fetch, api, nutrients):
+    resp = api.post(LOOKUP_URL, {"barcode": "00000000"}, format="json")
+    assert resp.status_code == 404
+
+
+def test_lookup_requires_auth():
+    resp = APIClient().post(LOOKUP_URL, {"barcode": "12345678"}, format="json")
     assert resp.status_code in (401, 403)
 
 

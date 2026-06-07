@@ -92,6 +92,16 @@ class BarcodeImportSerializer(serializers.Serializer):
         return code
 
 
+class BarcodeDraftSerializer(serializers.Serializer):
+    """A New-Food draft from a barcode lookup (nothing persisted yet)."""
+
+    name = serializers.CharField()
+    brand = serializers.CharField(allow_blank=True)
+    unit = serializers.CharField()
+    barcode = serializers.CharField()
+    nutrients = serializers.DictField(child=serializers.CharField())
+
+
 class MealSerializer(serializers.ModelSerializer):
     class Meta:
         model = Meal

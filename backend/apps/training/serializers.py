@@ -51,7 +51,7 @@ class PlannedSetSerializer(serializers.ModelSerializer):
         fields = [
             "id", "slot", "order", "set_type",
             "target_reps_low", "target_reps_high", "target_weight",
-            "target_pct_1rm", "target_rpe", "target_rir", "tempo", "rest_seconds",
+            "target_pct_1rm", "target_rir", "tempo", "rest_seconds",
         ]
 
 
@@ -92,7 +92,7 @@ class LoggedSetSerializer(serializers.ModelSerializer):
         model = LoggedSet
         fields = [
             "id", "logged_exercise", "order", "set_type",
-            "reps", "weight", "rpe", "rir", "duration_seconds", "distance_m",
+            "reps", "weight", "rir", "duration_seconds", "distance_m",
             "rest_seconds", "is_completed", "e1rm", "is_pr",
         ]
         read_only_fields = ["e1rm", "is_pr"]

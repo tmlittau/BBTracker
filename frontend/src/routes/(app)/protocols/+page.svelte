@@ -3,6 +3,7 @@
 	import {
 		protocolsApi,
 		FREQUENCIES,
+		isScheduledToday,
 		type DoseLog,
 		type Protocol,
 		type ProtocolItem
@@ -13,8 +14,15 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let logging = $state<number | null>(null);
+	let showAllItems = $state(false);
 
 	const active = $derived(protocols.find((p) => p.is_active) ?? null);
+	// Quick-log only what's actually due today (e.g. a Sunday-only compound won't
+	// appear on a Tuesday) — with an escape hatch to show the whole protocol.
+	const todaysItems = $derived(
+		active ? active.items.filter((i) => isScheduledToday(i, active.started_on)) : []
+	);
+	const shownItems = $derived(showAllItems ? (active?.items ?? []) : todaysItems);
 
 	async function load() {
 		[protocols, recentDoses] = await Promise.all([protocolsApi.protocols(), protocolsApi.doses()]);
@@ -90,8 +98,15 @@
 					No items yet. <a class="text-indigo-400" href={`/protocols/manage/${active.id}`}>Add some →</a>
 				</p>
 			{:else}
+				<div class="mt-2 flex items-center justify-between">
+					<p class="text-xs text-neutral-500">{showAllItems ? 'All protocol items' : 'Scheduled for today'}</p>
+					<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => (showAllItems = !showAllItems)}>{showAllItems ? 'Show today only' : 'Show all'}</button>
+				</div>
+				{#if shownItems.length === 0}
+					<p class="mt-2 text-sm text-neutral-500">Nothing scheduled for today. <button class="text-indigo-400 hover:text-indigo-300" onclick={() => (showAllItems = true)}>Show all items</button></p>
+				{:else}
 				<div class="mt-3 space-y-2">
-					{#each active.items as item (item.id)}
+					{#each shownItems as item (item.id)}
 						<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
 							<div>
 								<span class="font-medium">{item.item_name}</span>
@@ -110,6 +125,7 @@
 						</div>
 					{/each}
 				</div>
+				{/if}
 			{/if}
 		{:else}
 			<p class="text-sm text-neutral-500">

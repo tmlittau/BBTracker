@@ -21,6 +21,7 @@ from .models import (
     RecipeItem,
 )
 from .serializers import (
+    BarcodeDraftSerializer,
     BarcodeImportSerializer,
     DailySummarySerializer,
     DiaryEntrySerializer,
@@ -38,6 +39,7 @@ from .services import (
     UpstreamUnavailable,
     daily_summary,
     import_food_from_barcode,
+    lookup_barcode_draft,
 )
 
 
@@ -121,6 +123,38 @@ class FoodViewSet(viewsets.ModelViewSet):
             )
         data = self.get_serializer(food).data
         return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @extend_schema(request=BarcodeImportSerializer, responses=BarcodeDraftSerializer)
+    @action(detail=False, methods=["post"], url_path="lookup_barcode")
+    def lookup_barcode(self, request):
+        """Look up a barcode WITHOUT saving — a draft to prefill the New Food form.
+
+        Resolves to an existing global/owned Food, else fetches + parses the Open
+        Food Facts product. Returns ``{name, brand, unit, barcode, nutrients}``
+        (nutrients keyed by our canonical slug) so the user can confirm/adjust the
+        values before the food is actually created.
+        """
+        serializer = BarcodeImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        barcode = serializer.validated_data["barcode"]
+        try:
+            draft = lookup_barcode_draft(request.user, barcode)
+        except ProductNotFound:
+            return Response(
+                {"detail": f"No product found for barcode {barcode}."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except NoNutrimentsError:
+            return Response(
+                {"detail": "That product has no nutrition data we can import."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except UpstreamUnavailable:
+            return Response(
+                {"detail": "Couldn't reach Open Food Facts. Try again shortly."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(draft, status=status.HTTP_200_OK)
 
 
 @extend_schema(tags=["nutrition"])

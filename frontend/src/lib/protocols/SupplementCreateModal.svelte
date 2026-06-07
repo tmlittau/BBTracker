@@ -7,16 +7,21 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
-	// Create a custom supplement (+ its per-serving nutrients) in-context. Nutrient
-	// rows can be added AND removed (the standalone page lacked the remove control).
+	// Create OR edit a custom supplement (+ its per-serving nutrients) in-context.
+	// Pass `edit` to load an existing supplement. Nutrient rows can be added AND
+	// removed.
 	let {
 		open = $bindable(false),
 		oncreated,
-		onclose
+		onupdated,
+		onclose,
+		edit = null
 	}: {
 		open?: boolean;
-		oncreated: (s: Supplement) => void;
+		oncreated?: (s: Supplement) => void;
+		onupdated?: (s: Supplement) => void;
 		onclose?: () => void;
+		edit?: Supplement | null;
 	} = $props();
 
 	let nutrients = $state<Nutrient[]>([]);
@@ -29,6 +34,29 @@
 
 	onMount(async () => {
 		nutrients = await nutritionApi.nutrients().catch(() => []);
+	});
+
+	function reset() {
+		name = brand = benefit = '';
+		rows = [{ nutrient: null, amount: '' }];
+	}
+
+	// Load the supplement being edited when the modal opens (once per open).
+	let lastEdit: Supplement | null = null;
+	$effect(() => {
+		if (open && edit && edit !== lastEdit) {
+			lastEdit = edit;
+			name = edit.name;
+			brand = edit.brand ?? '';
+			benefit = edit.target_benefit ?? '';
+			rows = edit.supplement_nutrients.length
+				? edit.supplement_nutrients.map((n) => ({
+						nutrient: n.nutrient,
+						amount: String(num(n.amount_per_serving))
+					}))
+				: [{ nutrient: null, amount: '' }];
+		}
+		if (!open) lastEdit = null;
 	});
 
 	function addRow() {
@@ -48,15 +76,18 @@
 			const supplement_nutrients = rows
 				.filter((r) => r.nutrient != null && r.amount !== '')
 				.map((r) => ({ nutrient: r.nutrient as number, amount_per_serving: String(num(r.amount)) }));
-			const s = await protocolsApi.createSupplement({
+			const data = {
 				name: name.trim(),
 				brand: brand.trim(),
 				target_benefit: benefit.trim(),
 				supplement_nutrients
-			});
-			oncreated(s);
-			name = brand = benefit = '';
-			rows = [{ nutrient: null, amount: '' }];
+			};
+			if (edit) {
+				onupdated?.(await protocolsApi.updateSupplement(edit.id, data));
+			} else {
+				oncreated?.(await protocolsApi.createSupplement(data));
+			}
+			reset();
 			open = false;
 		} catch (err) {
 			error = (err as Error).message;
@@ -69,7 +100,7 @@
 		'rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100';
 </script>
 
-<Modal bind:open title="New supplement" {onclose}>
+<Modal bind:open title={edit ? 'Edit supplement' : 'New supplement'} {onclose}>
 	<form class="space-y-3" onsubmit={submit}>
 		<div class="flex gap-2">
 			<Input placeholder="Name (e.g. Vitamin D3)" required bind:value={name} />
@@ -100,6 +131,8 @@
 			+ Add another nutrient
 		</button>
 		{#if error}<p class="text-sm text-red-400">{error}</p>{/if}
-		<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create supplement'}</Button>
+		<Button type="submit" disabled={saving}>
+			{saving ? 'Saving…' : edit ? 'Save changes' : 'Create supplement'}
+		</Button>
 	</form>
 </Modal>
