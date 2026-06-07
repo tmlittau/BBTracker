@@ -4,6 +4,7 @@
 	import { num } from '$lib/nutrition/calc';
 	import Button from '$lib/components/ui/Button.svelte';
 	import FoodCreateModal from '$lib/nutrition/FoodCreateModal.svelte';
+	import BarcodeScannerModal from '$lib/nutrition/BarcodeScannerModal.svelte';
 
 	let foods = $state<Food[]>([]);
 	let query = $state('');
@@ -16,6 +17,8 @@
 	let importing = $state(false);
 	let importMsg = $state<string | null>(null);
 	let importErr = $state<string | null>(null);
+	let scanSupported = $state(false); // browser camera (getUserMedia) available
+	let showScanner = $state(false);
 
 	let showFoodModal = $state(false);
 
@@ -44,9 +47,7 @@
 		return msg;
 	}
 
-	async function importByBarcode(e: SubmitEvent) {
-		e.preventDefault();
-		const code = barcode.trim();
+	async function lookup(code: string) {
 		if (!code) return;
 		importing = true;
 		importMsg = null;
@@ -64,7 +65,22 @@
 		}
 	}
 
-	onMount(load);
+	async function importByBarcode(e: SubmitEvent) {
+		e.preventDefault();
+		await lookup(barcode.trim());
+	}
+
+	// Camera scan result → drop it into the field + look it up.
+	function onScanResult(code: string) {
+		barcode = code;
+		showBarcode = true;
+		lookup(code);
+	}
+
+	onMount(() => {
+		load();
+		scanSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+	});
 
 	let timer: ReturnType<typeof setTimeout>;
 	function onSearch() {
@@ -89,6 +105,7 @@
 </script>
 
 <FoodCreateModal bind:open={showFoodModal} oncreated={onCreated} />
+<BarcodeScannerModal bind:open={showScanner} onresult={onScanResult} />
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Food library</h1>
@@ -116,6 +133,16 @@
 			it to the shared library.
 		</p>
 		<div class="flex gap-2">
+			{#if scanSupported}
+				<button
+					type="button"
+					onclick={() => (showScanner = true)}
+					disabled={importing}
+					class="shrink-0 rounded border border-emerald-700 px-3 py-2 text-sm text-emerald-300 hover:border-emerald-500 disabled:opacity-50"
+				>
+					📷 Scan
+				</button>
+			{/if}
 			<input
 				name="barcode"
 				inputmode="numeric"
