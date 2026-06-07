@@ -191,7 +191,13 @@ export const trainingApi = {
 	reorderPlannedSets: (order: { id: number; order: number }[]) =>
 		req<{ updated: number }>('POST', '/planned-sets/reorder/', order),
 
-	sessions: () => req<Paginated<WorkoutSessionListItem>>('GET', '/workout-sessions/').then(list),
+	sessions: (params: { from?: string; to?: string } = {}) => {
+		const qs = new URLSearchParams(params as Record<string, string>).toString();
+		return req<Paginated<WorkoutSessionListItem>>(
+			'GET',
+			`/workout-sessions/${qs ? `?${qs}` : ''}`
+		).then(list);
+	},
 	session: (id: number) => req<WorkoutSession>('GET', `/workout-sessions/${id}/`),
 	createSession: (data: { name?: string; day?: number | null; started_at: string }) =>
 		req<WorkoutSession>('POST', '/workout-sessions/', data),

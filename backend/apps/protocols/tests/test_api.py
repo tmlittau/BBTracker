@@ -149,6 +149,22 @@ def test_cannot_delete_others_dose_log(api, other, test_e):
     assert other_api.get(f"/api/v1/protocols/dose-logs/{did}/").status_code == 200
 
 
+def test_dose_log_date_range_filter(api, test_e):
+    now = timezone.now()
+    for days_ago in (0, 15):
+        api.post(
+            "/api/v1/protocols/dose-logs/",
+            {"compound": test_e.id, "taken_at": (now - timedelta(days=days_ago)).isoformat(),
+             "amount": "100", "unit": "mg", "route": "im"},
+            format="json",
+        )
+    assert len(api.get("/api/v1/protocols/dose-logs/").json()["results"]) == 2
+    frm = (now - timedelta(days=5)).date().isoformat()
+    assert len(api.get(f"/api/v1/protocols/dose-logs/?from={frm}").json()["results"]) == 1
+    to = (now - timedelta(days=10)).date().isoformat()
+    assert len(api.get(f"/api/v1/protocols/dose-logs/?to={to}").json()["results"]) == 1
+
+
 def test_protocol_item_needs_compound_or_supplement(api, user):
     pid = api.post("/api/v1/protocols/protocols/", {"name": "P"}, format="json").json()["id"]
     resp = api.post(

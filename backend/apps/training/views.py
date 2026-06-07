@@ -143,7 +143,13 @@ class WorkoutSessionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = WorkoutSession.objects.filter(owner=self.request.user)
         if self.action == "list":
-            return qs.annotate(exercise_count=Count("logged_exercises"))
+            frm = self.request.query_params.get("from")
+            if frm:
+                qs = qs.filter(started_at__date__gte=frm)
+            to = self.request.query_params.get("to")
+            if to:
+                qs = qs.filter(started_at__date__lte=to)
+            return qs.annotate(exercise_count=Count("logged_exercises")).order_by("-started_at")
         return qs.prefetch_related("logged_exercises__sets", "logged_exercises__exercise")
 
     def get_serializer_class(self):

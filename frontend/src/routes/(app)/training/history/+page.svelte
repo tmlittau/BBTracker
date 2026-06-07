@@ -8,6 +8,7 @@
 		type WorkoutSessionListItem
 	} from '$lib/training/api';
 	import { formatHM, durationSeconds } from '$lib/training/calc';
+	import { isoDate, shiftISODate } from '$lib/date';
 	import Card from '$lib/components/ui/Card.svelte';
 
 	let sessions = $state<WorkoutSessionListItem[]>([]);
@@ -19,10 +20,19 @@
 	let selectedExercise = $state<number | null>(null);
 	let history = $state<ExerciseHistoryPoint[]>([]);
 
+	// Date-bounded workout list so we don't pull the entire history (defaults to
+	// the last 30 days; widen as needed).
+	let from = $state(shiftISODate(isoDate(), -30));
+	let to = $state(isoDate());
+
+	async function loadSessions() {
+		sessions = await trainingApi.sessions({ from, to });
+	}
+
 	onMount(async () => {
 		try {
-			[sessions, exercises, volume] = await Promise.all([
-				trainingApi.sessions(),
+			[, exercises, volume] = await Promise.all([
+				loadSessions(),
 				trainingApi.exercises(),
 				trainingApi.volume(30)
 			]);
@@ -112,9 +122,20 @@
 	</section>
 
 	<section class="mt-8">
-		<h2 class="font-medium">All workouts</h2>
+		<div class="flex flex-wrap items-end justify-between gap-2">
+			<h2 class="font-medium">All workouts</h2>
+			<div class="flex items-end gap-2">
+				<label class="flex flex-col text-xs text-neutral-500">From
+					<input type="date" bind:value={from} max={to} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100" />
+				</label>
+				<label class="flex flex-col text-xs text-neutral-500">To
+					<input type="date" bind:value={to} min={from} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100" />
+				</label>
+				<button class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={loadSessions}>Show</button>
+			</div>
+		</div>
 		{#if sessions.length === 0}
-			<p class="mt-2 text-sm text-neutral-500">No workouts logged yet.</p>
+			<p class="mt-2 text-sm text-neutral-500">No workouts in this range.</p>
 		{:else}
 			<div class="mt-3 space-y-2">
 				{#each sessions as s (s.id)}
