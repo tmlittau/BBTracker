@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { nutritionApi, type Food } from '$lib/nutrition/api';
+	import { nutritionApi, type BarcodeLookup, type Food } from '$lib/nutrition/api';
 	import { num } from '$lib/nutrition/calc';
 	import Button from '$lib/components/ui/Button.svelte';
 	import FoodCreateModal from '$lib/nutrition/FoodCreateModal.svelte';
@@ -21,6 +21,7 @@
 	let showScanner = $state(false);
 
 	let showFoodModal = $state(false);
+	let barcodePrefill = $state<BarcodeLookup | null>(null);
 
 	async function load() {
 		loading = true;
@@ -47,17 +48,18 @@
 		return msg;
 	}
 
+	// Look the barcode up (without saving) and open the New Food form prefilled, so
+	// the pulled values can be confirmed/edited before the food is created.
 	async function lookup(code: string) {
 		if (!code) return;
 		importing = true;
 		importMsg = null;
 		importErr = null;
 		try {
-			const food = await nutritionApi.importBarcode(code);
-			importMsg = `Added “${food.name}”${food.brand ? ` · ${food.brand}` : ''}.`;
+			barcodePrefill = await nutritionApi.lookupBarcode(code);
+			showFoodModal = true;
+			showBarcode = false;
 			barcode = '';
-			query = '';
-			await load();
 		} catch (err) {
 			importErr = friendly(err);
 		} finally {
@@ -70,10 +72,8 @@
 		await lookup(barcode.trim());
 	}
 
-	// Camera scan result → drop it into the field + look it up.
+	// Camera scan result → look it up and prefill the New Food form.
 	function onScanResult(code: string) {
-		barcode = code;
-		showBarcode = true;
 		lookup(code);
 	}
 
@@ -90,6 +90,8 @@
 
 	function onCreated(food: Food) {
 		foods = [food, ...foods];
+		barcodePrefill = null;
+		importMsg = `Saved “${food.name}”${food.brand ? ` · ${food.brand}` : ''}.`;
 	}
 
 	async function remove(id: number) {
@@ -104,7 +106,12 @@
 	}
 </script>
 
-<FoodCreateModal bind:open={showFoodModal} oncreated={onCreated} />
+<FoodCreateModal
+	bind:open={showFoodModal}
+	oncreated={onCreated}
+	prefill={barcodePrefill}
+	onclose={() => (barcodePrefill = null)}
+/>
 <BarcodeScannerModal bind:open={showScanner} onresult={onScanResult} />
 
 <div class="flex items-center justify-between">
@@ -118,7 +125,7 @@
 		</button>
 		<button
 			class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-			onclick={() => (showFoodModal = true)}
+			onclick={() => { barcodePrefill = null; showFoodModal = true; }}
 		>
 			New food
 		</button>
@@ -129,8 +136,8 @@
 	<form class="mt-4 space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={importByBarcode}>
 		<p class="text-sm text-neutral-300">Add a branded food by its barcode</p>
 		<p class="text-xs text-neutral-500">
-			Enter the UPC/EAN (the digits under the barcode). We’ll look it up on Open Food Facts and add
-			it to the shared library.
+			Enter the UPC/EAN (the digits under the barcode), or scan it. We’ll look it up on Open Food
+			Facts and prefill the New Food form so you can review it before saving.
 		</p>
 		<div class="flex gap-2">
 			{#if scanSupported}

@@ -327,6 +327,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nutrition/foods/lookup_barcode/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Look up a barcode WITHOUT saving — a draft to prefill the New Food form.
+         *
+         *     Resolves to an existing global/owned Food, else fetches + parses the Open
+         *     Food Facts product. Returns ``{name, brand, unit, barcode, nutrients}``
+         *     (nutrients keyed by our canonical slug) so the user can confirm/adjust the
+         *     values before the food is actually created.
+         */
+        post: operations["v1_nutrition_foods_lookup_barcode_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nutrition/meals/": {
         parameters: {
             query?: never;
@@ -2147,6 +2171,16 @@ export interface components {
             actual: number;
             adherence: number | null;
         };
+        /** @description A New-Food draft from a barcode lookup (nothing persisted yet). */
+        BarcodeDraft: {
+            name: string;
+            brand: string;
+            unit: string;
+            barcode: string;
+            nutrients: {
+                [key: string]: string;
+            };
+        };
         /** @description Request body for the barcode-import action: a single UPC/EAN. */
         BarcodeImportRequest: {
             barcode: string;
@@ -2619,8 +2653,6 @@ export interface components {
             reps?: number | null;
             /** Format: decimal */
             weight?: string | null;
-            /** Format: decimal */
-            rpe?: string | null;
             rir?: number | null;
             duration_seconds?: number | null;
             /** Format: decimal */
@@ -2638,8 +2670,6 @@ export interface components {
             reps?: number | null;
             /** Format: decimal */
             weight?: string | null;
-            /** Format: decimal */
-            rpe?: string | null;
             rir?: number | null;
             duration_seconds?: number | null;
             /** Format: decimal */
@@ -3327,8 +3357,6 @@ export interface components {
             reps?: number | null;
             /** Format: decimal */
             weight?: string | null;
-            /** Format: decimal */
-            rpe?: string | null;
             rir?: number | null;
             duration_seconds?: number | null;
             /** Format: decimal */
@@ -3394,8 +3422,6 @@ export interface components {
             target_weight?: string | null;
             /** Format: decimal */
             target_pct_1rm?: string | null;
-            /** Format: decimal */
-            target_rpe?: string | null;
             target_rir?: number | null;
             /** @description e.g. '3-1-1-0' */
             tempo?: string;
@@ -3563,8 +3589,6 @@ export interface components {
             target_weight?: string | null;
             /** Format: decimal */
             target_pct_1rm?: string | null;
-            /** Format: decimal */
-            target_rpe?: string | null;
             target_rir?: number | null;
             /** @description e.g. '3-1-1-0' */
             tempo?: string;
@@ -3580,8 +3604,6 @@ export interface components {
             target_weight?: string | null;
             /** Format: decimal */
             target_pct_1rm?: string | null;
-            /** Format: decimal */
-            target_rpe?: string | null;
             target_rir?: number | null;
             /** @description e.g. '3-1-1-0' */
             tempo?: string;
@@ -4816,6 +4838,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Food"];
+                };
+            };
+        };
+    };
+    v1_nutrition_foods_lookup_barcode_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BarcodeImportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BarcodeImportRequest"];
+                "multipart/form-data": components["schemas"]["BarcodeImportRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeDraft"];
                 };
             };
         };

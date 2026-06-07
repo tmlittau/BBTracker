@@ -8,9 +8,13 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let showModal = $state(false);
+	let editing = $state<Compound | null>(null);
 
 	function onCreated(c: Compound) {
 		compounds = [c, ...compounds];
+	}
+	function onUpdated(c: Compound) {
+		compounds = compounds.map((x) => (x.id === c.id ? c : x));
 	}
 
 	async function load() {
@@ -33,13 +37,19 @@
 	}
 </script>
 
-<CompoundCreateModal bind:open={showModal} oncreated={onCreated} />
+<CompoundCreateModal
+	bind:open={showModal}
+	oncreated={onCreated}
+	onupdated={onUpdated}
+	edit={editing}
+	onclose={() => (editing = null)}
+/>
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Compound library</h1>
 	<button
 		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-		onclick={() => (showModal = true)}
+		onclick={() => { editing = null; showModal = true; }}
 	>
 		New compound
 	</button>
@@ -66,8 +76,9 @@
 {:else}
 	<ul class="mt-4 divide-y divide-neutral-800">
 		{#each compounds as c (c.id)}
-			<li class="py-3">
-				<span class="font-medium">{c.name}</span>
+			<li class="flex items-start justify-between gap-2 py-3">
+				<div>
+					<span class="font-medium">{c.name}</span>
 				{#if !c.is_global}
 					<span class="ml-2 rounded bg-indigo-900 px-1.5 py-0.5 text-xs text-indigo-300">Custom</span>
 				{/if}
@@ -76,6 +87,10 @@
 					{#if c.half_life_hours}· t½ {Number(c.half_life_hours)} h{/if}
 					· active {(Number(c.active_fraction) * 100).toFixed(0)}%
 				</div>
+				</div>
+				{#if !c.is_global}
+					<button class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
+				{/if}
 			</li>
 		{/each}
 	</ul>

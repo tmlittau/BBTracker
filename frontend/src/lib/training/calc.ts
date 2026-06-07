@@ -67,3 +67,26 @@ export function formatDuration(totalSeconds: number): string {
 	const rem = s % 60;
 	return `${m}:${rem.toString().padStart(2, '0')}`;
 }
+
+/** Compact workout length, e.g. "45m" or "1h 23m". */
+export function formatHM(totalSeconds: number): string {
+	const s = Math.max(0, Math.floor(totalSeconds));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** Live workout clock: "M:SS" under an hour, "H:MM:SS" beyond. */
+export function formatClock(totalSeconds: number): string {
+	const s = Math.max(0, Math.floor(totalSeconds));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const ss = (s % 60).toString().padStart(2, '0');
+	return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+/** Whole seconds between two ISO timestamps (0 if end precedes start). */
+export function durationSeconds(startISO: string, endISO: string | null): number {
+	if (!endISO) return 0;
+	return Math.max(0, Math.floor((new Date(endISO).getTime() - new Date(startISO).getTime()) / 1000));
+}

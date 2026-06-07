@@ -5,16 +5,21 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
-	// Create a custom compound (owner-scoped) in-context. half_life_hours +
-	// active_fraction are factual reference constants for concentration modelling.
+	// Create OR edit a custom compound (owner-scoped) in-context. Pass `edit` to
+	// load an existing compound into the form. half_life_hours + active_fraction
+	// are factual reference constants for concentration modelling.
 	let {
 		open = $bindable(false),
 		oncreated,
-		onclose
+		onupdated,
+		onclose,
+		edit = null
 	}: {
 		open?: boolean;
-		oncreated: (c: Compound) => void;
+		oncreated?: (c: Compound) => void;
+		onupdated?: (c: Compound) => void;
 		onclose?: () => void;
+		edit?: Compound | null;
 	} = $props();
 
 	const CLASSES = [
@@ -39,13 +44,36 @@
 	const selectClass =
 		'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100';
 
+	function reset() {
+		name = ester = halfLife = activeFraction = '';
+		compoundClass = 'anabolic';
+		unit = 'mg';
+		route = 'im';
+	}
+
+	// Load the compound being edited when the modal opens (once per open).
+	let lastEdit: Compound | null = null;
+	$effect(() => {
+		if (open && edit && edit !== lastEdit) {
+			lastEdit = edit;
+			name = edit.name;
+			compoundClass = edit.compound_class;
+			unit = edit.default_unit;
+			route = edit.default_route;
+			halfLife = edit.half_life_hours ?? '';
+			ester = edit.ester ?? '';
+			activeFraction = edit.active_fraction ?? '';
+		}
+		if (!open) lastEdit = null;
+	});
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		if (!name.trim()) return;
 		saving = true;
 		error = null;
 		try {
-			const c = await protocolsApi.createCompound({
+			const data = {
 				name: name.trim(),
 				compound_class: compoundClass,
 				default_unit: unit,
@@ -53,12 +81,13 @@
 				half_life_hours: halfLife === '' ? null : String(num(halfLife)),
 				ester: ester.trim(),
 				active_fraction: activeFraction === '' ? '1.000' : String(num(activeFraction))
-			});
-			oncreated(c);
-			name = ester = halfLife = activeFraction = '';
-			compoundClass = 'anabolic';
-			unit = 'mg';
-			route = 'im';
+			};
+			if (edit) {
+				onupdated?.(await protocolsApi.updateCompound(edit.id, data));
+			} else {
+				oncreated?.(await protocolsApi.createCompound(data));
+			}
+			reset();
 			open = false;
 		} catch (err) {
 			error = (err as Error).message;
@@ -68,7 +97,7 @@
 	}
 </script>
 
-<Modal bind:open title="New compound" {onclose}>
+<Modal bind:open title={edit ? 'Edit compound' : 'New compound'} {onclose}>
 	<form class="space-y-3" onsubmit={submit}>
 		<Input placeholder="Name (e.g. Testosterone Enanthate)" required bind:value={name} />
 		<div class="grid grid-cols-2 gap-2">
@@ -126,6 +155,8 @@
 			logged doses — not dosing guidance.
 		</p>
 		{#if error}<p class="text-sm text-red-400">{error}</p>{/if}
-		<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create compound'}</Button>
+		<Button type="submit" disabled={saving}>
+			{saving ? 'Saving…' : edit ? 'Save changes' : 'Create compound'}
+		</Button>
 	</form>
 </Modal>

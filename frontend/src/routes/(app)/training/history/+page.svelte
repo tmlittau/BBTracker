@@ -7,6 +7,7 @@
 		type MuscleVolume,
 		type WorkoutSessionListItem
 	} from '$lib/training/api';
+	import { formatHM, durationSeconds } from '$lib/training/calc';
 	import Card from '$lib/components/ui/Card.svelte';
 
 	let sessions = $state<WorkoutSessionListItem[]>([]);
@@ -117,15 +118,19 @@
 		{:else}
 			<div class="mt-3 space-y-2">
 				{#each sessions as s (s.id)}
-					<Card>
-						<div class="flex items-center justify-between">
-							<span>{s.name || 'Workout'}</span>
-							<span class="text-xs text-neutral-500">
-								{new Date(s.started_at).toLocaleString()} · {s.exercise_count} exercise(s)
-								{#if !s.is_completed}· <span class="text-amber-400">in progress</span>{/if}
-							</span>
-						</div>
-					</Card>
+					<a href={`/training/history/${s.id}`} class="block transition hover:opacity-80">
+						<Card>
+							<div class="flex items-center justify-between gap-2">
+								<span class="font-medium">{s.name || 'Workout'}</span>
+								<span class="text-right text-xs text-neutral-500">
+									{new Date(s.started_at).toLocaleDateString()} · {s.exercise_count} exercise(s)
+									{#if s.is_completed && s.ended_at}· ⏱ {formatHM(durationSeconds(s.started_at, s.ended_at))}{/if}
+									{#if !s.is_completed}· <span class="text-amber-400">in progress</span>{/if}
+									<span class="ml-1 text-neutral-600">›</span>
+								</span>
+							</div>
+						</Card>
+					</a>
 				{/each}
 			</div>
 		{/if}

@@ -214,7 +214,6 @@
 												<th class="text-left font-normal">Type</th>
 												<th class="text-left font-normal">Reps</th>
 												<th class="text-left font-normal">Weight</th>
-												<th class="text-left font-normal">RPE</th>
 												<th class="text-left font-normal">Rest s</th>
 												<th></th>
 											</tr>
@@ -241,9 +240,6 @@
 													</td>
 													<td class="py-1 pr-2">
 														<input class="w-16 {fieldClass}" type="number" step="0.5" value={ps.target_weight ?? ''} onchange={(e) => setField(ps, 'target_weight', e.currentTarget.value, 'dec')} />
-													</td>
-													<td class="py-1 pr-2">
-														<input class="w-12 {fieldClass}" type="number" step="0.5" min="1" max="10" value={ps.target_rpe ?? ''} onchange={(e) => setField(ps, 'target_rpe', e.currentTarget.value, 'dec')} />
 													</td>
 													<td class="py-1 pr-2">
 														<input class="w-14 {fieldClass}" type="number" min="0" step="5" value={ps.rest_seconds ?? ''} onchange={(e) => setField(ps, 'rest_seconds', e.currentTarget.value, 'int')} />

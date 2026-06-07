@@ -138,8 +138,19 @@ export interface FoodInput {
 	name: string;
 	brand?: string;
 	unit?: 'g' | 'ml';
+	barcode?: string;
 	servings?: { label: string; grams: string; is_default?: boolean }[];
 	food_nutrients?: { nutrient: number; amount_per_100g: string }[];
+}
+
+/** Draft for the New Food modal, returned by a barcode lookup (nothing saved yet). */
+export interface BarcodeLookup {
+	name: string;
+	brand: string;
+	unit: 'g' | 'ml';
+	barcode: string;
+	/** canonical nutrient slug -> amount per 100 (in the nutrient's own unit) */
+	nutrients: Record<string, string>;
 }
 
 export const nutritionApi = {
@@ -153,6 +164,10 @@ export const nutritionApi = {
 	// Open Food Facts (creating a global food). Throws on 404/422/502.
 	importBarcode: (barcode: string) =>
 		req<Food>('POST', '/foods/import_barcode/', { barcode }),
+	// Look up a barcode WITHOUT saving — returns a draft to prefill the New Food
+	// modal (from an existing food or Open Food Facts). Throws on 404/422/502.
+	lookupBarcode: (barcode: string) =>
+		req<BarcodeLookup>('POST', '/foods/lookup_barcode/', { barcode }),
 
 	diary: (date: string) =>
 		req<Paginated<DiaryEntry>>('GET', `/diary-entries/?date=${date}`).then(list),

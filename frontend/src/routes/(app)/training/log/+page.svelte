@@ -10,7 +10,7 @@
 	} from '$lib/training/api';
 	import { page } from '$app/stores';
 	import { restTimer } from '$lib/training/restTimer.svelte';
-	import { estimated1rm, formatDuration, platesPerSide } from '$lib/training/calc';
+	import { estimated1rm, formatClock, formatDuration, formatHM, platesPerSide } from '$lib/training/calc';
 	import ExerciseCreateModal from '$lib/training/ExerciseCreateModal.svelte';
 	import StepperInput from '$lib/training/StepperInput.svelte';
 
@@ -27,7 +27,6 @@
 	interface Draft {
 		weight: string;
 		reps: string;
-		rpe: string;
 	}
 	let pendingDraft = $state<Record<number, Draft>>({});
 	let exDraft = $state<Record<number, Draft & { set_type: string }>>({});
@@ -37,11 +36,26 @@
 
 	$effect(() => {
 		for (const le of session?.logged_exercises ?? []) {
-			if (!exDraft[le.id]) exDraft[le.id] = { weight: '', reps: '', rpe: '', set_type: 'working' };
+			if (!exDraft[le.id]) exDraft[le.id] = { weight: '', reps: '', set_type: 'working' };
 			for (const s of le.sets) {
-				if (!s.is_completed && !pendingDraft[s.id]) pendingDraft[s.id] = { weight: '', reps: '', rpe: '' };
+				if (!s.is_completed && !pendingDraft[s.id]) pendingDraft[s.id] = { weight: '', reps: '' };
 			}
 		}
+	});
+
+	// Live workout clock — ticks each second while in progress so you can keep an
+	// eye on total time (e.g. staying under 90 minutes). Frozen at the duration
+	// once finished.
+	let now = $state(Date.now());
+	$effect(() => {
+		if (!session || session.is_completed) return;
+		const id = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(id);
+	});
+	const elapsedSeconds = $derived.by(() => {
+		if (!session) return 0;
+		const end = session.is_completed && session.ended_at ? new Date(session.ended_at).getTime() : now;
+		return Math.max(0, Math.floor((end - new Date(session.started_at).getTime()) / 1000));
 	});
 
 	onMount(async () => {
@@ -78,7 +92,6 @@
 		await trainingApi.updateLoggedSet(s.id, {
 			reps: d.reps === '' ? null : Number(d.reps),
 			weight: d.weight === '' ? null : String(Number(d.weight)),
-			rpe: d.rpe === '' ? null : String(Number(d.rpe)),
 			is_completed: true
 		});
 		restTimer.start(s.rest_seconds ?? 90, { countdown: true });
@@ -93,8 +106,7 @@
 			order: le.sets.length,
 			set_type: d.set_type,
 			weight: d.weight === '' ? null : String(Number(d.weight)),
-			reps: d.reps === '' ? null : Number(d.reps),
-			rpe: d.rpe === '' ? null : String(Number(d.rpe))
+			reps: d.reps === '' ? null : Number(d.reps)
 		});
 		d.reps = '';
 		restTimer.start(restForExercise(le), { countdown: true });
@@ -172,8 +184,18 @@
 
 <div class="flex items-center justify-between gap-3">
 	<h1 class="text-xl font-semibold">Workout logger</h1>
-	{#if session && !session.is_completed}
-		<button class="shrink-0 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={finish}>Finish workout</button>
+	{#if session}
+		<span
+			data-testid="workout-clock"
+			class="shrink-0 font-mono text-sm tabular-nums {elapsedSeconds >= 5400
+				? 'text-red-400'
+				: elapsedSeconds >= 4500
+					? 'text-amber-400'
+					: 'text-neutral-400'}"
+			title="Total workout time"
+		>
+			⏱ {session.is_completed ? formatHM(elapsedSeconds) : formatClock(elapsedSeconds)}
+		</span>
 	{/if}
 </div>
 
@@ -219,7 +241,7 @@
 {:else}
 	{#if session.is_completed}
 		<p class="mt-4 rounded bg-green-950 px-3 py-2 text-sm text-green-300">
-			Workout finished — {session.logged_exercises.length} exercise(s) logged.
+			Workout finished — {session.logged_exercises.length} exercise(s) logged in {formatHM(elapsedSeconds)}.
 		</p>
 	{/if}
 
@@ -258,11 +280,8 @@
 										<StepperInput label="Weight" step={2.5} bind:value={pendingDraft[s.id].weight} placeholder="kg" />
 										<StepperInput label="Reps" step={1} inputmode="numeric" bind:value={pendingDraft[s.id].reps} placeholder="reps" />
 									</div>
-									<div class="mt-2 flex items-end gap-2">
-										<label class="flex w-20 flex-col text-xs text-neutral-500">RPE
-											<input type="number" step="0.5" min="1" max="10" bind:value={pendingDraft[s.id].rpe} class="mt-1 {fieldClass}" />
-										</label>
-										<button class="flex-1 rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logPending(s)}>Log</button>
+									<div class="mt-2">
+										<button class="w-full rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logPending(s)}>Log</button>
 									</div>
 								</div>
 							{/if}
@@ -278,9 +297,6 @@
 								<select bind:value={exDraft[le.id].set_type} class="mt-1 {fieldClass}">
 									{#each SET_TYPES as t (t)}<option value={t}>{t}</option>{/each}
 								</select>
-							</label>
-							<label class="flex w-20 flex-col text-xs text-neutral-500">RPE
-								<input type="number" step="0.5" min="1" max="10" bind:value={exDraft[le.id].rpe} class="mt-1 {fieldClass}" />
 							</label>
 						</div>
 						<div class="grid grid-cols-2 gap-2">
@@ -322,6 +338,16 @@
 					<option value={ex.id}>{ex.name}</option>
 				{/each}
 			</select>
+		</div>
+
+		<!-- Primary action lives at the bottom so it's reachable right after the last set. -->
+		<div class="mt-6">
+			<button
+				class="w-full rounded-md bg-indigo-600 px-4 py-3 text-base font-medium text-white hover:bg-indigo-500"
+				onclick={finish}
+			>
+				Finish workout
+			</button>
 		</div>
 	{/if}
 
