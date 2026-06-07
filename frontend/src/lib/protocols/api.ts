@@ -295,7 +295,7 @@ export const protocolsApi = {
 		req<ProtocolItem>('POST', '/protocol-items/', data),
 	deleteItem: (id: number) => req<void>('DELETE', `/protocol-items/${id}/`),
 
-	doses: (params: { date?: string; compound?: number } = {}) => {
+	doses: (params: { date?: string; compound?: number; from?: string; to?: string } = {}) => {
 		const qs = new URLSearchParams(params as Record<string, string>).toString();
 		return req<Paginated<DoseLog>>('GET', `/dose-logs/${qs ? `?${qs}` : ''}`).then(list);
 	},

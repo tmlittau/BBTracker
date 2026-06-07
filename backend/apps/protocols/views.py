@@ -206,6 +206,12 @@ class DoseLogViewSet(viewsets.ModelViewSet):
         compound = self.request.query_params.get("compound")
         if compound:
             qs = qs.filter(compound_id=compound)
+        frm = self.request.query_params.get("from")
+        if frm:
+            qs = qs.filter(taken_at__date__gte=frm)
+        to = self.request.query_params.get("to")
+        if to:
+            qs = qs.filter(taken_at__date__lte=to)
         return qs
 
     def _check_refs(self, serializer):

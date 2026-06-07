@@ -10,13 +10,14 @@
 		type Meal
 	} from '$lib/nutrition/api';
 	import { microColor, num, barWidth, macroBarColor } from '$lib/nutrition/calc';
+	import { isoDate, shiftISODate } from '$lib/date';
 	import MacroBar from '$lib/nutrition/MacroBar.svelte';
 	import FoodSearch from '$lib/nutrition/FoodSearch.svelte';
 	import AddEntryDialog from '$lib/nutrition/AddEntryDialog.svelte';
 	import FoodCreateModal from '$lib/nutrition/FoodCreateModal.svelte';
 
 	function todayISO(): string {
-		return new Date().toISOString().slice(0, 10);
+		return isoDate();
 	}
 
 	let date = $state(todayISO());
@@ -56,9 +57,7 @@
 	onMount(load);
 
 	function shiftDate(days: number) {
-		const d = new Date(date + 'T00:00:00');
-		d.setDate(d.getDate() + days);
-		date = d.toISOString().slice(0, 10);
+		date = shiftISODate(date, days);
 		load();
 	}
 

@@ -1,4 +1,6 @@
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -198,3 +200,16 @@ def test_session_owner_isolation(api, other):
         owner=other, name="Theirs", started_at=timezone.now()
     )
     assert api.get(f"/api/v1/training/workout-sessions/{theirs.id}/").status_code == 404
+
+
+def test_session_date_range_filter(api, user):
+    now = timezone.now()
+    WorkoutSession.objects.create(owner=user, name="Recent", started_at=now)
+    WorkoutSession.objects.create(owner=user, name="Old", started_at=now - timedelta(days=20))
+    assert len(api.get("/api/v1/training/workout-sessions/").json()["results"]) == 2
+    frm = (now - timedelta(days=7)).date().isoformat()
+    res = api.get(f"/api/v1/training/workout-sessions/?from={frm}").json()["results"]
+    assert [s["name"] for s in res] == ["Recent"]
+    to = (now - timedelta(days=10)).date().isoformat()
+    res2 = api.get(f"/api/v1/training/workout-sessions/?to={to}").json()["results"]
+    assert [s["name"] for s in res2] == ["Old"]
