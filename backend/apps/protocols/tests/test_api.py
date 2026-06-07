@@ -120,6 +120,35 @@ def test_build_protocol_and_log_dose(api, user, test_e):
     assert dose.status_code == 201, dose.content
 
 
+def test_delete_own_dose_log(api, test_e):
+    dose = api.post(
+        "/api/v1/protocols/dose-logs/",
+        {"compound": test_e.id, "taken_at": timezone.now().isoformat(),
+         "amount": "125", "unit": "mg", "route": "im"},
+        format="json",
+    )
+    assert dose.status_code == 201, dose.content
+    did = dose.json()["id"]
+    assert api.delete(f"/api/v1/protocols/dose-logs/{did}/").status_code == 204
+    assert api.get(f"/api/v1/protocols/dose-logs/{did}/").status_code == 404
+
+
+def test_cannot_delete_others_dose_log(api, other, test_e):
+    other_api = APIClient()
+    other_api.force_authenticate(other)
+    dose = other_api.post(
+        "/api/v1/protocols/dose-logs/",
+        {"compound": test_e.id, "taken_at": timezone.now().isoformat(),
+         "amount": "100", "unit": "mg", "route": "im"},
+        format="json",
+    )
+    assert dose.status_code == 201, dose.content
+    did = dose.json()["id"]
+    # The owner-scoped queryset hides another user's dose → 404, and it survives.
+    assert api.delete(f"/api/v1/protocols/dose-logs/{did}/").status_code == 404
+    assert other_api.get(f"/api/v1/protocols/dose-logs/{did}/").status_code == 200
+
+
 def test_protocol_item_needs_compound_or_supplement(api, user):
     pid = api.post("/api/v1/protocols/protocols/", {"name": "P"}, format="json").json()["id"]
     resp = api.post(

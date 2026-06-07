@@ -60,6 +60,17 @@
 		}
 	}
 
+	// Undo a mis-logged dose.
+	async function removeDose(id: number) {
+		if (!confirm('Delete this logged dose?')) return;
+		try {
+			await protocolsApi.deleteDose(id);
+			recentDoses = await protocolsApi.doses();
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	const freqLabel = (k: string) => FREQUENCIES.find((f) => f.key === k)?.label ?? k;
 </script>
 
@@ -146,13 +157,23 @@
 		{:else}
 			<div class="mt-3 space-y-2">
 				{#each recentDoses.slice(0, 8) as d (d.id)}
-					<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
+					<div class="flex items-center justify-between gap-2 rounded border border-neutral-800 px-3 py-2 text-sm">
 						<span>{d.item_name}</span>
-						<span class="text-xs text-neutral-500">
-							{d.amount}{d.unit}
-							{#if d.site_name}· {d.site_name}{/if}
-							· {new Date(d.taken_at).toLocaleDateString()}
-						</span>
+						<div class="flex items-center gap-3">
+							<span class="text-xs text-neutral-500">
+								{d.amount}{d.unit}
+								{#if d.site_name}· {d.site_name}{/if}
+								· {new Date(d.taken_at).toLocaleDateString()}
+							</span>
+							<button
+								class="shrink-0 text-neutral-600 hover:text-red-400"
+								aria-label="Delete logged dose"
+								title="Delete this logged dose"
+								onclick={() => removeDose(d.id)}
+							>
+								✕
+							</button>
+						</div>
 					</div>
 				{/each}
 			</div>

@@ -46,6 +46,17 @@
 		today = await protocolsApi.doses({ date: todayISO });
 	}
 
+	// Undo a mis-logged dose (refresh site recency too, for injections).
+	async function removeDose(id: number) {
+		if (!confirm('Delete this logged dose?')) return;
+		try {
+			await protocolsApi.deleteDose(id);
+			await Promise.all([loadToday(), loadSites()]);
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	onMount(async () => {
 		try {
 			[compounds, supplements] = await Promise.all([
@@ -257,12 +268,22 @@
 		{:else}
 			<div class="mt-3 space-y-2">
 				{#each today as d (d.id)}
-					<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
+					<div class="flex items-center justify-between gap-2 rounded border border-neutral-800 px-3 py-2 text-sm">
 						<span>{d.item_name}</span>
-						<span class="text-xs text-neutral-500">
-							{d.amount}{d.unit}{#if d.site_name} · {d.site_name}{/if}
-							· {new Date(d.taken_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-						</span>
+						<div class="flex items-center gap-3">
+							<span class="text-xs text-neutral-500">
+								{d.amount}{d.unit}{#if d.site_name} · {d.site_name}{/if}
+								· {new Date(d.taken_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+							</span>
+							<button
+								class="shrink-0 text-neutral-600 hover:text-red-400"
+								aria-label="Delete logged dose"
+								title="Delete this logged dose"
+								onclick={() => removeDose(d.id)}
+							>
+								✕
+							</button>
+						</div>
 					</div>
 				{/each}
 			</div>
