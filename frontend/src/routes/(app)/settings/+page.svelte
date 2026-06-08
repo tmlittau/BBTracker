@@ -7,6 +7,7 @@
 		UNIT_OPTIONS,
 		type Me
 	} from '$lib/api/profile';
+	import { notificationsApi, type ReminderSettings } from '$lib/notifications/api';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let me = $state<Me | null>(null);
@@ -14,6 +15,30 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 	let saved = $state(false);
+
+	// Reminder settings (delivered via Home Assistant).
+	let reminders = $state<ReminderSettings | null>(null);
+	let savingReminders = $state(false);
+	let remindersSaved = $state(false);
+	let testMsg = $state<string | null>(null);
+	const TIME_SLOTS = [
+		['waking', 'Waking'],
+		['am', 'AM'],
+		['noon', 'Noon'],
+		['pm', 'PM'],
+		['night', 'Night']
+	] as const;
+
+	function normalizeTimes(r: ReminderSettings): ReminderSettings {
+		return {
+			...r,
+			waking: r.waking.slice(0, 5),
+			am: r.am.slice(0, 5),
+			noon: r.noon.slice(0, 5),
+			pm: r.pm.slice(0, 5),
+			night: r.night.slice(0, 5)
+		};
+	}
 
 	// Editable form fields (strings for inputs/selects).
 	let firstName = $state('');
@@ -41,6 +66,8 @@
 		} finally {
 			loading = false;
 		}
+		const r = await notificationsApi.settings().catch(() => null);
+		if (r) reminders = normalizeTimes(r);
 	});
 
 	async function save(e: SubmitEvent) {
@@ -65,6 +92,33 @@
 			error = (err as Error).message;
 		} finally {
 			saving = false;
+		}
+	}
+
+	async function saveReminders(e: SubmitEvent) {
+		e.preventDefault();
+		if (!reminders) return;
+		savingReminders = true;
+		remindersSaved = false;
+		try {
+			reminders = normalizeTimes(await notificationsApi.updateSettings(reminders));
+			remindersSaved = true;
+		} catch (err) {
+			error = (err as Error).message;
+		} finally {
+			savingReminders = false;
+		}
+	}
+
+	async function sendTest() {
+		testMsg = 'Sending…';
+		try {
+			const r = await notificationsApi.test();
+			testMsg = r.ok
+				? 'Sent! Check your phone.'
+				: 'No notification sent — check the Home Assistant settings on the server.';
+		} catch {
+			testMsg = 'Could not reach the server.';
 		}
 	}
 </script>
@@ -169,4 +223,41 @@
 		{#if saved}<p class="text-sm text-green-400">Saved.</p>{/if}
 		<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
 	</form>
+
+	{#if reminders}
+		<form class="mt-8 max-w-md space-y-4 border-t border-neutral-800 pt-6" onsubmit={saveReminders}>
+			<div>
+				<h2 class="font-medium">Reminders</h2>
+				<p class="mt-1 text-xs text-neutral-500">
+					Pushed to your phone via Home Assistant. Slot times use your timezone above.
+				</p>
+			</div>
+			<label class="flex items-center gap-2 text-sm text-neutral-300">
+				<input type="checkbox" bind:checked={reminders.enabled} /> Daily dose reminders
+			</label>
+			<label class="flex items-center gap-2 text-sm text-neutral-300">
+				<input type="checkbox" bind:checked={reminders.rest_enabled} /> Rest-timer “Rest over” alert
+			</label>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				{#each TIME_SLOTS as [key, label] (key)}
+					<label class="flex flex-col text-xs text-neutral-500">
+						{label}
+						<input
+							type="time"
+							bind:value={reminders[key]}
+							class="mt-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+						/>
+					</label>
+				{/each}
+			</div>
+			{#if remindersSaved}<p class="text-sm text-green-400">Reminders saved.</p>{/if}
+			<div class="flex flex-wrap items-center gap-3">
+				<Button type="submit" disabled={savingReminders}>{savingReminders ? 'Saving…' : 'Save reminders'}</Button>
+				<button type="button" class="text-sm text-indigo-400 hover:text-indigo-300" onclick={sendTest}>
+					Send test notification
+				</button>
+			</div>
+			{#if testMsg}<p class="text-xs text-neutral-400">{testMsg}</p>{/if}
+		</form>
+	{/if}
 {/if}

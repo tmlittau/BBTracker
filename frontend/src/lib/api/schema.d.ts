@@ -235,6 +235,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/reminder-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Get/update the current user's reminder preferences (slot times + toggles). */
+        get: operations["v1_notifications_reminder_settings_retrieve"];
+        /** @description Get/update the current user's reminder preferences (slot times + toggles). */
+        put: operations["v1_notifications_reminder_settings_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Get/update the current user's reminder preferences (slot times + toggles). */
+        patch: operations["v1_notifications_reminder_settings_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/notifications/rest/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Cancel any pending 'rest over' notification (rest skipped/finished early). */
+        post: operations["v1_notifications_rest_cancel_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/rest/schedule/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Schedule (or replace) the user's pending 'rest over' notification. */
+        post: operations["v1_notifications_rest_schedule_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/test/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send a test notification to confirm the Home Assistant wiring works. */
+        post: operations["v1_notifications_test_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nutrition/diary-entries/": {
         parameters: {
             query?: never;
@@ -2709,6 +2779,9 @@ export interface components {
             /** Format: decimal */
             tonnage: string;
         };
+        NotifyResult: {
+            ok: boolean;
+        };
         Nutrient: {
             readonly id: number;
             name: string;
@@ -3468,6 +3541,22 @@ export interface components {
             servings?: string;
             notes?: string;
         };
+        PatchedReminderSettingsRequest: {
+            /** @description Master switch for dose reminders. */
+            enabled?: boolean;
+            /** @description Notify when a rest timer ends. */
+            rest_enabled?: boolean;
+            /** Format: time */
+            waking?: string;
+            /** Format: time */
+            am?: string;
+            /** Format: time */
+            noon?: string;
+            /** Format: time */
+            pm?: string;
+            /** Format: time */
+            night?: string;
+        };
         PatchedSupplementRequest: {
             name?: string;
             brand?: string;
@@ -3792,6 +3881,41 @@ export interface components {
             /** Format: double */
             rate: number;
             projected: boolean;
+        };
+        ReminderSettings: {
+            /** @description Master switch for dose reminders. */
+            enabled?: boolean;
+            /** @description Notify when a rest timer ends. */
+            rest_enabled?: boolean;
+            /** Format: time */
+            waking?: string;
+            /** Format: time */
+            am?: string;
+            /** Format: time */
+            noon?: string;
+            /** Format: time */
+            pm?: string;
+            /** Format: time */
+            night?: string;
+        };
+        ReminderSettingsRequest: {
+            /** @description Master switch for dose reminders. */
+            enabled?: boolean;
+            /** @description Notify when a rest timer ends. */
+            rest_enabled?: boolean;
+            /** Format: time */
+            waking?: string;
+            /** Format: time */
+            am?: string;
+            /** Format: time */
+            noon?: string;
+            /** Format: time */
+            pm?: string;
+            /** Format: time */
+            night?: string;
+        };
+        RestScheduleRequest: {
+            seconds: number;
         };
         /**
          * @description * `im` - Intramuscular
@@ -4521,6 +4645,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Healthz"];
+                };
+            };
+        };
+    };
+    v1_notifications_reminder_settings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderSettings"];
+                };
+            };
+        };
+    };
+    v1_notifications_reminder_settings_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReminderSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReminderSettingsRequest"];
+                "multipart/form-data": components["schemas"]["ReminderSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderSettings"];
+                };
+            };
+        };
+    };
+    v1_notifications_reminder_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedReminderSettingsRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedReminderSettingsRequest"];
+                "multipart/form-data": components["schemas"]["PatchedReminderSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderSettings"];
+                };
+            };
+        };
+    };
+    v1_notifications_rest_cancel_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyResult"];
+                };
+            };
+        };
+    };
+    v1_notifications_rest_schedule_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestScheduleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RestScheduleRequest"];
+                "multipart/form-data": components["schemas"]["RestScheduleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyResult"];
+                };
+            };
+        };
+    };
+    v1_notifications_test_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyResult"];
                 };
             };
         };
