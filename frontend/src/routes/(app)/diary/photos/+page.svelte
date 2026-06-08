@@ -136,7 +136,6 @@
 						id="photo-file"
 						type="file"
 						accept="image/*"
-						capture="environment"
 						onchange={onFile}
 						class="mt-1 block w-full text-sm text-neutral-300 file:mr-3 file:rounded file:border-0 file:bg-neutral-800 file:px-3 file:py-1.5 file:text-neutral-200"
 					/>
