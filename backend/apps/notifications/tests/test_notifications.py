@@ -4,7 +4,9 @@ The HA HTTP call is always mocked — no network. Covers the ha_notify client
 (configured/unconfigured), slot-pending computation, rest-reminder firing, and
 the REST endpoints.
 """
+import io
 import json
+import urllib.error
 from datetime import timedelta
 from unittest import mock
 
@@ -80,6 +82,19 @@ def test_ha_notify_posts_when_configured(settings):
     assert req.full_url == "http://ha.local:8123/api/services/notify/mobile_app_phone"
     assert req.get_header("Authorization") == "Bearer tok"
     assert json.loads(req.data) == {"title": "Title", "message": "Body"}
+
+
+def test_ha_notify_result_surfaces_http_error(settings):
+    settings.HA_BASE_URL = "http://ha.local:8123"
+    settings.HA_TOKEN = "tok"
+    err = urllib.error.HTTPError(
+        "u", 400, "Bad Request", {}, io.BytesIO(b'{"message":"Service notify.notify not found"}')
+    )
+    with mock.patch("urllib.request.urlopen", side_effect=err):
+        ok, detail = services.ha_notify_result("t", "m")
+    assert ok is False
+    assert "400" in detail
+    assert "not found" in detail
 
 
 # --- slot pending logic -------------------------------------------------------
@@ -163,7 +178,9 @@ def test_rest_schedule_respects_disabled(api, user):
 
 
 def test_test_notification_endpoint(api):
-    with mock.patch("apps.notifications.views.ha_notify", return_value=True) as m:
+    with mock.patch(
+        "apps.notifications.views.ha_notify_result", return_value=(True, "HTTP 200")
+    ) as m:
         assert api.post("/api/v1/notifications/test/").json()["ok"] is True
     m.assert_called_once()
 

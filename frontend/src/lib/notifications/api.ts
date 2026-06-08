@@ -39,7 +39,7 @@ export const notificationsApi = {
 	settings: () => req<ReminderSettings>('GET', '/reminder-settings/'),
 	updateSettings: (data: Partial<ReminderSettings>) =>
 		req<ReminderSettings>('PATCH', '/reminder-settings/', data),
-	test: () => req<{ ok: boolean }>('POST', '/test/'),
+	test: () => req<{ ok: boolean; detail?: string }>('POST', '/test/'),
 	// Best-effort: schedule/cancel the "rest over" notification (never throws).
 	scheduleRest: (seconds: number) =>
 		req<{ ok: boolean }>('POST', '/rest/schedule/', { seconds }).catch(() => ({ ok: false })),
