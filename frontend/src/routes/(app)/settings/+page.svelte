@@ -116,7 +116,7 @@
 			const r = await notificationsApi.test();
 			testMsg = r.ok
 				? 'Sent! Check your phone.'
-				: 'No notification sent — check the Home Assistant settings on the server.';
+				: r.detail || 'No notification sent — check the Home Assistant settings on the server.';
 		} catch {
 			testMsg = 'Could not reach the server.';
 		}

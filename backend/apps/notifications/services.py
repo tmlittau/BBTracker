@@ -42,13 +42,13 @@ def ha_configured() -> bool:
     return bool(base and token)
 
 
-def ha_notify(title: str, message: str, data: dict | None = None) -> bool:
-    """Send a notification via Home Assistant. Returns True on success, False on
-    any failure or when unconfigured. Never raises."""
+def ha_notify_result(title: str, message: str, data: dict | None = None) -> tuple[bool, str]:
+    """Send a notification via Home Assistant. Returns ``(ok, detail)`` where
+    `detail` explains a failure — including Home Assistant's own error body (e.g.
+    an unknown notify service). Never raises."""
     base, token, service = _ha_config()
     if not (base and token):
-        logger.info("Home Assistant not configured; skipping notification %r", title)
-        return False
+        return False, "Home Assistant is not configured (HA_BASE_URL / HA_TOKEN)."
     payload: dict = {"title": title, "message": message}
     if data:
         payload["data"] = data
@@ -60,10 +60,30 @@ def ha_notify(title: str, message: str, data: dict | None = None) -> bool:
     )
     try:
         with urllib.request.urlopen(request, timeout=HA_TIMEOUT) as resp:
-            return 200 <= resp.status < 300
+            return (200 <= resp.status < 300), f"HTTP {resp.status}"
+    except urllib.error.HTTPError as exc:  # 4xx/5xx — HA replied, so it IS reachable
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", "replace")[:300].strip()
+        except OSError:
+            pass
+        detail = (
+            f"Home Assistant returned HTTP {exc.code}: {body or exc.reason}. "
+            f"Check HA_NOTIFY_SERVICE (currently {service!r}) — it must be an existing "
+            "notify service such as mobile_app_<device>."
+        )
+        logger.warning(detail)
+        return False, detail
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        logger.warning("Home Assistant notify failed: %s", exc)
-        return False
+        detail = f"Could not reach Home Assistant at {base}: {exc}"
+        logger.warning(detail)
+        return False, detail
+
+
+def ha_notify(title: str, message: str, data: dict | None = None) -> bool:
+    """Best-effort fire-and-forget notify (bool). See ha_notify_result for the
+    failure reason."""
+    return ha_notify_result(title, message, data)[0]
 
 
 # --- Dose-slot reminders ------------------------------------------------------

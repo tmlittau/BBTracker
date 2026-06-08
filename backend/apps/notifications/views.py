@@ -11,7 +11,7 @@ from .serializers import (
     ReminderSettingsSerializer,
     RestScheduleSerializer,
 )
-from .services import ha_notify
+from .services import ha_notify_result
 
 
 @extend_schema(tags=["notifications"])
@@ -66,5 +66,7 @@ class TestNotificationView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        ok = ha_notify("BBTracker", "Test notification — Home Assistant wiring works.")
-        return Response({"ok": ok})
+        ok, detail = ha_notify_result(
+            "BBTracker", "Test notification — Home Assistant wiring works."
+        )
+        return Response({"ok": ok, "detail": detail})
