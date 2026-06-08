@@ -13,6 +13,7 @@
 	import { estimated1rm, formatClock, formatDuration, formatHM, platesPerSide } from '$lib/training/calc';
 	import ExerciseCreateModal from '$lib/training/ExerciseCreateModal.svelte';
 	import StepperInput from '$lib/training/StepperInput.svelte';
+	import { notificationsApi } from '$lib/notifications/api';
 
 	let session = $state<WorkoutSession | null>(null);
 	let exercises = $state<Exercise[]>([]);
@@ -86,6 +87,17 @@
 		return withRest.length ? (withRest[withRest.length - 1].rest_seconds as number) : 90;
 	}
 
+	// Start the rest countdown + schedule a backend "Rest over" notification (so it
+	// fires even if the phone is locked). Ending the rest cancels the pending one.
+	function startRest(seconds: number) {
+		restTimer.start(seconds, { countdown: true });
+		notificationsApi.scheduleRest(seconds);
+	}
+	function endRest() {
+		restTimer.reset();
+		notificationsApi.cancelRest();
+	}
+
 	async function logPending(s: LoggedSet) {
 		const d = pendingDraft[s.id];
 		if (!d) return;
@@ -94,7 +106,7 @@
 			weight: d.weight === '' ? null : String(Number(d.weight)),
 			is_completed: true
 		});
-		restTimer.start(s.rest_seconds ?? 90, { countdown: true });
+		startRest(s.rest_seconds ?? 90);
 		await refresh();
 	}
 
@@ -109,7 +121,7 @@
 			reps: d.reps === '' ? null : Number(d.reps)
 		});
 		d.reps = '';
-		restTimer.start(restForExercise(le), { countdown: true });
+		startRest(restForExercise(le));
 		await refresh();
 	}
 
@@ -162,7 +174,7 @@
 		} else {
 			session = await trainingApi.finishSession(session.id, false);
 		}
-		restTimer.reset();
+		endRest();
 	}
 
 	function liveE1rm(leId: number): number | null {
@@ -365,7 +377,7 @@
 		>
 			<span class="text-sm">{restTimer.overTarget ? 'Rest complete' : 'Rest'}</span>
 			<span class="font-mono text-2xl tabular-nums">{formatDuration(restTimer.display)}</span>
-			<button class="rounded-md border border-neutral-500/40 px-3 py-1 text-sm hover:bg-white/10" onclick={() => restTimer.reset()}>
+			<button class="rounded-md border border-neutral-500/40 px-3 py-1 text-sm hover:bg-white/10" onclick={endRest}>
 				{restTimer.overTarget ? 'Done' : 'Skip'}
 			</button>
 		</div>

@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.nutrition",
     "apps.protocols",
     "apps.diary",
+    "apps.notifications",
 ]
 
 MIDDLEWARE = [
@@ -178,3 +179,11 @@ DIARY_S3_REGION = env("DIARY_S3_REGION", default="us-east-1")
 
 # Cap raw progress-photo uploads (Pillow re-encodes anyway).
 DIARY_MAX_UPLOAD_BYTES = env.int("DIARY_MAX_UPLOAD_BYTES", default=15 * 1024 * 1024)
+
+# --- Home Assistant notifications (personal, self-hosted) ---
+# The reminder worker (manage.py run_reminders) posts to Home Assistant's REST
+# API to deliver rest-timer + dose reminders. All optional: if unset, every
+# notification is a silent no-op, so the app runs fine without Home Assistant.
+HA_BASE_URL = env("HA_BASE_URL", default="")  # e.g. http://192.168.1.10:8123
+HA_TOKEN = env("HA_TOKEN", default="")  # long-lived access token (keep secret)
+HA_NOTIFY_SERVICE = env("HA_NOTIFY_SERVICE", default="notify")  # e.g. mobile_app_<device>
