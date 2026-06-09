@@ -16,6 +16,11 @@
 	function onUpdated(c: Compound) {
 		compounds = compounds.map((x) => (x.id === c.id ? c : x));
 	}
+	async function remove(c: Compound) {
+		if (!confirm(`Delete "${c.name}"?`)) return;
+		await protocolsApi.deleteCompound(c.id);
+		compounds = compounds.filter((x) => x.id !== c.id);
+	}
 
 	async function load() {
 		loading = true;
@@ -89,7 +94,10 @@
 				</div>
 				</div>
 				{#if !c.is_global}
-					<button class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
+					<div class="flex shrink-0 items-center gap-3 text-xs">
+						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
+						<button class="text-red-400 hover:text-red-300" onclick={() => remove(c)}>Delete</button>
+					</div>
 				{/if}
 			</li>
 		{/each}

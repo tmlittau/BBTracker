@@ -163,6 +163,9 @@ export const trainingApi = {
 			list
 		),
 	createExercise: (data: Partial<Exercise>) => req<Exercise>('POST', '/exercises/', data),
+	updateExercise: (id: number, data: Partial<Exercise>) =>
+		req<Exercise>('PATCH', `/exercises/${id}/`, data),
+	deleteExercise: (id: number) => req<void>('DELETE', `/exercises/${id}/`),
 	exerciseHistory: (id: number) =>
 		req<ExerciseHistoryPoint[]>('GET', `/exercises/${id}/history/`),
 

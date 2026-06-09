@@ -22,6 +22,8 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let newDayName = $state('');
+	let collapsed = $state<Record<number, boolean>>({});
+	const toggleDay = (id: number) => (collapsed[id] = !collapsed[id]);
 
 	// "＋ New exercise" modal — remember which day to drop the result into.
 	let showExerciseModal = $state(false);
@@ -177,12 +179,17 @@
 			{#each program.days as day (day.id)}
 				<Card>
 					<div class="flex items-center justify-between">
-						<h2 class="font-medium">{day.name}</h2>
+						<button class="flex items-center gap-2 text-left" onclick={() => toggleDay(day.id)}>
+							<span class="w-3 text-neutral-500">{collapsed[day.id] ? '▸' : '▾'}</span>
+							<h2 class="font-medium">{day.name}</h2>
+							<span class="text-xs text-neutral-600">· {day.slots.length} exercise(s)</span>
+						</button>
 						<button class="text-xs text-red-400 hover:text-red-300" onclick={() => removeDay(day.id)}>
 							Remove day
 						</button>
 					</div>
 
+					{#if !collapsed[day.id]}
 					{#if day.slots.length === 0}
 						<p class="mt-2 text-sm text-neutral-500">No exercises yet.</p>
 					{:else}
@@ -275,6 +282,7 @@
 							{/each}
 						</select>
 					</div>
+					{/if}
 				</Card>
 			{/each}
 		</div>

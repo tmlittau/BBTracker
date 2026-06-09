@@ -9,7 +9,6 @@
 		type AdherenceRow,
 		type Compound,
 		type Protocol,
-		type ProtocolRelease,
 		type Supplement
 	} from '$lib/protocols/api';
 	import { num } from '$lib/protocols/calc';
@@ -17,7 +16,6 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import CompoundCreateModal from '$lib/protocols/CompoundCreateModal.svelte';
 	import SupplementCreateModal from '$lib/protocols/SupplementCreateModal.svelte';
-	import ProtocolReleaseChart from '$lib/protocols/ProtocolReleaseChart.svelte';
 
 	const protocolId = Number($page.params.id);
 
@@ -25,7 +23,6 @@
 	let compounds = $state<Compound[]>([]);
 	let supplements = $state<Supplement[]>([]);
 	let adherence = $state<AdherenceRow[]>([]);
-	let release = $state<ProtocolRelease | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -45,7 +42,6 @@
 	async function load() {
 		protocol = await protocolsApi.protocol(protocolId);
 		adherence = await protocolsApi.adherence(protocolId).catch(() => []);
-		release = await protocolsApi.releaseCurves(protocolId).catch(() => null);
 	}
 
 	onMount(async () => {
@@ -132,17 +128,6 @@
 			<span class="rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Active</span>
 		{/if}
 	</div>
-
-	{#if release && (release.compounds.length || release.excluded.length)}
-		<section class="mt-4 rounded-lg border border-neutral-800 p-4">
-			<h2 class="font-medium">Release curve</h2>
-			<p class="mt-0.5 text-xs text-neutral-500">
-				Combined per-compound active release — logged doses (solid) and the schedule projection
-				(dashed), split at today.
-			</p>
-			<div class="mt-2"><ProtocolReleaseChart data={release} /></div>
-		</section>
-	{/if}
 
 	<!-- Add item with schedule -->
 	<form class="mt-4 space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={addItem}>

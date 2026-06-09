@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { trainingApi, type Exercise, type Muscle } from '$lib/training/api';
+	import { trainingApi, type Exercise } from '$lib/training/api';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
 	let exercises = $state<Exercise[]>([]);
-	let muscles = $state<Muscle[]>([]);
 	let query = $state('');
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
 	let showForm = $state(false);
+	let editingId = $state<number | null>(null);
 	let newName = $state('');
 	let newCategory = $state('barbell');
 	let saving = $state(false);
@@ -30,10 +30,7 @@
 		}
 	}
 
-	onMount(async () => {
-		muscles = await trainingApi.muscles().catch(() => []);
-		await load();
-	});
+	onMount(load);
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearch() {
@@ -41,14 +38,35 @@
 		searchTimer = setTimeout(load, 200);
 	}
 
-	async function createExercise(e: SubmitEvent) {
+	function startNew() {
+		editingId = null;
+		newName = '';
+		newCategory = 'barbell';
+		showForm = true;
+	}
+	function startEdit(ex: Exercise) {
+		editingId = ex.id;
+		newName = ex.name;
+		newCategory = ex.category;
+		showForm = true;
+	}
+	function cancelForm() {
+		showForm = false;
+		editingId = null;
+		newName = '';
+	}
+
+	async function submitExercise(e: SubmitEvent) {
 		e.preventDefault();
 		if (!newName.trim()) return;
 		saving = true;
 		try {
-			await trainingApi.createExercise({ name: newName.trim(), category: newCategory });
-			newName = '';
-			showForm = false;
+			if (editingId != null) {
+				await trainingApi.updateExercise(editingId, { name: newName.trim(), category: newCategory });
+			} else {
+				await trainingApi.createExercise({ name: newName.trim(), category: newCategory });
+			}
+			cancelForm();
 			await load();
 		} catch (err) {
 			error = (err as Error).message;
@@ -56,15 +74,25 @@
 			saving = false;
 		}
 	}
+
+	async function remove(ex: Exercise) {
+		if (!confirm(`Delete "${ex.name}"?`)) return;
+		try {
+			await trainingApi.deleteExercise(ex.id);
+			await load();
+		} catch (err) {
+			error = (err as Error).message;
+		}
+	}
 </script>
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Exercise library</h1>
-	<Button onclick={() => (showForm = !showForm)}>{showForm ? 'Cancel' : 'New exercise'}</Button>
+	<Button onclick={() => (showForm ? cancelForm() : startNew())}>{showForm ? 'Cancel' : 'New exercise'}</Button>
 </div>
 
 {#if showForm}
-	<form class="mt-4 flex flex-col gap-3 rounded-lg border border-neutral-800 p-4" onsubmit={createExercise}>
+	<form class="mt-4 flex flex-col gap-3 rounded-lg border border-neutral-800 p-4" onsubmit={submitExercise}>
 		<Input placeholder="Exercise name" required bind:value={newName} />
 		<select
 			bind:value={newCategory}
@@ -74,7 +102,9 @@
 				<option value={c}>{c}</option>
 			{/each}
 		</select>
-		<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create custom exercise'}</Button>
+		<Button type="submit" disabled={saving}>
+			{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Create custom exercise'}
+		</Button>
 	</form>
 {/if}
 
@@ -95,7 +125,7 @@
 	<p class="mt-4 text-xs text-neutral-500">{exercises.length} exercise(s)</p>
 	<ul class="mt-2 divide-y divide-neutral-800">
 		{#each exercises as ex (ex.id)}
-			<li class="flex items-center justify-between py-3">
+			<li class="flex items-center justify-between gap-2 py-3">
 				<div>
 					<span class="font-medium">{ex.name}</span>
 					{#if !ex.is_global}
@@ -107,6 +137,12 @@
 							: ''}
 					</div>
 				</div>
+				{#if !ex.is_global}
+					<div class="flex shrink-0 items-center gap-3 text-xs">
+						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(ex)}>Edit</button>
+						<button class="text-red-400 hover:text-red-300" onclick={() => remove(ex)}>Delete</button>
+					</div>
+				{/if}
 			</li>
 		{/each}
 	</ul>

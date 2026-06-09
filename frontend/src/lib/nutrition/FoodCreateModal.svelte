@@ -6,20 +6,22 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
-	// Create a custom food without leaving the page (mirrors the in-context exercise/
-	// compound modals). Supports g or ml as the base unit (SI). `oncreated` hands the
-	// new food back so the caller can immediately log it. A `prefill` (e.g. from a
-	// barcode lookup) populates the form so the user can confirm before saving.
+	// Create OR edit a custom food. `prefill` (from a barcode lookup) and `edit`
+	// (an existing food) both populate the form so the user confirms before saving.
 	let {
 		open = $bindable(false),
 		oncreated,
+		onupdated,
 		onclose,
-		prefill = null
+		prefill = null,
+		edit = null
 	}: {
 		open?: boolean;
-		oncreated: (food: Food) => void;
+		oncreated?: (food: Food) => void;
+		onupdated?: (food: Food) => void;
 		onclose?: () => void;
 		prefill?: BarcodeLookup | null;
+		edit?: Food | null;
 	} = $props();
 
 	let nutrients = $state<Nutrient[]>([]);
@@ -43,8 +45,6 @@
 		['fiber', 'Fiber']
 	];
 	const MACRO_SLUGS = new Set(MACRO_FIELDS.map(([s]) => s));
-	// Everything that isn't a headline macro (sugar, saturated fat, vitamins,
-	// minerals) lives in the optional, collapsed-by-default micronutrient section.
 	const microNutrients = $derived(
 		[...nutrients]
 			.filter((n) => !MACRO_SLUGS.has(n.slug))
@@ -69,32 +69,43 @@
 		showMicros = false;
 	}
 
-	// Apply a prefill (barcode lookup) when the modal opens with one. Tracked so a
-	// later plain "New food" open (prefill=null) doesn't re-apply stale data.
-	let lastPrefill: BarcodeLookup | null = null;
-	$effect(() => {
-		if (open && prefill && prefill !== lastPrefill) {
-			lastPrefill = prefill;
-			name = prefill.name ?? '';
-			brand = prefill.brand ?? '';
-			unit = prefill.unit ?? 'g';
-			barcode = prefill.barcode ?? '';
-			const incoming = prefill.nutrients ?? {};
-			macros = {
-				energy: incoming.energy ?? '',
-				protein: incoming.protein ?? '',
-				carbohydrate: incoming.carbohydrate ?? '',
-				fat: incoming.fat ?? '',
-				fiber: incoming.fiber ?? ''
-			};
-			const m: Record<string, string> = {};
-			for (const [slug, amt] of Object.entries(incoming)) {
-				if (!MACRO_SLUGS.has(slug)) m[slug] = amt;
-			}
-			micros = m;
-			if (Object.keys(m).length) showMicros = true;
+	function loadNutrients(bySlug: Record<string, string>) {
+		macros = {
+			energy: bySlug.energy ?? '',
+			protein: bySlug.protein ?? '',
+			carbohydrate: bySlug.carbohydrate ?? '',
+			fat: bySlug.fat ?? '',
+			fiber: bySlug.fiber ?? ''
+		};
+		const m: Record<string, string> = {};
+		for (const [slug, amt] of Object.entries(bySlug)) {
+			if (!MACRO_SLUGS.has(slug)) m[slug] = amt;
 		}
-		if (!open) lastPrefill = null;
+		micros = m;
+		if (Object.keys(m).length) showMicros = true;
+	}
+
+	// Populate from a barcode draft or an existing food when the modal opens.
+	let lastSource: BarcodeLookup | Food | null = null;
+	$effect(() => {
+		const source = edit ?? prefill;
+		if (open && source && source !== lastSource) {
+			lastSource = source;
+			if (edit) {
+				name = edit.name;
+				brand = edit.brand;
+				unit = (edit.unit as 'g' | 'ml') ?? 'g';
+				barcode = edit.barcode ?? '';
+				loadNutrients(Object.fromEntries(edit.food_nutrients.map((fn) => [fn.slug, fn.amount_per_100g])));
+			} else if (prefill) {
+				name = prefill.name ?? '';
+				brand = prefill.brand ?? '';
+				unit = prefill.unit ?? 'g';
+				barcode = prefill.barcode ?? '';
+				loadNutrients(prefill.nutrients ?? {});
+			}
+		}
+		if (!open) lastSource = null;
 	});
 
 	async function submit(e: SubmitEvent) {
@@ -110,15 +121,19 @@
 			const food_nutrients = entries
 				.filter(([slug, v]) => v !== '' && v != null && nid(slug) != null)
 				.map(([slug, v]) => ({ nutrient: nid(slug)!, amount_per_100g: String(num(v)) }));
-			const food = await nutritionApi.createFood({
+			const payload = {
 				name: name.trim(),
 				brand: brand.trim(),
 				unit,
 				barcode: barcode.trim() || undefined,
 				servings: [{ label: `100 ${unit}`, grams: '100', is_default: true }],
 				food_nutrients
-			});
-			oncreated(food);
+			};
+			if (edit) {
+				onupdated?.(await nutritionApi.updateFood(edit.id, payload));
+			} else {
+				oncreated?.(await nutritionApi.createFood(payload));
+			}
 			reset();
 			open = false;
 		} catch (err) {
@@ -129,7 +144,7 @@
 	}
 </script>
 
-<Modal bind:open title="New food" {onclose}>
+<Modal bind:open title={edit ? 'Edit food' : 'New food'} {onclose}>
 	<form class="space-y-3" onsubmit={submit}>
 		<div class="flex gap-2">
 			<Input placeholder="Food name" required bind:value={name} />
@@ -157,7 +172,6 @@
 		</div>
 		<p class="text-xs text-neutral-500">Calories from macros: ~{previewKcal} kcal/100{unit}</p>
 
-		<!-- Micronutrients: optional + collapsed so the form isn't overwhelming. -->
 		<details class="rounded border border-neutral-800" bind:open={showMicros}>
 			<summary class="cursor-pointer select-none px-3 py-2 text-sm text-neutral-300">
 				Micronutrients (optional)
@@ -180,6 +194,8 @@
 		</details>
 
 		{#if error}<p class="text-sm text-red-400">{error}</p>{/if}
-		<Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create custom food'}</Button>
+		<Button type="submit" disabled={saving}>
+			{saving ? 'Saving…' : edit ? 'Save changes' : 'Create custom food'}
+		</Button>
 	</form>
 </Modal>
