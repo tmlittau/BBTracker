@@ -22,6 +22,7 @@
 
 	let showFoodModal = $state(false);
 	let barcodePrefill = $state<BarcodeLookup | null>(null);
+	let editingFood = $state<Food | null>(null);
 
 	async function load() {
 		loading = true;
@@ -56,6 +57,7 @@
 		importMsg = null;
 		importErr = null;
 		try {
+			editingFood = null;
 			barcodePrefill = await nutritionApi.lookupBarcode(code);
 			showFoodModal = true;
 			showBarcode = false;
@@ -93,6 +95,15 @@
 		barcodePrefill = null;
 		importMsg = `Saved “${food.name}”${food.brand ? ` · ${food.brand}` : ''}.`;
 	}
+	function onUpdated(food: Food) {
+		foods = foods.map((f) => (f.id === food.id ? food : f));
+		editingFood = null;
+	}
+	function startEdit(food: Food) {
+		barcodePrefill = null;
+		editingFood = food;
+		showFoodModal = true;
+	}
 
 	async function remove(id: number) {
 		if (!confirm('Delete this custom food?')) return;
@@ -109,8 +120,10 @@
 <FoodCreateModal
 	bind:open={showFoodModal}
 	oncreated={onCreated}
+	onupdated={onUpdated}
 	prefill={barcodePrefill}
-	onclose={() => (barcodePrefill = null)}
+	edit={editingFood}
+	onclose={() => { barcodePrefill = null; editingFood = null; }}
 />
 <BarcodeScannerModal bind:open={showScanner} onresult={onScanResult} />
 
@@ -125,7 +138,7 @@
 		</button>
 		<button
 			class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-			onclick={() => { barcodePrefill = null; showFoodModal = true; }}
+			onclick={() => { barcodePrefill = null; editingFood = null; showFoodModal = true; }}
 		>
 			New food
 		</button>
@@ -195,7 +208,10 @@
 					<div class="text-xs text-neutral-500">{kcalOf(food)}</div>
 				</div>
 				{#if !food.is_global}
-					<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(food.id)}>Delete</button>
+					<div class="flex shrink-0 items-center gap-3 text-xs">
+						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(food)}>Edit</button>
+						<button class="text-red-400 hover:text-red-300" onclick={() => remove(food.id)}>Delete</button>
+					</div>
 				{/if}
 			</li>
 		{/each}

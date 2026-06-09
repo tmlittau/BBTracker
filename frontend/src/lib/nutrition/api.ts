@@ -159,6 +159,7 @@ export const nutritionApi = {
 	foods: (q = '') =>
 		req<Paginated<Food>>('GET', `/foods/${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(list),
 	createFood: (data: FoodInput) => req<Food>('POST', '/foods/', data),
+	updateFood: (id: number, data: FoodInput) => req<Food>('PATCH', `/foods/${id}/`, data),
 	deleteFood: (id: number) => req<void>('DELETE', `/foods/${id}/`),
 	// Resolve a UPC/EAN to a Food: returns an existing match or imports it from
 	// Open Food Facts (creating a global food). Throws on 404/422/502.
