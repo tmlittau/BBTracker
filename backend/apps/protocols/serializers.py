@@ -125,7 +125,7 @@ class DoseLogSerializer(serializers.ModelSerializer):
         fields = [
             "id", "protocol_item", "compound", "supplement", "item_name",
             "taken_at", "amount", "unit", "route", "injection_site", "site_name",
-            "notes", "side_effects",
+            "notes", "side_effects", "status",
         ]
 
     def get_item_name(self, obj) -> str:
@@ -223,6 +223,14 @@ class AdherenceRowSerializer(serializers.Serializer):
     expected = serializers.FloatField()
     actual = serializers.IntegerField()
     adherence = serializers.IntegerField(allow_null=True)
+
+
+class PhaseDoseMatrixSerializer(serializers.Serializer):
+    """Week-by-week dose table for a phase (loose shape; documented for the client)."""
+
+    phase = serializers.DictField()
+    weeks = serializers.ListField(child=serializers.DictField())
+    rows = serializers.ListField(child=serializers.DictField())
 
 
 class MarkerTrendPointSerializer(serializers.Serializer):

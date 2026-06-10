@@ -439,3 +439,53 @@ def test_supplement_capsule_count_scales_servings(api, user, db):
     summary = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
     by_slug = {n["slug"]: n for n in summary["nutrients"]}
     assert float(by_slug["fat"]["amount"]) == 2.0
+
+
+def test_skipped_supplement_not_counted(api, user, db):
+    """A skipped supplement dose must not feed the nutrition totals."""
+    vit_c = Nutrient.objects.create(
+        name="Vitamin C", slug="vitamin_c", category="vitamin", unit="mg"
+    )
+    supp = Supplement.objects.create(name="C", owner=user)
+    supp.supplement_nutrients.create(nutrient=vit_c, amount_per_serving=500)
+    DoseLog.objects.create(
+        owner=user, supplement=supp,
+        taken_at=timezone.make_aware(timezone.datetime(2026, 5, 30, 8, 0)),
+        amount=1, unit="capsule", status="skipped",
+    )
+    summary = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
+    by_slug = {n["slug"]: n for n in summary["nutrients"]}
+    assert float(by_slug["vitamin_c"]["amount"]) == 0.0
+
+
+def test_phase_dose_matrix(api, user, test_e, db):
+    """Phase matrix: injectable anabolic = weekly mode; taken/skipped counted per week."""
+    from datetime import date
+
+    from apps.core.models import Phase
+
+    start = date(2026, 5, 1)
+    phase = Phase.objects.create(
+        owner=user, name="Cut", start_date=start, end_date=start + timedelta(days=20)
+    )
+    p = Protocol.objects.create(owner=user, name="Cycle", started_on=start)
+    ProtocolItem.objects.create(
+        protocol=p, compound=test_e, dose_amount=125, dose_unit="mg",
+        route="im", frequency="2x_week",
+    )
+    for day, status in ((2, "taken"), (3, "skipped")):  # both in week 0
+        DoseLog.objects.create(
+            owner=user, compound=test_e,
+            taken_at=timezone.make_aware(timezone.datetime(2026, 5, day, 9, 0)),
+            amount=125, unit="mg", route="im", status=status,
+        )
+    data = api.get(
+        f"/api/v1/protocols/protocols/{p.id}/phase_matrix/?phase={phase.id}"
+    ).json()
+    assert data["phase"]["name"] == "Cut"
+    assert len(data["weeks"]) == 3  # 21 days → 3 weekly columns
+    row = data["rows"][0]
+    assert row["mode"] == "weekly"  # injectable anabolic aggregates to a weekly dose
+    assert row["cells"][0]["taken_count"] == 1
+    assert row["cells"][0]["skipped_count"] == 1
+    assert float(row["cells"][0]["taken_amount"]) == 125.0

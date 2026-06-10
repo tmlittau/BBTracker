@@ -228,6 +228,12 @@ class DoseLog(TimeStampedModel):
     )
     notes = models.CharField(max_length=255, blank=True)
     side_effects = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=8,
+        choices=[("taken", "Taken"), ("skipped", "Skipped")],
+        default="taken",
+        help_text="'skipped' = intentionally not taken (e.g. a sick day).",
+    )
 
     class Meta:
         ordering = ["-taken_at"]

@@ -1418,6 +1418,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/protocols/{id}/phase_matrix/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Week-by-week dose table for a phase: rows = items, columns = weeks.
+         *
+         *     `?phase=` selects the phase; without it, the phase containing today (else the
+         *     latest) is used.
+         */
+        get: operations["v1_protocols_protocols_phase_matrix_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols/protocols/{id}/release/": {
         parameters: {
             query?: never;
@@ -2514,6 +2536,13 @@ export interface components {
             readonly site_name: string;
             notes?: string;
             side_effects?: string;
+            /**
+             * @description 'skipped' = intentionally not taken (e.g. a sick day).
+             *
+             *     * `taken` - Taken
+             *     * `skipped` - Skipped
+             */
+            status?: components["schemas"]["StatusEnum"];
         };
         DoseLogRequest: {
             protocol_item?: number | null;
@@ -2528,6 +2557,13 @@ export interface components {
             injection_site?: number | null;
             notes?: string;
             side_effects?: string;
+            /**
+             * @description 'skipped' = intentionally not taken (e.g. a sick day).
+             *
+             *     * `taken` - Taken
+             *     * `skipped` - Skipped
+             */
+            status?: components["schemas"]["StatusEnum"];
         };
         /**
          * @description * `mg` - mg
@@ -3401,6 +3437,13 @@ export interface components {
             injection_site?: number | null;
             notes?: string;
             side_effects?: string;
+            /**
+             * @description 'skipped' = intentionally not taken (e.g. a sick day).
+             *
+             *     * `taken` - Taken
+             *     * `skipped` - Skipped
+             */
+            status?: components["schemas"]["StatusEnum"];
         };
         PatchedExerciseRequest: {
             name?: string;
@@ -3652,6 +3695,18 @@ export interface components {
             nutrition_target?: number | null;
             program?: number | null;
             protocol?: number | null;
+        };
+        /** @description Week-by-week dose table for a phase (loose shape; documented for the client). */
+        PhaseDoseMatrix: {
+            phase: {
+                [key: string]: unknown;
+            };
+            weeks: {
+                [key: string]: unknown;
+            }[];
+            rows: {
+                [key: string]: unknown;
+            }[];
         };
         PhaseRequest: {
             name: string;
@@ -3996,6 +4051,12 @@ export interface components {
             days_since: number | null;
             status: string;
         };
+        /**
+         * @description * `taken` - Taken
+         *     * `skipped` - Skipped
+         * @enum {string}
+         */
+        StatusEnum: "taken" | "skipped";
         SummaryNutrient: {
             id: number;
             name: string;
@@ -7396,6 +7457,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedAdherenceRowList"];
+                };
+            };
+        };
+    };
+    v1_protocols_protocols_phase_matrix_retrieve: {
+        parameters: {
+            query?: {
+                phase?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhaseDoseMatrix"];
                 };
             };
         };
