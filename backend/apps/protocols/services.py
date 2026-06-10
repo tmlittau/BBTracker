@@ -382,6 +382,11 @@ def protocol_adherence(owner, protocol, window_days=28):
     return rows
 
 
+# Supplement nutrients are defined per serving; only count-based dose units scale
+# them. A mass/volume unit (mg/g/iu/ml) counts as a single serving.
+SERVING_UNITS = {"capsule", "tablet", "serving"}
+
+
 def supplement_nutrient_contribution(owner, date):
     """{nutrient_id: amount} contributed by supplement doses logged on `date`.
 
@@ -395,7 +400,11 @@ def supplement_nutrient_contribution(owner, date):
         owner=owner, supplement__isnull=False, taken_at__date=date
     ).select_related("supplement").prefetch_related("supplement__supplement_nutrients")
     for log in qs:
-        servings = Decimal(str(log.amount or 1))
+        # Only count-based units (capsule/tablet/serving) scale the per-serving
+        # nutrients. A mass/volume dose (mg, g, iu, ml) counts as ONE serving, so
+        # logging fish oil as "1000 mg" doesn't multiply its macros by 1000.
+        unit = (log.unit or "").lower()
+        servings = Decimal(str(log.amount or 1)) if unit in SERVING_UNITS else Decimal("1")
         for sn in log.supplement.supplement_nutrients.all():
             add = _q(sn.amount_per_serving * servings)
             totals[sn.nutrient_id] = totals.get(sn.nutrient_id, Decimal("0")) + add

@@ -403,3 +403,39 @@ def test_supplement_feeds_nutrition_summary(api, user, db):
     by_slug = {n["slug"]: n for n in resp.json()["nutrients"]}
     # 500 mg from the supplement should show up against Vitamin C.
     assert float(by_slug["vitamin_c"]["amount"]) == 500.0
+
+
+def test_supplement_mass_dose_counts_as_one_serving(api, user, db):
+    """Regression: a supplement logged in a mass unit (e.g. 1000 mg fish oil) must
+    NOT multiply its per-serving macros by the dose amount."""
+    fat = Nutrient.objects.create(name="Fat", slug="fat", category="macro", unit="g")
+    energy = Nutrient.objects.create(
+        name="Energy", slug="energy", category="energy", unit="kcal", is_energy=True
+    )
+    omega = Supplement.objects.create(name="Omega 3", owner=user)
+    omega.supplement_nutrients.create(nutrient=fat, amount_per_serving=1)
+    omega.supplement_nutrients.create(nutrient=energy, amount_per_serving=10)
+    DoseLog.objects.create(
+        owner=user, supplement=omega,
+        taken_at=timezone.make_aware(timezone.datetime(2026, 5, 30, 8, 0)),
+        amount=1000, unit="mg",
+    )
+    summary = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
+    by_slug = {n["slug"]: n for n in summary["nutrients"]}
+    assert float(by_slug["fat"]["amount"]) == 1.0  # one serving, not 1000
+    assert float(by_slug["energy"]["amount"]) == 10.0
+
+
+def test_supplement_capsule_count_scales_servings(api, user, db):
+    """Count-based units still scale: 2 capsules = 2× the per-serving nutrients."""
+    fat = Nutrient.objects.create(name="Fat", slug="fat", category="macro", unit="g")
+    omega = Supplement.objects.create(name="Omega 3", owner=user)
+    omega.supplement_nutrients.create(nutrient=fat, amount_per_serving=1)
+    DoseLog.objects.create(
+        owner=user, supplement=omega,
+        taken_at=timezone.make_aware(timezone.datetime(2026, 5, 30, 8, 0)),
+        amount=2, unit="capsule",
+    )
+    summary = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
+    by_slug = {n["slug"]: n for n in summary["nutrients"]}
+    assert float(by_slug["fat"]["amount"]) == 2.0
