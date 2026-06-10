@@ -94,6 +94,14 @@ export interface SummaryNutrient {
 	percent: number | null;
 }
 
+export interface MealMacro {
+	meal: number;
+	calories: string;
+	protein_g: string;
+	carb_g: string;
+	fat_g: string;
+}
+
 export interface DailySummary {
 	date: string;
 	has_target: boolean;
@@ -106,6 +114,7 @@ export interface DailySummary {
 		fiber_g: string;
 	};
 	nutrients: SummaryNutrient[];
+	meals: MealMacro[];
 }
 
 interface Paginated<T> {
