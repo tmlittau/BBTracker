@@ -128,6 +128,7 @@ export interface DoseLog {
 	site_name: string | null;
 	notes: string;
 	side_effects: string;
+	status: string; // 'taken' | 'skipped'
 }
 
 export interface Vial {
@@ -256,6 +257,30 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 const list = <T>(p: Paginated<T> | T[]): T[] => (Array.isArray(p) ? p : p.results);
 
+export interface MatrixCell {
+	week: number;
+	scheduled: number;
+	planned_amount: string | null;
+	taken_count: number;
+	skipped_count: number;
+	taken_amount: string;
+	state: 'done' | 'partial' | 'skipped' | 'planned' | 'none';
+}
+export interface MatrixRow {
+	item_id: number;
+	name: string;
+	kind: 'compound' | 'supplement';
+	mode: 'weekly' | 'daily';
+	unit: string;
+	daily_dose: string | null;
+	cells: MatrixCell[];
+}
+export interface PhaseDoseMatrix {
+	phase: { id: number; name: string; start_date: string; end_date: string | null };
+	weeks: { index: number; start: string; end: string }[];
+	rows: MatrixRow[];
+}
+
 export const protocolsApi = {
 	compounds: (q = '') =>
 		req<Paginated<Compound>>('GET', `/compounds/${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(
@@ -308,6 +333,14 @@ export const protocolsApi = {
 
 	releaseCurves: (id: number, horizonDays = 84) =>
 		req<ProtocolRelease>('GET', `/protocols/${id}/release/?horizon_days=${horizonDays}`),
+
+	phaseMatrix: (protocolId: number, phaseId?: number) =>
+		req<PhaseDoseMatrix>(
+			'GET',
+			`/protocols/${protocolId}/phase_matrix/${phaseId ? `?phase=${phaseId}` : ''}`
+		),
+	skipDose: (data: Partial<DoseLog> & { taken_at: string; amount: string }) =>
+		req<DoseLog>('POST', '/dose-logs/', { ...data, status: 'skipped' }),
 
 	updateItem: (id: number, data: Partial<ProtocolItem>) =>
 		req<ProtocolItem>('PATCH', `/protocol-items/${id}/`, data),

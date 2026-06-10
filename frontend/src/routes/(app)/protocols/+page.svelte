@@ -173,6 +173,29 @@
 		}
 	}
 
+	// Skip = record a "not taken" decision (e.g. a sick day). It clears the item
+	// from today's quick-log without feeding nutrition / release / adherence.
+	async function skipItem(item: ProtocolItem) {
+		logging = item.id;
+		error = null;
+		try {
+			await protocolsApi.skipDose({
+				protocol_item: item.id,
+				compound: item.compound,
+				supplement: item.supplement,
+				taken_at: new Date().toISOString(),
+				amount: item.dose_amount ?? '0',
+				unit: item.dose_unit,
+				route: item.route || undefined
+			});
+			await loadDoses();
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			logging = null;
+		}
+	}
+
 	const freqLabel = (k: string) => FREQUENCIES.find((f) => f.key === k)?.label ?? k;
 </script>
 
@@ -180,12 +203,20 @@
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Protocols</h1>
-	<a
-		href="/protocols/log"
-		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-	>
-		Log a dose
-	</a>
+	<div class="flex gap-2">
+		<a
+			href="/protocols/schedule"
+			class="rounded-md border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500"
+		>
+			Dose table
+		</a>
+		<a
+			href="/protocols/log"
+			class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+		>
+			Log a dose
+		</a>
+	</div>
 </div>
 
 <p class="mt-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-300">
@@ -228,18 +259,27 @@
 						<h3 class="text-xs font-medium uppercase tracking-wide text-neutral-500">{group.label}</h3>
 						<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
 							{#each group.items as item (item.id)}
-								<button
-									class="rounded-lg border border-neutral-800 px-3 py-2 text-left text-sm hover:border-indigo-600 disabled:opacity-50"
-									disabled={logging === item.id}
-									onclick={() => quickLog(item)}
-								>
-									<span class="block truncate font-medium">{item.item_name}</span>
-									<span class="text-xs text-neutral-500">
-										{item.dose_amount ?? '—'}{item.dose_unit}
-										{#if item.compound != null && (item.route === 'im' || item.route === 'subq')}· 💉{/if}
-										{logging === item.id ? '· …' : ''}
-									</span>
-								</button>
+								<div class="overflow-hidden rounded-lg border border-neutral-800 text-sm hover:border-indigo-600">
+									<button
+										class="block w-full px-3 py-2 text-left disabled:opacity-50"
+										disabled={logging === item.id}
+										onclick={() => quickLog(item)}
+									>
+										<span class="block truncate font-medium">{item.item_name}</span>
+										<span class="text-xs text-neutral-500">
+											{item.dose_amount ?? '—'}{item.dose_unit}
+											{#if item.compound != null && (item.route === 'im' || item.route === 'subq')}· 💉{/if}
+											{logging === item.id ? '· …' : ''}
+										</span>
+									</button>
+									<button
+										class="block w-full border-t border-neutral-800 px-3 py-1 text-right text-xs text-neutral-500 hover:bg-neutral-900 hover:text-amber-300 disabled:opacity-50"
+										disabled={logging === item.id}
+										onclick={() => skipItem(item)}
+									>
+										Skip
+									</button>
+								</div>
 							{/each}
 						</div>
 					</div>
@@ -250,14 +290,23 @@
 						<h3 class="text-xs font-medium uppercase tracking-wide text-neutral-500">Anytime</h3>
 						<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
 							{#each anytimeItems as item (item.id)}
-								<button
-									class="rounded-lg border border-neutral-800 px-3 py-2 text-left text-sm hover:border-indigo-600 disabled:opacity-50"
-									disabled={logging === item.id}
-									onclick={() => quickLog(item)}
-								>
-									<span class="block truncate font-medium">{item.item_name}</span>
-									<span class="text-xs text-neutral-500">{item.dose_amount ?? '—'}{item.dose_unit} · {freqLabel(item.frequency)}</span>
-								</button>
+								<div class="overflow-hidden rounded-lg border border-neutral-800 text-sm hover:border-indigo-600">
+									<button
+										class="block w-full px-3 py-2 text-left disabled:opacity-50"
+										disabled={logging === item.id}
+										onclick={() => quickLog(item)}
+									>
+										<span class="block truncate font-medium">{item.item_name}</span>
+										<span class="text-xs text-neutral-500">{item.dose_amount ?? '—'}{item.dose_unit} · {freqLabel(item.frequency)}</span>
+									</button>
+									<button
+										class="block w-full border-t border-neutral-800 px-3 py-1 text-right text-xs text-neutral-500 hover:bg-neutral-900 hover:text-amber-300 disabled:opacity-50"
+										disabled={logging === item.id}
+										onclick={() => skipItem(item)}
+									>
+										Skip
+									</button>
+								</div>
 							{/each}
 						</div>
 					</div>

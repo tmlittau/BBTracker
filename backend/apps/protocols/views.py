@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -29,6 +30,7 @@ from .serializers import (
     DoseLogSerializer,
     InjectionSiteSerializer,
     MarkerTrendPointSerializer,
+    PhaseDoseMatrixSerializer,
     ProtocolItemSerializer,
     ProtocolReleaseSerializer,
     ProtocolSerializer,
@@ -40,6 +42,7 @@ from .services import (
     bloodwork_matrix,
     injection_site_recency,
     marker_trend,
+    phase_dose_matrix,
     protocol_adherence,
     protocol_release_curves,
     suggest_next_site,
@@ -162,6 +165,39 @@ class ProtocolViewSet(viewsets.ModelViewSet):
         protocol = self.get_object()
         horizon = _int_param(request, "horizon_days", 84)
         return Response(protocol_release_curves(request.user, protocol, horizon_days=horizon))
+
+    @extend_schema(
+        parameters=[OpenApiParameter("phase", int)],
+        responses=PhaseDoseMatrixSerializer,
+    )
+    @action(detail=True, methods=["get"])
+    def phase_matrix(self, request, pk=None):
+        """Week-by-week dose table for a phase: rows = items, columns = weeks.
+
+        `?phase=` selects the phase; without it, the phase containing today (else the
+        latest) is used.
+        """
+        from apps.core.models import Phase
+
+        protocol = self.get_object()
+        phase_id = _int_param(request, "phase", 0)
+        phases = Phase.objects.filter(owner=request.user)
+        phase = phases.filter(id=phase_id).first() if phase_id else None
+        if phase is None:
+            today = timezone.now().date()
+            phase = (
+                phases.filter(start_date__lte=today)
+                .filter(Q(end_date__isnull=True) | Q(end_date__gte=today))
+                .order_by("-start_date")
+                .first()
+                or phases.order_by("-start_date").first()
+            )
+        if phase is None:
+            return Response(
+                {"detail": "No phase found — create a phase to see its dose table."},
+                status=400,
+            )
+        return Response(phase_dose_matrix(request.user, phase, protocol))
 
 
 @extend_schema(tags=["protocols"])

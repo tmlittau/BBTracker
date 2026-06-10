@@ -226,7 +226,7 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
 
     cids = list(grouped)
     first_dose = (
-        DoseLog.objects.filter(owner=owner, compound_id__in=cids)
+        DoseLog.objects.filter(owner=owner, compound_id__in=cids, status="taken")
         .order_by("taken_at").values_list("taken_at", flat=True).first()
     )
 
@@ -259,7 +259,8 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         doses = [
             ((ta - start_dt).total_seconds() / 86400.0, float(amt) * factor)
             for ta, amt in DoseLog.objects.filter(
-                owner=owner, compound_id=c.id, taken_at__lte=now, taken_at__gte=lookback
+                owner=owner, compound_id=c.id, status="taken",
+                taken_at__lte=now, taken_at__gte=lookback
             ).values_list("taken_at", "amount")
             if amt is not None
         ]
@@ -312,7 +313,7 @@ def injection_site_recency(owner, days=30):
     since = now - timedelta(days=days)
     last_by_site: dict[int, object] = {}
     qs = DoseLog.objects.filter(
-        owner=owner, taken_at__gte=since, injection_site__isnull=False
+        owner=owner, taken_at__gte=since, injection_site__isnull=False, status="taken"
     ).values_list("injection_site_id", "taken_at")
     for site_id, taken_at in qs:
         if site_id not in last_by_site or taken_at > last_by_site[site_id]:
@@ -366,7 +367,8 @@ def protocol_adherence(owner, protocol, window_days=28):
             item.frequency, item.days_of_week, item.times_of_day, window_days, end_date
         )
         actual = DoseLog.objects.filter(
-            owner=owner, protocol_item=item, taken_at__gte=since, taken_at__lte=now
+            owner=owner, protocol_item=item, status="taken",
+            taken_at__gte=since, taken_at__lte=now
         ).count()
         item_obj = item.compound or item.supplement
         rows.append(
@@ -380,6 +382,119 @@ def protocol_adherence(owner, protocol, window_days=28):
             }
         )
     return rows
+
+
+def phase_dose_matrix(owner, phase, protocol):
+    """Week-by-week dose table for a phase, from the protocol's plan + the user's logs.
+
+    Each row is a protocol item; each column a 7-day week of the phase. Past/current
+    weeks reflect what was actually logged (taken / skipped); future weeks show the
+    current plan — so adjusting the protocol only changes weeks not yet logged.
+    Injectable anabolics report a summed **weekly** dose; everything else its **daily**
+    dose. Cell `state`: done / partial / skipped / planned (future) / none.
+    """
+    from .models import DoseLog
+
+    start = phase.start_date
+    end = phase.end_date or timezone.now().date()
+    today = timezone.now().date()
+
+    weeks = []
+    d = start
+    while d <= end:
+        w_end = min(d + timedelta(days=6), end)
+        weeks.append({"index": len(weeks), "start": d, "end": w_end})
+        d += timedelta(days=7)
+
+    anchor = protocol.started_on or start
+    rows = []
+    for item in protocol.items.select_related("compound", "supplement").all():
+        obj = item.compound or item.supplement
+        if obj is None:
+            continue
+        is_compound = item.compound_id is not None
+        route = item.route or (item.compound.default_route if item.compound else "")
+        injectable_anabolic = (
+            is_compound
+            and item.compound.compound_class == "anabolic"
+            and route in INJECTABLE_ROUTES
+        )
+        mode = "weekly" if injectable_anabolic else "daily"
+        per = Decimal(str(item.dose_amount)) if item.dose_amount is not None else None
+
+        log_key = "compound_id" if is_compound else "supplement_id"
+        log_val = item.compound_id if is_compound else item.supplement_id
+        logs = list(
+            DoseLog.objects.filter(
+                owner=owner, taken_at__date__gte=start, taken_at__date__lte=end,
+                **{log_key: log_val},
+            ).values_list("taken_at", "amount", "status")
+        )
+
+        cells = []
+        for w in weeks:
+            ws, we = w["start"], w["end"]
+            taken_amt, taken_n, skipped_n = Decimal("0"), 0, 0
+            for ta, amt, status in logs:
+                if ws <= ta.date() <= we:
+                    if status == "skipped":
+                        skipped_n += 1
+                    else:
+                        taken_n += 1
+                        taken_amt += Decimal(str(amt or 0))
+            sched_days = scheduled_dose_dates(
+                item.frequency, item.days_of_week, ws, we, anchor
+            )
+            scheduled = len(sched_days) * times_per_day_count(
+                item.times_of_day, item.frequency
+            )
+            planned_amt = per * scheduled if per is not None else None
+            future = ws > today
+            if future:
+                state = "planned" if scheduled else "none"
+            elif taken_n:
+                state = "done" if (not scheduled or taken_n >= scheduled) else "partial"
+            elif skipped_n:
+                state = "skipped"
+            else:
+                state = "none"
+            cells.append(
+                {
+                    "week": w["index"],
+                    "scheduled": scheduled,
+                    "planned_amount": str(_q(planned_amt)) if planned_amt is not None else None,
+                    "taken_count": taken_n,
+                    "skipped_count": skipped_n,
+                    "taken_amount": str(_q(taken_amt)),
+                    "state": state,
+                }
+            )
+
+        rows.append(
+            {
+                "item_id": item.id,
+                "name": str(obj),
+                "kind": "compound" if is_compound else "supplement",
+                "mode": mode,
+                "unit": item.dose_unit,
+                "daily_dose": str(_q(per)) if per is not None else None,
+                "cells": cells,
+            }
+        )
+
+    return {
+        "phase": {
+            "id": phase.id,
+            "name": phase.name,
+            "start_date": start.isoformat(),
+            "end_date": phase.end_date.isoformat() if phase.end_date else None,
+        },
+        "weeks": [
+            {"index": w["index"], "start": w["start"].isoformat(), "end": w["end"].isoformat()}
+            for w in weeks
+        ],
+        "rows": rows,
+    }
 
 
 # Supplement nutrients are defined per serving; only count-based dose units scale
@@ -397,7 +512,7 @@ def supplement_nutrient_contribution(owner, date):
 
     totals: dict[int, Decimal] = {}
     qs = DoseLog.objects.filter(
-        owner=owner, supplement__isnull=False, taken_at__date=date
+        owner=owner, supplement__isnull=False, taken_at__date=date, status="taken"
     ).select_related("supplement").prefetch_related("supplement__supplement_nutrients")
     for log in qs:
         # Only count-based units (capsule/tablet/serving) scale the per-serving
