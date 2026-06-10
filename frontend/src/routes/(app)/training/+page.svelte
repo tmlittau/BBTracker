@@ -9,6 +9,10 @@
 	let error = $state<string | null>(null);
 
 	const active = $derived(programs.find((p) => p.is_active) ?? null);
+	// In-progress = started but not finished — surfaced so you can jump back in if
+	// you navigated away mid-workout (all logged sets are retained).
+	const inProgress = $derived(recent.filter((s) => !s.is_completed));
+	const completed = $derived(recent.filter((s) => s.is_completed));
 
 	onMount(async () => {
 		try {
@@ -25,6 +29,9 @@
 	}
 	function startEmpty() {
 		goto('/training/log');
+	}
+	function resume(id: number) {
+		goto(`/training/log?session=${id}`);
 	}
 </script>
 
@@ -43,6 +50,31 @@
 {:else if error}
 	<p class="mt-6 text-red-400">{error}</p>
 {:else}
+	<!-- Resume a workout left in progress (navigated away mid-session) -->
+	{#if inProgress.length > 0}
+		<section class="mt-6">
+			<h2 class="font-medium text-amber-400">In progress</h2>
+			<div class="mt-3 space-y-2">
+				{#each inProgress as s (s.id)}
+					<div class="flex items-center justify-between gap-2 rounded-lg border border-amber-800/60 bg-amber-950/20 p-4">
+						<div>
+							<span class="font-medium">{s.name || 'Workout'}</span>
+							<p class="text-xs text-neutral-500">
+								Started {new Date(s.started_at).toLocaleString()} · {s.exercise_count} exercise(s)
+							</p>
+						</div>
+						<button
+							class="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
+							onclick={() => resume(s.id)}
+						>
+							Resume
+						</button>
+					</div>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	<!-- Active program: quick-start its days -->
 	<section class="mt-6">
 		{#if active}
@@ -86,11 +118,11 @@
 	<!-- Recent workouts -->
 	<section class="mt-8">
 		<h2 class="font-medium">Recent workouts</h2>
-		{#if recent.length === 0}
+		{#if completed.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">No workouts logged yet.</p>
 		{:else}
 			<div class="mt-3 space-y-2">
-				{#each recent.slice(0, 5) as s (s.id)}
+				{#each completed.slice(0, 5) as s (s.id)}
 					<a href="/training/history" class="block rounded-lg border border-neutral-800 p-4 transition hover:border-neutral-600">
 						<div class="flex items-center justify-between">
 							<span>{s.name || 'Workout'}</span>

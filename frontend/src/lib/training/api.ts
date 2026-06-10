@@ -208,6 +208,7 @@ export const trainingApi = {
 		req<WorkoutSession>('POST', '/workout-sessions/start_from_day/', { day }),
 	finishSession: (id: number, dropIncomplete = false) =>
 		req<WorkoutSession>('POST', `/workout-sessions/${id}/finish/`, { drop_incomplete: dropIncomplete }),
+	deleteSession: (id: number) => req<void>('DELETE', `/workout-sessions/${id}/`),
 
 	createLoggedExercise: (data: { session: number; exercise: number; order: number }) =>
 		req<LoggedExercise>('POST', '/logged-exercises/', data),

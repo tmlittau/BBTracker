@@ -62,8 +62,11 @@
 	onMount(async () => {
 		try {
 			[exercises, programs] = await Promise.all([trainingApi.exercises(), trainingApi.programs()]);
+			// Resume an existing (usually in-progress) session, or start from a day.
+			const sessionParam = $page.url.searchParams.get('session');
 			const dayParam = $page.url.searchParams.get('day');
-			if (dayParam) await startDay(Number(dayParam));
+			if (sessionParam) session = await trainingApi.session(Number(sessionParam));
+			else if (dayParam) await startDay(Number(dayParam));
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {

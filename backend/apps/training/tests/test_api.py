@@ -202,6 +202,22 @@ def test_session_owner_isolation(api, other):
     assert api.get(f"/api/v1/training/workout-sessions/{theirs.id}/").status_code == 404
 
 
+def test_delete_own_session(api, user):
+    """A workout (e.g. started by accident) can be deleted from history."""
+    s = WorkoutSession.objects.create(owner=user, name="Oops", started_at=timezone.now())
+    assert api.delete(f"/api/v1/training/workout-sessions/{s.id}/").status_code == 204
+    assert api.get(f"/api/v1/training/workout-sessions/{s.id}/").status_code == 404
+
+
+def test_cannot_delete_others_session(api, other):
+    theirs = WorkoutSession.objects.create(
+        owner=other, name="Theirs", started_at=timezone.now()
+    )
+    # The owner-scoped queryset hides another user's session → 404, and it survives.
+    assert api.delete(f"/api/v1/training/workout-sessions/{theirs.id}/").status_code == 404
+    assert WorkoutSession.objects.filter(id=theirs.id).exists()
+
+
 def test_session_date_range_filter(api, user):
     now = timezone.now()
     WorkoutSession.objects.create(owner=user, name="Recent", started_at=now)
