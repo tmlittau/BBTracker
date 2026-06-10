@@ -2439,6 +2439,7 @@ export interface components {
                 [key: string]: unknown;
             };
             nutrients: components["schemas"]["SummaryNutrient"][];
+            meals: components["schemas"]["MealMacro"][];
         };
         DashboardToday: {
             date: string;
@@ -2760,6 +2761,17 @@ export interface components {
             date: string;
             name: string;
             order?: number;
+        };
+        MealMacro: {
+            meal: number;
+            /** Format: decimal */
+            calories: string;
+            /** Format: decimal */
+            protein_g: string;
+            /** Format: decimal */
+            carb_g: string;
+            /** Format: decimal */
+            fat_g: string;
         };
         MealRequest: {
             /** Format: date */

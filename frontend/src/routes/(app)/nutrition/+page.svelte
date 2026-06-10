@@ -22,6 +22,7 @@
 
 	let date = $state(todayISO());
 	let summary = $state<DailySummary | null>(null);
+	const mealMacros = $derived(new Map((summary?.meals ?? []).map((m) => [m.meal, m] as const)));
 	let entries = $state<DiaryEntry[]>([]);
 	let meals = $state<Meal[]>([]);
 	let loading = $state(true);
@@ -250,6 +251,7 @@
 			onfinalize={dndFinalize}
 		>
 			{#each meals as m, mi (m.id)}
+				{@const mm = mealMacros.get(m.id)}
 				<div class="rounded-lg border border-neutral-800 p-4">
 					<div class="flex items-center justify-between gap-2">
 						<div class="flex items-center gap-2">
@@ -267,6 +269,11 @@
 							<button class="text-red-400 hover:text-red-300" onclick={() => deleteMeal(m.id)}>Delete</button>
 						</div>
 					</div>
+					{#if mm}
+						<p class="mt-1 text-xs text-neutral-500">
+							{Math.round(num(mm.calories))} kcal · C {Math.round(num(mm.carb_g))}g · P {Math.round(num(mm.protein_g))}g · F {Math.round(num(mm.fat_g))}g
+						</p>
+					{/if}
 
 					{#if entriesFor(m.id).length > 0}
 						<ul class="mt-2 divide-y divide-neutral-800">

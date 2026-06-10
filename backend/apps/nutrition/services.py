@@ -175,12 +175,37 @@ def daily_summary(owner, date):
         "fat_g": macro("fat"),
         "fiber_g": macro("fiber"),
     }
+
+    # Per-meal macro rollup (for the meal headers in the diary).
+    macro_id = {
+        x["slug"]: x["id"]
+        for x in nutrients
+        if x["slug"] in ("energy", "protein", "carbohydrate", "fat")
+    }
+    by_meal: dict[int, list] = {}
+    for entry in entries:
+        if entry.meal_id is not None:
+            by_meal.setdefault(entry.meal_id, []).append(entry)
+    meals = []
+    for meal_id, meal_entries in by_meal.items():
+        mt = daily_totals(meal_entries)
+        meals.append(
+            {
+                "meal": meal_id,
+                "calories": str(_q(mt.get(macro_id.get("energy"), Decimal("0")), "0.001")),
+                "protein_g": str(_q(mt.get(macro_id.get("protein"), Decimal("0")), "0.001")),
+                "carb_g": str(_q(mt.get(macro_id.get("carbohydrate"), Decimal("0")), "0.001")),
+                "fat_g": str(_q(mt.get(macro_id.get("fat"), Decimal("0")), "0.001")),
+            }
+        )
+
     return {
         "date": date.isoformat() if hasattr(date, "isoformat") else str(date),
         "has_target": target is not None,
         "target_name": target.name if target else None,
         "totals": headline,
         "nutrients": nutrients,
+        "meals": meals,
     }
 
 

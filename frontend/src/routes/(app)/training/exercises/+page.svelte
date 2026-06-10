@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { trainingApi, type Exercise } from '$lib/training/api';
+	import { trainingApi, type Exercise, type Muscle } from '$lib/training/api';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
 	let exercises = $state<Exercise[]>([]);
+	let muscles = $state<Muscle[]>([]);
 	let query = $state('');
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -13,6 +14,7 @@
 	let editingId = $state<number | null>(null);
 	let newName = $state('');
 	let newCategory = $state('barbell');
+	let selectedMuscles = $state<number[]>([]);
 	let saving = $state(false);
 
 	const categories = [
@@ -30,7 +32,10 @@
 		}
 	}
 
-	onMount(load);
+	onMount(async () => {
+		muscles = await trainingApi.muscles().catch(() => []);
+		await load();
+	});
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearch() {
@@ -42,12 +47,14 @@
 		editingId = null;
 		newName = '';
 		newCategory = 'barbell';
+		selectedMuscles = [];
 		showForm = true;
 	}
 	function startEdit(ex: Exercise) {
 		editingId = ex.id;
 		newName = ex.name;
 		newCategory = ex.category;
+		selectedMuscles = [...ex.primary_muscles];
 		showForm = true;
 	}
 	function cancelForm() {
@@ -55,16 +62,22 @@
 		editingId = null;
 		newName = '';
 	}
+	function toggleMuscle(id: number) {
+		selectedMuscles = selectedMuscles.includes(id)
+			? selectedMuscles.filter((m) => m !== id)
+			: [...selectedMuscles, id];
+	}
 
 	async function submitExercise(e: SubmitEvent) {
 		e.preventDefault();
 		if (!newName.trim()) return;
 		saving = true;
 		try {
+			const payload = { name: newName.trim(), category: newCategory, primary_muscles: selectedMuscles };
 			if (editingId != null) {
-				await trainingApi.updateExercise(editingId, { name: newName.trim(), category: newCategory });
+				await trainingApi.updateExercise(editingId, payload);
 			} else {
-				await trainingApi.createExercise({ name: newName.trim(), category: newCategory });
+				await trainingApi.createExercise(payload);
 			}
 			cancelForm();
 			await load();
@@ -102,6 +115,22 @@
 				<option value={c}>{c}</option>
 			{/each}
 		</select>
+		<div>
+			<p class="mb-1 text-xs text-neutral-500">Primary muscles (so it counts toward weekly volume)</p>
+			<div class="flex flex-wrap gap-1.5">
+				{#each muscles as mu (mu.id)}
+					<button
+						type="button"
+						class="rounded-full border px-2.5 py-0.5 text-xs {selectedMuscles.includes(mu.id)
+							? 'border-indigo-500 bg-indigo-950 text-indigo-200'
+							: 'border-neutral-700 text-neutral-400 hover:border-neutral-500'}"
+						onclick={() => toggleMuscle(mu.id)}
+					>
+						{mu.name}
+					</button>
+				{/each}
+			</div>
+		</div>
 		<Button type="submit" disabled={saving}>
 			{saving ? 'Saving…' : editingId != null ? 'Save changes' : 'Create custom exercise'}
 		</Button>
