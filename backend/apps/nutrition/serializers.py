@@ -203,9 +203,18 @@ class SummaryNutrientSerializer(serializers.Serializer):
     percent = serializers.IntegerField(allow_null=True)
 
 
+class MealMacroSerializer(serializers.Serializer):
+    meal = serializers.IntegerField()
+    calories = serializers.DecimalField(max_digits=12, decimal_places=3)
+    protein_g = serializers.DecimalField(max_digits=12, decimal_places=3)
+    carb_g = serializers.DecimalField(max_digits=12, decimal_places=3)
+    fat_g = serializers.DecimalField(max_digits=12, decimal_places=3)
+
+
 class DailySummarySerializer(serializers.Serializer):
     date = serializers.CharField()
     has_target = serializers.BooleanField()
     target_name = serializers.CharField(allow_null=True)
     totals = serializers.DictField()
     nutrients = SummaryNutrientSerializer(many=True)
+    meals = MealMacroSerializer(many=True)

@@ -9,6 +9,7 @@
 	} from '$lib/training/api';
 	import { formatHM, durationSeconds } from '$lib/training/calc';
 	import { isoDate, shiftISODate } from '$lib/date';
+	import LineChart from '$lib/components/ui/LineChart.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 
 	let sessions = $state<WorkoutSessionListItem[]>([]);
@@ -51,9 +52,12 @@
 		history = await trainingApi.exerciseHistory(selectedExercise);
 	}
 
-	const maxE1rm = $derived(
-		Math.max(1, ...history.map((h) => (h.best_e1rm ? Number(h.best_e1rm) : 0)))
-	);
+	const weightSeries = $derived([
+		{ points: history.map((h) => ({ x: h.date, y: Number(h.top_weight ?? 0) })), color: '#6366f1', dots: true }
+	]);
+	const volumeSeries = $derived([
+		{ points: history.map((h) => ({ x: h.date, y: Number(h.volume) })), color: '#10b981', dots: true }
+	]);
 </script>
 
 <h1 class="text-xl font-semibold">History</h1>
@@ -80,26 +84,15 @@
 			{#if history.length === 0}
 				<p class="mt-3 text-sm text-neutral-500">No logged sets for this exercise yet.</p>
 			{:else}
-				<div class="mt-4 space-y-1">
-					{#each history as point (point.session_id)}
-						<div class="flex items-center gap-3 text-sm">
-							<span class="w-24 shrink-0 text-neutral-500">{point.date}</span>
-							<div class="h-5 flex-1 rounded bg-neutral-900">
-								<div
-									class="flex h-5 items-center rounded bg-indigo-600 px-2 text-xs"
-									style="width: {point.best_e1rm
-										? (Number(point.best_e1rm) / maxE1rm) * 100
-										: 0}%"
-								>
-									{point.best_e1rm ?? '—'}
-								</div>
-							</div>
-							<span class="w-20 shrink-0 text-right text-xs text-neutral-500">
-								{point.top_weight ?? '—'} kg
-							</span>
-						</div>
-					{/each}
-					<p class="pt-2 text-xs text-neutral-500">Bars show estimated 1RM (kg) over time.</p>
+				<div class="mt-4 grid gap-4 sm:grid-cols-2">
+					<div>
+						<p class="mb-1 text-xs font-medium text-neutral-400">Max weight per session (kg)</p>
+						<LineChart series={weightSeries} unit="kg" baselineZero />
+					</div>
+					<div>
+						<p class="mb-1 text-xs font-medium text-neutral-400">Total volume per session (kg)</p>
+						<LineChart series={volumeSeries} unit="kg" baselineZero />
+					</div>
 				</div>
 			{/if}
 		{/if}
