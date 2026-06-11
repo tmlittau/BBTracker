@@ -53,3 +53,9 @@ if __name__ == "__main__":
     for name, size, scale in ICONS:
         draw_dumbbell(size, scale).save(os.path.join(OUT, name))
         print("wrote", os.path.normpath(os.path.join(OUT, name)))
+
+    # Multi-resolution favicon.ico (legacy browser tabs / bookmarks) from the same
+    # glyph; drawn large and downsampled to the standard 16/32/48 px sizes.
+    favicon = os.path.join(OUT, "favicon.ico")
+    draw_dumbbell(256, 0.70).save(favicon, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    print("wrote", os.path.normpath(favicon))
