@@ -4,7 +4,6 @@
 		protocolsApi,
 		type BloodMarker,
 		type BloodMatrix,
-		type BloodPressureLog,
 		type MarkerTrendPoint
 	} from '$lib/protocols/api';
 	import { num } from '$lib/protocols/calc';
@@ -15,7 +14,6 @@
 
 	let markers = $state<BloodMarker[]>([]);
 	let matrix = $state<BloodMatrix | null>(null);
-	let bpLogs = $state<BloodPressureLog[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -32,21 +30,14 @@
 	let chartMarker = $state<number | null>(null);
 	let trend = $state<MarkerTrendPoint[]>([]);
 
-	// Quick BP.
-	let systolic = $state('');
-	let diastolic = $state('');
-	let pulse = $state('');
 
 	async function loadMatrix() {
 		matrix = await protocolsApi.bloodworkMatrix();
 	}
-	async function loadBp() {
-		bpLogs = await protocolsApi.bpLogs();
-	}
 
 	onMount(async () => {
 		try {
-			[markers] = await Promise.all([protocolsApi.bloodMarkers(), loadMatrix(), loadBp()]);
+			[markers] = await Promise.all([protocolsApi.bloodMarkers(), loadMatrix()]);
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -87,18 +78,6 @@
 		trend = await protocolsApi.markerTrend(chartMarker);
 	}
 
-	async function saveBp(e: SubmitEvent) {
-		e.preventDefault();
-		if (systolic === '' || diastolic === '') return;
-		await protocolsApi.logBp({
-			systolic: Math.round(num(systolic)),
-			diastolic: Math.round(num(diastolic)),
-			pulse: pulse === '' ? undefined : Math.round(num(pulse)),
-			measured_at: new Date().toISOString()
-		});
-		systolic = diastolic = pulse = '';
-		await loadBp();
-	}
 
 	// Cell colouring: high = red, low = amber (distinguish direction), in-range = plain.
 	function cellClass(flag: string): string {
@@ -231,24 +210,4 @@
 		{/if}
 	</section>
 
-	<!-- Blood pressure (quick) -->
-	<section class="mt-6 rounded-lg border border-neutral-800 p-4">
-		<h2 class="font-medium">Blood pressure</h2>
-		<form class="mt-3 flex flex-wrap items-end gap-2" onsubmit={saveBp}>
-			<label class="flex flex-col text-xs text-neutral-500">Systolic<input name="systolic" type="number" bind:value={systolic} class="mt-1 w-24 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100" /></label>
-			<label class="flex flex-col text-xs text-neutral-500">Diastolic<input name="diastolic" type="number" bind:value={diastolic} class="mt-1 w-24 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100" /></label>
-			<label class="flex flex-col text-xs text-neutral-500">Pulse<input name="pulse" type="number" bind:value={pulse} class="mt-1 w-20 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100" /></label>
-			<Button type="submit">Log BP</Button>
-		</form>
-		{#if bpLogs.length > 0}
-			<div class="mt-3 space-y-1">
-				{#each bpLogs.slice(0, 6) as bp (bp.id)}
-					<div class="flex items-center justify-between text-sm">
-						<span class="font-mono">{bp.systolic}/{bp.diastolic}{#if bp.pulse} · {bp.pulse} bpm{/if}</span>
-						<span class="text-xs text-neutral-500">{new Date(bp.measured_at).toLocaleString()}</span>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</section>
 {/if}

@@ -14,6 +14,7 @@ class CheckInSerializer(serializers.ModelSerializer):
         model = CheckIn
         fields = [
             "id", "date", "bodyweight",
+            "systolic", "diastolic", "pulse",
             "energy", "sleep", "mood", "motivation", "soreness",
             "notes", "created_at",
         ]

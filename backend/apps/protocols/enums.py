@@ -16,6 +16,7 @@ class DoseUnit(models.TextChoices):
     ML = "ml", "ml"
     TABLET = "tablet", "tablet"
     CAPSULE = "capsule", "capsule"
+    SERVING = "serving", "serving"
 
 
 class Route(models.TextChoices):

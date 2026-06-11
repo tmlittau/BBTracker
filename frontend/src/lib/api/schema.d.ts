@@ -2369,6 +2369,9 @@ export interface components {
             date: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */
@@ -2389,6 +2392,9 @@ export interface components {
             date: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */
@@ -2572,9 +2578,10 @@ export interface components {
          *     * `ml` - ml
          *     * `tablet` - tablet
          *     * `capsule` - capsule
+         *     * `serving` - serving
          * @enum {string}
          */
-        DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule";
+        DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule" | "serving";
         Exercise: {
             readonly id: number;
             name: string;
@@ -3383,6 +3390,9 @@ export interface components {
             date?: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */

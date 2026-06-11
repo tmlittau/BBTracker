@@ -45,6 +45,19 @@
 		{ points: daily, color: '#6366f1', dots: true, label: 'daily' },
 		{ points: weeklyAvg, color: '#f59e0b', dashed: true, label: '7-day avg' }
 	]);
+
+	// Blood pressure (systolic + diastolic), toggled with the bodyweight plot.
+	let plotView = $state<'weight' | 'bp'>('weight');
+	const bpReadings = $derived(
+		checkIns
+			.filter((c) => c.systolic != null && c.diastolic != null)
+			.map((c) => ({ date: c.date, sys: c.systolic as number, dia: c.diastolic as number }))
+			.sort((a, b) => (a.date < b.date ? -1 : 1))
+	);
+	const bpSeries = $derived([
+		{ points: bpReadings.map((r) => ({ x: r.date, y: r.sys })), color: '#f43f5e', dots: true, label: 'systolic' },
+		{ points: bpReadings.map((r) => ({ x: r.date, y: r.dia })), color: '#38bdf8', dots: true, label: 'diastolic' }
+	]);
 </script>
 
 <div class="flex items-center justify-between">
@@ -67,15 +80,36 @@
 	<!-- Bodyweight trend -->
 	<section class="mt-6 rounded-lg border border-neutral-800 p-4">
 		<div class="flex items-center justify-between">
-			<h2 class="font-medium">Bodyweight</h2>
-			<span class="text-xs text-neutral-500">
-				<span class="text-indigo-400">daily</span> · <span class="text-amber-400">7-day avg</span>
-			</span>
+			<div class="flex gap-1 text-sm">
+				<button
+					class="rounded px-2 py-0.5 {plotView === 'weight' ? 'bg-neutral-800 font-medium text-white' : 'text-neutral-400 hover:text-white'}"
+					onclick={() => (plotView = 'weight')}
+				>Bodyweight</button>
+				<button
+					class="rounded px-2 py-0.5 {plotView === 'bp' ? 'bg-neutral-800 font-medium text-white' : 'text-neutral-400 hover:text-white'}"
+					onclick={() => (plotView = 'bp')}
+				>Blood pressure</button>
+			</div>
+			{#if plotView === 'weight'}
+				<span class="text-xs text-neutral-500">
+					<span class="text-indigo-400">daily</span> · <span class="text-amber-400">7-day avg</span>
+				</span>
+			{:else}
+				<span class="text-xs text-neutral-500">
+					<span class="text-rose-400">systolic</span> · <span class="text-sky-400">diastolic</span>
+				</span>
+			{/if}
 		</div>
-		{#if daily.length === 0}
-			<p class="mt-3 text-sm text-neutral-500">Log bodyweight in your check-ins to see the trend.</p>
+		{#if plotView === 'weight'}
+			{#if daily.length === 0}
+				<p class="mt-3 text-sm text-neutral-500">Log bodyweight in your check-ins to see the trend.</p>
+			{:else}
+				<div class="mt-3"><LineChart series={weightSeries} unit="kg" /></div>
+			{/if}
+		{:else if bpReadings.length === 0}
+			<p class="mt-3 text-sm text-neutral-500">Log blood pressure in your check-ins to see the trend.</p>
 		{:else}
-			<div class="mt-3"><LineChart series={weightSeries} unit="kg" /></div>
+			<div class="mt-3"><LineChart series={bpSeries} unit="mmHg" /></div>
 		{/if}
 	</section>
 

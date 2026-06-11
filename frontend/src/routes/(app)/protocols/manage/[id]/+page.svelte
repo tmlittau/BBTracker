@@ -133,8 +133,8 @@
 	<form class="mt-4 space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={addItem}>
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="flex gap-2 text-sm">
-				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; }}>Compound</button>
-				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'supplement'; refId = null; }}>Supplement</button>
+				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; unit = 'mg'; }}>Compound</button>
+				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'supplement'; refId = null; unit = 'serving'; }}>Supplement</button>
 			</div>
 			<select bind:value={refId} class={selectClass}>
 				<option value={null}>Choose {kind}…</option>
@@ -154,10 +154,14 @@
 		</div>
 
 		<div class="flex flex-wrap items-center gap-2">
-			<input type="number" step="0.001" placeholder="dose" bind:value={dose} class="w-24 {selectClass}" />
-			<select bind:value={unit} class={selectClass}>
-				{#each ['mg', 'mcg', 'iu', 'ml', 'tablet', 'capsule'] as u (u)}<option value={u}>{u}</option>{/each}
-			</select>
+			<input type="number" step={kind === 'supplement' ? '0.5' : '0.001'} placeholder={kind === 'supplement' ? 'servings' : 'dose'} bind:value={dose} class="w-24 {selectClass}" />
+			{#if kind === 'supplement'}
+				<span class="text-sm text-neutral-400">servings</span>
+			{:else}
+				<select bind:value={unit} class={selectClass}>
+					{#each ['mg', 'mcg', 'iu', 'ml', 'tablet', 'capsule'] as u (u)}<option value={u}>{u}</option>{/each}
+				</select>
+			{/if}
 			<select bind:value={frequency} class={selectClass}>
 				{#each FREQUENCIES as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
 			</select>
