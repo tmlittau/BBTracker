@@ -59,6 +59,18 @@ def test_create_checkin(api, user):
     assert CheckIn.objects.get(owner=user).bodyweight == pytest.approx(84.5)
 
 
+def test_checkin_blood_pressure(api, user):
+    """Blood pressure (systolic/diastolic/pulse) is tracked on the daily check-in."""
+    resp = api.post(
+        "/api/v1/diary/check-ins/",
+        {"date": "2026-06-01", "bodyweight": "84", "systolic": 122, "diastolic": 78, "pulse": 60},
+        format="json",
+    )
+    assert resp.status_code == 201, resp.content
+    ci = CheckIn.objects.get(owner=user, date="2026-06-01")
+    assert (ci.systolic, ci.diastolic, ci.pulse) == (122, 78, 60)
+
+
 def test_duplicate_checkin_date_rejected(api):
     api.post("/api/v1/diary/check-ins/", {"date": "2026-05-31"}, format="json")
     resp = api.post("/api/v1/diary/check-ins/", {"date": "2026-05-31"}, format="json")

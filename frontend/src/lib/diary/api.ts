@@ -18,6 +18,9 @@ export interface CheckIn {
 	id: number;
 	date: string;
 	bodyweight: string | null;
+	systolic: number | null;
+	diastolic: number | null;
+	pulse: number | null;
 	energy: number | null;
 	sleep: number | null;
 	mood: number | null;
@@ -71,6 +74,9 @@ async function jsonReq<T>(method: string, path: string, body?: unknown): Promise
 export interface CheckInInput {
 	date: string;
 	bodyweight?: string | null;
+	systolic?: number | null;
+	diastolic?: number | null;
+	pulse?: number | null;
 	energy?: number | null;
 	sleep?: number | null;
 	mood?: number | null;

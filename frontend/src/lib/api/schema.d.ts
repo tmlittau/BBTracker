@@ -2369,6 +2369,9 @@ export interface components {
             date: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */
@@ -2389,6 +2392,9 @@ export interface components {
             date: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */
@@ -3384,6 +3390,9 @@ export interface components {
             date?: string;
             /** Format: decimal */
             bodyweight?: string | null;
+            systolic?: number | null;
+            diastolic?: number | null;
+            pulse?: number | null;
             /** @description Energy 1–5 */
             energy?: number | null;
             /** @description Sleep quality 1–5 */

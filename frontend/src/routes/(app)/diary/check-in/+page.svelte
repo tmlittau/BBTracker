@@ -24,6 +24,9 @@
 
 	let date = $state($page.url.searchParams.get('date') ?? todayISO());
 	let bodyweight = $state('');
+	let systolic = $state('');
+	let diastolic = $state('');
+	let pulse = $state('');
 	let scores = $state<Record<string, number | null>>({
 		energy: null, sleep: null, mood: null, motivation: null, soreness: null
 	});
@@ -33,6 +36,9 @@
 		existing = c;
 		date = c.date;
 		bodyweight = c.bodyweight ?? '';
+		systolic = c.systolic != null ? String(c.systolic) : '';
+		diastolic = c.diastolic != null ? String(c.diastolic) : '';
+		pulse = c.pulse != null ? String(c.pulse) : '';
 		for (const f of SCORE_FIELDS) {
 			scores[f.key] = (c[f.key] as number | null) ?? null;
 		}
@@ -55,6 +61,9 @@
 			date,
 			// Bodyweight is mandatory; blank defaults to 0.
 			bodyweight: bodyweight === '' ? '0' : String(num(bodyweight)),
+			systolic: systolic === '' ? null : Math.round(num(systolic)),
+			diastolic: diastolic === '' ? null : Math.round(num(diastolic)),
+			pulse: pulse === '' ? null : Math.round(num(pulse)),
 			energy: scores.energy,
 			sleep: scores.sleep,
 			mood: scores.mood,
@@ -102,6 +111,18 @@
 			<div class="flex-1">
 				<label class="text-xs text-neutral-500" for="bw">Bodyweight (kg) *</label>
 				<input id="bw" name="bodyweight" type="number" step="0.1" required bind:value={bodyweight} placeholder="0" class="mt-1 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100" />
+			</div>
+		</div>
+
+		<div>
+			<p class="text-xs text-neutral-500">Blood pressure (optional)</p>
+			<div class="mt-1 flex flex-wrap items-center gap-2">
+				<input type="number" inputmode="numeric" bind:value={systolic} placeholder="sys" aria-label="Systolic" class="w-20 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100" />
+				<span class="text-neutral-600">/</span>
+				<input type="number" inputmode="numeric" bind:value={diastolic} placeholder="dia" aria-label="Diastolic" class="w-20 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100" />
+				<span class="text-xs text-neutral-600">mmHg</span>
+				<input type="number" inputmode="numeric" bind:value={pulse} placeholder="pulse" aria-label="Pulse" class="ml-2 w-20 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100" />
+				<span class="text-xs text-neutral-600">bpm</span>
 			</div>
 		</div>
 
