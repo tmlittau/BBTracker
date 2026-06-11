@@ -168,8 +168,9 @@ def dispatch_rest_reminders(now=None) -> int:
 
     now = now or timezone.now()
     due = list(RestReminder.objects.filter(fire_at__lte=now))
+    data = {"push": {"sound": "Bell.wav"}}
     for reminder in due:
-        ha_notify("BBTracker", "Rest over — time for your next set.")
+        ha_notify("BBTracker", "Rest over — time for your next set.", data=data)
         reminder.delete()
     return len(due)
 
