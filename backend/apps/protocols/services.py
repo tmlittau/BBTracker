@@ -421,6 +421,9 @@ def phase_dose_matrix(owner, phase, protocol):
         )
         mode = "weekly" if injectable_anabolic else "daily"
         per = Decimal(str(item.dose_amount)) if item.dose_amount is not None else None
+        # Administrations per dosing day (e.g. Waking + Night = 2) — the daily dose
+        # is the per-administration amount times this.
+        times_per_day = times_per_day_count(item.times_of_day, item.frequency)
 
         log_key = "compound_id" if is_compound else "supplement_id"
         log_val = item.compound_id if is_compound else item.supplement_id
@@ -445,9 +448,7 @@ def phase_dose_matrix(owner, phase, protocol):
             sched_days = scheduled_dose_dates(
                 item.frequency, item.days_of_week, ws, we, anchor
             )
-            scheduled = len(sched_days) * times_per_day_count(
-                item.times_of_day, item.frequency
-            )
+            scheduled = len(sched_days) * times_per_day
             planned_amt = per * scheduled if per is not None else None
             future = ws > today
             if future:
@@ -477,7 +478,7 @@ def phase_dose_matrix(owner, phase, protocol):
                 "kind": "compound" if is_compound else "supplement",
                 "mode": mode,
                 "unit": item.dose_unit,
-                "daily_dose": str(_q(per)) if per is not None else None,
+                "daily_dose": str(_q(per * times_per_day)) if per is not None else None,
                 "cells": cells,
             }
         )

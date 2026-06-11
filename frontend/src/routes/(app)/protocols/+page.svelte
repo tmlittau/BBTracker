@@ -219,11 +219,6 @@
 	</div>
 </div>
 
-<p class="mt-2 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-300">
-	⚠️ Personal tracking only — not medical advice. BBTracker does not recommend any substance, dose,
-	or protocol. Monitor your health with a qualified professional and regular bloodwork.
-</p>
-
 {#if loading}
 	<p class="mt-6 text-neutral-400">Loading…</p>
 {:else if error}

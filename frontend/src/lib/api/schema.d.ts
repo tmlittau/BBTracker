@@ -2572,9 +2572,10 @@ export interface components {
          *     * `ml` - ml
          *     * `tablet` - tablet
          *     * `capsule` - capsule
+         *     * `serving` - serving
          * @enum {string}
          */
-        DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule";
+        DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule" | "serving";
         Exercise: {
             readonly id: number;
             name: string;
