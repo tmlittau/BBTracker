@@ -14,6 +14,8 @@ from .models import (
     DiaryEntry,
     Food,
     Meal,
+    MealTemplate,
+    MealTemplateItem,
     Nutrient,
     NutrientTarget,
     NutritionTarget,
@@ -27,6 +29,7 @@ from .serializers import (
     DiaryEntrySerializer,
     FoodSerializer,
     MealSerializer,
+    MealTemplateSerializer,
     NutrientSerializer,
     NutrientTargetSerializer,
     NutritionTargetSerializer,
@@ -309,3 +312,53 @@ class NutritionSummaryView(APIView):
         else:
             day = date_cls.today()
         return Response(daily_summary(request.user, day))
+
+
+@extend_schema(tags=["nutrition"])
+class MealTemplateViewSet(viewsets.ModelViewSet):
+    serializer_class = MealTemplateSerializer
+
+    def get_queryset(self):
+        return MealTemplate.objects.filter(owner=self.request.user).prefetch_related(
+            "items__food"
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    def _meal(self, request):
+        return Meal.objects.filter(owner=request.user, id=request.data.get("meal")).first()
+
+    @extend_schema(responses=MealTemplateSerializer)
+    @action(detail=False, methods=["post"], url_path="from_meal")
+    def from_meal(self, request):
+        """Create a template from an existing meal's food entries."""
+        meal = self._meal(request)
+        if meal is None:
+            return Response({"detail": "Meal not found."}, status=status.HTTP_404_NOT_FOUND)
+        name = (request.data.get("name") or meal.name or "Meal template").strip()
+        template = MealTemplate.objects.create(owner=request.user, name=name)
+        for order, e in enumerate(
+            meal.entries.filter(food__isnull=False).select_related("food", "serving")
+        ):
+            MealTemplateItem.objects.create(
+                template=template, food=e.food, serving=e.serving,
+                quantity=e.quantity, order=order,
+            )
+        return Response(self.get_serializer(template).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def apply(self, request, pk=None):
+        """Create diary entries from this template into a target meal."""
+        template = self.get_object()
+        meal = self._meal(request)
+        if meal is None:
+            return Response({"detail": "Meal not found."}, status=status.HTTP_404_NOT_FOUND)
+        created = 0
+        for it in template.items.select_related("food", "serving").all():
+            DiaryEntry.objects.create(
+                owner=request.user, date=meal.date, meal=meal,
+                food=it.food, serving=it.serving, quantity=it.quantity,
+            )
+            created += 1
+        return Response({"created": created}, status=status.HTTP_201_CREATED)

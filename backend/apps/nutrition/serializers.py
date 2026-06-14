@@ -7,6 +7,8 @@ from .models import (
     Food,
     FoodNutrient,
     Meal,
+    MealTemplate,
+    MealTemplateItem,
     Nutrient,
     NutrientTarget,
     NutritionTarget,
@@ -218,3 +220,37 @@ class DailySummarySerializer(serializers.Serializer):
     totals = serializers.DictField()
     nutrients = SummaryNutrientSerializer(many=True)
     meals = MealMacroSerializer(many=True)
+
+
+class MealTemplateItemSerializer(serializers.ModelSerializer):
+    food_name = serializers.CharField(source="food.name", read_only=True)
+    unit = serializers.CharField(source="food.unit", read_only=True)
+
+    class Meta:
+        model = MealTemplateItem
+        fields = ["id", "food", "food_name", "unit", "serving", "quantity", "order"]
+
+
+class MealTemplateSerializer(serializers.ModelSerializer):
+    items = MealTemplateItemSerializer(many=True)
+
+    class Meta:
+        model = MealTemplate
+        fields = ["id", "name", "items"]
+
+    def create(self, validated_data):
+        items = validated_data.pop("items", [])
+        template = MealTemplate.objects.create(**validated_data)
+        for i in items:
+            MealTemplateItem.objects.create(template=template, **i)
+        return template
+
+    def update(self, instance, validated_data):
+        items = validated_data.pop("items", None)
+        instance.name = validated_data.get("name", instance.name)
+        instance.save()
+        if items is not None:
+            instance.items.all().delete()
+            for i in items:
+                MealTemplateItem.objects.create(template=instance, **i)
+        return instance

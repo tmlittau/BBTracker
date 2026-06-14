@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DiaryEntryViewSet,
     FoodViewSet,
+    MealTemplateViewSet,
     MealViewSet,
     NutrientTargetViewSet,
     NutrientViewSet,
@@ -18,6 +19,7 @@ router.register("nutrients", NutrientViewSet, basename="nutrient")
 router.register("foods", FoodViewSet, basename="food")
 router.register("diary-entries", DiaryEntryViewSet, basename="diaryentry")
 router.register("meals", MealViewSet, basename="meal")
+router.register("meal-templates", MealTemplateViewSet, basename="mealtemplate")
 router.register("targets", NutritionTargetViewSet, basename="nutritiontarget")
 router.register("nutrient-targets", NutrientTargetViewSet, basename="nutrienttarget")
 router.register("recipes", RecipeViewSet, basename="recipe")
