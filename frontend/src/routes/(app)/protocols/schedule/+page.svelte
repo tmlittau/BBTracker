@@ -88,6 +88,16 @@
 
 	const fmt = (iso: string) =>
 		new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+	// Split rows into per-class sections (Injectable/Oral steroids, Peptides, …).
+	const GROUP_ORDER = [
+		'Injectable steroids', 'Oral steroids', 'SARMs', 'Peptides', 'Ancillaries', 'Supplements', 'Other'
+	];
+	const groupedRows = $derived.by(() => {
+		const by = new Map<string, MatrixRow[]>();
+		for (const r of matrix?.rows ?? []) by.set(r.group, [...(by.get(r.group) ?? []), r]);
+		return [...by.entries()].sort((a, b) => GROUP_ORDER.indexOf(a[0]) - GROUP_ORDER.indexOf(b[0]));
+	});
 </script>
 
 <div class="flex items-center justify-between">
@@ -137,7 +147,11 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each matrix.rows as row (row.item_id)}
+					{#each groupedRows as [group, rows] (group)}
+						<tr>
+							<td colspan={matrix.weeks.length + 1} class="sticky left-0 bg-neutral-950 px-2 pt-4 pb-1 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">{group}</td>
+						</tr>
+						{#each rows as row (row.item_id)}
 						<tr class="border-t border-neutral-800">
 							<td class="sticky left-0 z-10 bg-neutral-950 px-2 py-2 align-top">
 								<div class="font-medium">{row.name}</div>
@@ -159,6 +173,7 @@
 								</td>
 							{/each}
 						</tr>
+						{/each}
 					{/each}
 				</tbody>
 			</table>

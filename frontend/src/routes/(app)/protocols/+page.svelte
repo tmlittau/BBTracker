@@ -12,12 +12,13 @@
 		type ProtocolRelease,
 		type SiteRecency
 	} from '$lib/protocols/api';
-	import { isoDate } from '$lib/date';
+	import { isoDate, shiftISODate } from '$lib/date';
 	import ProtocolReleaseChart from '$lib/protocols/ProtocolReleaseChart.svelte';
 	import SiteSelectModal from '$lib/protocols/SiteSelectModal.svelte';
 
 	let protocols = $state<Protocol[]>([]);
 	let todayDoses = $state<DoseLog[]>([]);
+	let yesterdayDoses = $state<DoseLog[]>([]);
 	let compounds = $state<Compound[]>([]);
 	let release = $state<ProtocolRelease | null>(null);
 	let sites = $state<SiteRecency[]>([]);
@@ -31,6 +32,12 @@
 	const SLOT_ORDER: Record<string, number> = Object.fromEntries(
 		TIMES_OF_DAY.map((t, i) => [t.key, i])
 	);
+	const yesterday = shiftISODate(today, -1);
+	// Template clock time per slot — used to back-log a dose missed yesterday so it
+	// still counts for that day (e.g. Night → 21:00).
+	const SLOT_TIME: Record<string, string> = {
+		waking: '06:30', am: '10:00', noon: '15:00', pm: '19:00', night: '21:00'
+	};
 
 	// --- dose scheduling helpers (mirror the reminder/grid logic) ---
 	function plannedToday(item: ProtocolItem): number {
@@ -59,6 +66,37 @@
 		if (times.length > 0 || !isScheduledToday(item, active?.started_on ?? null)) return false;
 		return loggedToday(item) < plannedToday(item);
 	}
+
+	function loggedYesterday(item: ProtocolItem): number {
+		return yesterdayDoses.filter(
+			(d) =>
+				(item.compound != null && d.compound === item.compound) ||
+				(item.supplement != null && d.supplement === item.supplement)
+		).length;
+	}
+	// Yesterday's scheduled doses that were never logged or skipped — so one missed
+	// right before bed can still be recorded. Timed items list each outstanding
+	// slot; untimed daily items collapse to one "Anytime". PRN is never "missed".
+	const yesterdayDate = new Date(yesterday + 'T12:00:00');
+	const missedYesterday = $derived(
+		(active?.items ?? []).flatMap((item) => {
+			if (item.frequency === 'prn' || item.frequency === 'as_needed') return [];
+			if (!isScheduledToday(item, active?.started_on ?? null, yesterdayDate)) return [];
+			const logged = loggedYesterday(item);
+			const times = [...(item.times_of_day ?? [])].sort(
+				(a, b) => (SLOT_ORDER[a] ?? 0) - (SLOT_ORDER[b] ?? 0)
+			);
+			if (times.length === 0) {
+				const planned = item.frequency === '2x_day' ? 2 : 1;
+				return logged >= planned ? [] : [{ item, slotKey: '', slotLabel: 'Anytime' }];
+			}
+			return times.slice(logged).map((slotKey) => ({
+				item,
+				slotKey,
+				slotLabel: TIMES_OF_DAY.find((t) => t.key === slotKey)?.label ?? slotKey
+			}));
+		})
+	);
 
 	const slotGroups = $derived(
 		TIMES_OF_DAY.map((t) => ({
@@ -96,7 +134,10 @@
 
 	// --- data loading ---
 	async function loadDoses() {
-		todayDoses = await protocolsApi.doses({ date: today });
+		[todayDoses, yesterdayDoses] = await Promise.all([
+			protocolsApi.doses({ date: today }),
+			protocolsApi.doses({ date: yesterday })
+		]);
 	}
 	async function loadSites() {
 		[sites, suggestion] = await Promise.all([
@@ -126,9 +167,14 @@
 	// --- logging (injectables prompt for a site first) ---
 	const INJECTABLE = new Set(['im', 'subq']);
 	let pendingInjectable = $state<ProtocolItem | null>(null);
+	let pendingTakenAt = $state<string | undefined>(undefined);
 	let showSiteModal = $state(false);
 
-	async function logItem(item: ProtocolItem, injectionSite: number | null = null) {
+	async function logItem(
+		item: ProtocolItem,
+		injectionSite: number | null = null,
+		takenAt: string = new Date().toISOString()
+	) {
 		logging = item.id;
 		error = null;
 		try {
@@ -136,7 +182,7 @@
 				protocol_item: item.id,
 				compound: item.compound,
 				supplement: item.supplement,
-				taken_at: new Date().toISOString(),
+				taken_at: takenAt,
 				amount: item.dose_amount ?? '0',
 				unit: item.dose_unit,
 				route: item.route || undefined,
@@ -159,8 +205,24 @@
 	}
 	function onSiteChosen(siteId: number | null) {
 		const item = pendingInjectable;
+		const takenAt = pendingTakenAt;
 		pendingInjectable = null;
-		if (item) logItem(item, siteId);
+		pendingTakenAt = undefined;
+		if (item) logItem(item, siteId, takenAt);
+	}
+
+	// Back-log a dose missed yesterday, stamped at its slot's template time so it
+	// counts for yesterday. Injectables still prompt for a site first.
+	function logMissed(m: { item: ProtocolItem; slotKey: string }) {
+		const time = SLOT_TIME[m.slotKey] ?? '20:00';
+		const takenAt = new Date(`${yesterday}T${time}:00`).toISOString();
+		if (m.item.compound != null && m.item.route && INJECTABLE.has(m.item.route)) {
+			pendingInjectable = m.item;
+			pendingTakenAt = takenAt;
+			showSiteModal = true;
+		} else {
+			logItem(m.item, null, takenAt);
+		}
 	}
 
 	async function removeDose(id: number) {
@@ -236,6 +298,28 @@
 		</h2>
 		<a class="text-sm text-indigo-400 hover:text-indigo-300" href={`/protocols/manage/${active.id}`}>Edit →</a>
 	</div>
+
+	{#if missedYesterday.length > 0}
+		<section class="mt-4 rounded-lg border border-amber-800/60 bg-amber-950/20 p-3">
+			<h3 class="text-xs font-medium uppercase tracking-wide text-amber-400">Yesterday — not logged</h3>
+			<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+				{#each missedYesterday as m (m.item.id + ':' + m.slotKey)}
+					<button
+						class="rounded-lg border border-amber-900/50 px-3 py-2 text-left text-sm hover:border-amber-600 disabled:opacity-50"
+						disabled={logging === m.item.id}
+						onclick={() => logMissed(m)}
+					>
+						<span class="block truncate font-medium">{m.item.item_name}</span>
+						<span class="text-xs text-neutral-500">
+							{m.item.dose_amount ?? '—'}{m.item.dose_unit} · {m.slotLabel}
+							{#if m.item.compound != null && (m.item.route === 'im' || m.item.route === 'subq')}· 💉{/if}
+						</span>
+					</button>
+				{/each}
+			</div>
+			<p class="mt-2 text-[11px] text-neutral-500">Logs against yesterday at the slot's usual time.</p>
+		</section>
+	{/if}
 
 	<!-- Quick log, grouped by time of day. Logging a multi-dose item moves it to its next slot. -->
 	<section class="mt-4">
