@@ -244,3 +244,50 @@ def test_meal_template_owner_isolation(api, other):
 
     theirs = MealTemplate.objects.create(owner=other, name="Theirs")
     assert api.get(f"/api/v1/nutrition/meal-templates/{theirs.id}/").status_code == 404
+
+
+def test_nutrition_headline_matches_daily_summary(user, chicken):
+    """The light dashboard headline equals daily_summary's headline numbers."""
+    from apps.nutrition.models import DiaryEntry, Meal
+    from apps.nutrition.services import daily_summary, nutrition_headline
+
+    d = date(2026, 6, 1)
+    m = Meal.objects.create(owner=user, date=d, name="Lunch")
+    DiaryEntry.objects.create(owner=user, date=d, meal=m, food=chicken, quantity=150)
+    full = daily_summary(user, d)
+    light = nutrition_headline(user, d)
+    assert light["calories"] == full["totals"]["calories"]
+    assert light["protein_g"] == full["totals"]["protein_g"]
+    assert light["has_target"] == full["has_target"]
+    assert light["target_name"] == full["target_name"]
+
+
+def test_cached_nutrients_caches_until_cleared(db):
+    from django.core.cache import cache
+
+    from apps.nutrition.models import Nutrient
+    from apps.nutrition.services import NUTRIENTS_CACHE_KEY, cached_nutrients
+
+    cache.delete(NUTRIENTS_CACHE_KEY)
+    Nutrient.objects.create(name="Calories", slug="energy", category="energy", unit="kcal")
+    first = cached_nutrients()
+    assert any(n["slug"] == "energy" for n in first)
+    # A nutrient added after the cache is warm isn't seen until the key is cleared.
+    Nutrient.objects.create(name="Zinc", slug="zinc", category="mineral", unit="mg")
+    assert cached_nutrients() == first
+    cache.delete(NUTRIENTS_CACHE_KEY)
+    assert any(n["slug"] == "zinc" for n in cached_nutrients())
+
+
+def test_weekly_macro_adherence_averages_days_with_intake(user, chicken):
+    from datetime import timedelta
+
+    from apps.nutrition.models import DiaryEntry
+    from apps.nutrition.services import weekly_macro_adherence
+
+    end = date(2026, 6, 7)
+    DiaryEntry.objects.create(owner=user, date=end, food=chicken, quantity=200)  # 330 kcal
+    DiaryEntry.objects.create(owner=user, date=end - timedelta(days=2), food=chicken, quantity=100)
+    res = weekly_macro_adherence(user, end - timedelta(days=6), end)
+    assert res["days_logged"] == 2
+    assert res["avg_calories"] == round((330 + 165) / 2, 0)
