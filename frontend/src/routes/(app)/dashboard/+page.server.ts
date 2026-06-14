@@ -1,14 +1,13 @@
 import type { PageServerLoad } from './$types';
 import { backendFetch } from '$lib/server/backend';
 
-export const load: PageServerLoad = async ({ request }) => {
+export const load: PageServerLoad = async ({ request, locals }) => {
 	const cookie = request.headers.get('cookie');
-	const [meRes, todayRes] = await Promise.all([
-		backendFetch('/api/v1/auth/me/', { cookie }),
-		backendFetch('/api/v1/dashboard/today/', { cookie })
-	]);
+	// `me` is the user the hook already resolved (locals.user) — no extra /auth/me
+	// round-trip. The dashboard only needs the email for the header.
+	const todayRes = await backendFetch('/api/v1/dashboard/today/', { cookie });
 	return {
-		me: meRes.ok ? await meRes.json() : null,
+		me: locals.user,
 		today: todayRes.ok ? await todayRes.json() : null
 	};
 };
