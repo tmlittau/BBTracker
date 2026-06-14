@@ -270,6 +270,7 @@ export interface MatrixRow {
 	item_id: number;
 	name: string;
 	kind: 'compound' | 'supplement';
+	group: string;
 	mode: 'weekly' | 'daily';
 	unit: string;
 	daily_dose: string | null;

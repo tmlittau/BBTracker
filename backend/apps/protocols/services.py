@@ -424,6 +424,17 @@ def phase_dose_matrix(owner, phase, protocol):
         # Administrations per dosing day (e.g. Waking + Night = 2) — the daily dose
         # is the per-administration amount times this.
         times_per_day = times_per_day_count(item.times_of_day, item.frequency)
+        # Subgroup for the dose table, so it can be split into per-class sections.
+        if not is_compound:
+            group = "Supplements"
+        elif item.compound.compound_class == "anabolic":
+            group = "Injectable steroids" if route in INJECTABLE_ROUTES else "Oral steroids"
+        else:
+            group = {
+                "peptide": "Peptides",
+                "sarm": "SARMs",
+                "ancillary": "Ancillaries",
+            }.get(item.compound.compound_class, "Other")
 
         log_key = "compound_id" if is_compound else "supplement_id"
         log_val = item.compound_id if is_compound else item.supplement_id
@@ -476,6 +487,7 @@ def phase_dose_matrix(owner, phase, protocol):
                 "item_id": item.id,
                 "name": str(obj),
                 "kind": "compound" if is_compound else "supplement",
+                "group": group,
                 "mode": mode,
                 "unit": item.dose_unit,
                 "daily_dose": str(_q(per * times_per_day)) if per is not None else None,
