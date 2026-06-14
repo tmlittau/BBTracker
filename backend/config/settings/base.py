@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.protocols",
     "apps.diary",
     "apps.notifications",
+    "apps.analysis",
 ]
 
 MIDDLEWARE = [

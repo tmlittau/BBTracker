@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+    "/api/v1/analysis/body/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analysis_body_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis/measurements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analysis_measurements_list"];
+        put?: never;
+        post: operations["v1_analysis_measurements_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis/measurements/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_analysis_measurements_retrieve"];
+        put: operations["v1_analysis_measurements_update"];
+        post?: never;
+        delete: operations["v1_analysis_measurements_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["v1_analysis_measurements_partial_update"];
+        trace?: never;
+    };
     "/api/v1/auth/csrf/": {
         parameters: {
             query?: never;
@@ -2429,6 +2477,52 @@ export interface components {
          * @enum {string}
          */
         BloodResultSourceEnum: "manual" | "pdf";
+        /** @description Loose shape for the computed analysis (documented for the client). */
+        BodyAnalysis: {
+            date: string;
+            sex: string;
+            composition: {
+                [key: string]: unknown;
+            };
+            distribution: {
+                [key: string]: unknown;
+            };
+            energy: {
+                [key: string]: unknown;
+            };
+            blood_pressure: {
+                [key: string]: unknown;
+            } | null;
+            bloodwork: {
+                [key: string]: unknown;
+            };
+            assessments: {
+                [key: string]: unknown;
+            }[];
+            measurements: {
+                [key: string]: unknown;
+            }[];
+        };
+        BodyMeasurement: {
+            readonly id: number;
+            /** Format: date */
+            date: string;
+            type: components["schemas"]["TypeEnum"];
+            /** Format: decimal */
+            value: string;
+            readonly unit: string;
+            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
+            notes?: string;
+        };
+        BodyMeasurementRequest: {
+            /** Format: date */
+            date: string;
+            type: components["schemas"]["TypeEnum"];
+            /** Format: decimal */
+            value: string;
+            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
+            notes?: string;
+        };
         CheckIn: {
             readonly id: number;
             /** Format: date */
@@ -2914,6 +3008,15 @@ export interface components {
             name: string;
             items: components["schemas"]["MealTemplateItemRequest"][];
         };
+        /**
+         * @description * `dexa` - DEXA
+         *     * `bia` - Bioimpedance
+         *     * `calipers` - Calipers
+         *     * `scale` - Smart scale
+         *     * `estimate` - Estimated
+         * @enum {string}
+         */
+        MethodEnum: "dexa" | "bia" | "calipers" | "scale" | "estimate";
         Muscle: {
             readonly id: number;
             name: string;
@@ -3050,6 +3153,21 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["BloodResult"][];
+        };
+        PaginatedBodyMeasurementList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["BodyMeasurement"][];
         };
         PaginatedCheckInList: {
             /** @example 123 */
@@ -3490,6 +3608,15 @@ export interface components {
             source?: components["schemas"]["BloodResultSourceEnum"];
             /** Format: date */
             measured_on?: string;
+            notes?: string;
+        };
+        PatchedBodyMeasurementRequest: {
+            /** Format: date */
+            date?: string;
+            type?: components["schemas"]["TypeEnum"];
+            /** Format: decimal */
+            value?: string;
+            method?: components["schemas"]["MethodEnum"] | components["schemas"]["BlankEnum"];
             notes?: string;
         };
         PatchedCheckInRequest: {
@@ -4237,6 +4364,24 @@ export interface components {
             notes?: string;
         };
         /**
+         * @description * `waist` - Waist
+         *     * `neck` - Neck
+         *     * `hip` - Hip
+         *     * `chest` - Chest
+         *     * `upper_arm_left` - Upper arm (left)
+         *     * `upper_arm_right` - Upper arm (right)
+         *     * `forearm_left` - Forearm (left)
+         *     * `forearm_right` - Forearm (right)
+         *     * `thigh_left` - Thigh (left)
+         *     * `thigh_right` - Thigh (right)
+         *     * `calf_left` - Calf (left)
+         *     * `calf_right` - Calf (right)
+         *     * `body_fat` - Body fat %
+         *     * `resting_hr` - Resting heart rate
+         * @enum {string}
+         */
+        TypeEnum: "waist" | "neck" | "hip" | "chest" | "upper_arm_left" | "upper_arm_right" | "forearm_left" | "forearm_right" | "thigh_left" | "thigh_right" | "calf_left" | "calf_right" | "body_fat" | "resting_hr";
+        /**
          * @description * `metric` - Metric
          *     * `imperial` - Imperial
          * @enum {string}
@@ -4360,6 +4505,169 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    v1_analysis_body_retrieve: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BodyAnalysis"];
+                };
+            };
+        };
+    };
+    v1_analysis_measurements_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedBodyMeasurementList"];
+                };
+            };
+        };
+    };
+    v1_analysis_measurements_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BodyMeasurementRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BodyMeasurementRequest"];
+                "multipart/form-data": components["schemas"]["BodyMeasurementRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BodyMeasurement"];
+                };
+            };
+        };
+    };
+    v1_analysis_measurements_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BodyMeasurement"];
+                };
+            };
+        };
+    };
+    v1_analysis_measurements_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BodyMeasurementRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["BodyMeasurementRequest"];
+                "multipart/form-data": components["schemas"]["BodyMeasurementRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BodyMeasurement"];
+                };
+            };
+        };
+    };
+    v1_analysis_measurements_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_analysis_measurements_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBodyMeasurementRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedBodyMeasurementRequest"];
+                "multipart/form-data": components["schemas"]["PatchedBodyMeasurementRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BodyMeasurement"];
+                };
+            };
+        };
+    };
     v1_auth_csrf_retrieve: {
         parameters: {
             query?: never;
