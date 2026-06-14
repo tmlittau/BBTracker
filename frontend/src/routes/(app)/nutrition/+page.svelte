@@ -7,7 +7,8 @@
 		type DailySummary,
 		type DiaryEntry,
 		type Food,
-		type Meal
+		type Meal,
+		type MealTemplate
 	} from '$lib/nutrition/api';
 	import { microColor, num, barWidth, macroBarColor } from '$lib/nutrition/calc';
 	import { isoDate, shiftISODate } from '$lib/date';
@@ -25,6 +26,7 @@
 	const mealMacros = $derived(new Map((summary?.meals ?? []).map((m) => [m.meal, m] as const)));
 	let entries = $state<DiaryEntry[]>([]);
 	let meals = $state<Meal[]>([]);
+	let templates = $state<MealTemplate[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -44,10 +46,11 @@
 		loading = true;
 		error = null;
 		try {
-			[summary, entries, meals] = await Promise.all([
+			[summary, entries, meals, templates] = await Promise.all([
 				nutritionApi.summary(date),
 				nutritionApi.diary(date),
-				nutritionApi.meals(date)
+				nutritionApi.meals(date),
+				nutritionApi.mealTemplates()
 			]);
 		} catch (e) {
 			error = (e as Error).message;
@@ -87,6 +90,25 @@
 	async function copyYesterday() {
 		await nutritionApi.copyYesterdayMeals(date);
 		meals = await nutritionApi.meals(date);
+	}
+	async function saveAsTemplate(m: Meal) {
+		const name = prompt('Save this meal as a reusable template named:', m.name);
+		if (name == null) return;
+		try {
+			await nutritionApi.templateFromMeal(m.id, name.trim() || m.name);
+			templates = await nutritionApi.mealTemplates();
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+	async function applyTemplate(mealId: number, templateId: number) {
+		if (!templateId) return;
+		try {
+			await nutritionApi.applyMealTemplate(templateId, mealId);
+			await load();
+		} catch (e) {
+			error = (e as Error).message;
+		}
 	}
 
 	// meal reorder: drag + arrow fallback
@@ -266,6 +288,7 @@
 						<div class="flex items-center gap-2 text-xs text-neutral-500">
 							<button class="hover:text-white disabled:opacity-30" aria-label="Move up" disabled={mi === 0} onclick={() => moveMeal(mi, -1)}>↑</button>
 							<button class="hover:text-white disabled:opacity-30" aria-label="Move down" disabled={mi === meals.length - 1} onclick={() => moveMeal(mi, 1)}>↓</button>
+							<button class="hover:text-white" onclick={() => saveAsTemplate(m)}>Save tpl</button>
 							<button class="text-red-400 hover:text-red-300" onclick={() => deleteMeal(m.id)}>Delete</button>
 						</div>
 					</div>
@@ -298,6 +321,20 @@
 							＋ New food
 						</button>
 					</div>
+					{#if templates.length > 0}
+						<select
+							class="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-400"
+							onchange={(e) => {
+								applyTemplate(m.id, Number(e.currentTarget.value));
+								e.currentTarget.value = '';
+							}}
+						>
+							<option value="">＋ Add from template…</option>
+							{#each templates as t (t.id)}
+								<option value={t.id}>{t.name}</option>
+							{/each}
+						</select>
+					{/if}
 				</div>
 			{/each}
 		</section>

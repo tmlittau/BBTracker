@@ -194,3 +194,53 @@ def test_can_log_global_food_but_not_others_custom(api, other, nutrients):
         format="json",
     )
     assert resp.status_code == 403
+
+
+def test_meal_template_create_and_apply(api, user, chicken):
+    """Create a meal template, then apply it to a meal → diary entries appear."""
+    resp = api.post(
+        "/api/v1/nutrition/meal-templates/",
+        {"name": "Breakfast staple", "items": [{"food": chicken.id, "quantity": "150"}]},
+        format="json",
+    )
+    assert resp.status_code == 201, resp.content
+    tid = resp.json()["id"]
+    assert resp.json()["items"][0]["food_name"] == "Chicken breast"
+
+    meal = api.post(
+        "/api/v1/nutrition/meals/", {"date": "2026-06-12", "name": "Breakfast"}, format="json"
+    ).json()
+    applied = api.post(
+        f"/api/v1/nutrition/meal-templates/{tid}/apply/", {"meal": meal["id"]}, format="json"
+    )
+    assert applied.status_code == 201, applied.content
+    assert applied.json()["created"] == 1
+    entry = DiaryEntry.objects.get(owner=user, meal_id=meal["id"])
+    assert entry.food_id == chicken.id
+    assert str(entry.quantity) == "150.00"
+    assert str(entry.date) == "2026-06-12"
+
+
+def test_meal_template_from_meal(api, user, chicken):
+    """Save an existing meal's foods as a template."""
+    meal = api.post(
+        "/api/v1/nutrition/meals/", {"date": "2026-06-12", "name": "Lunch"}, format="json"
+    ).json()
+    api.post(
+        "/api/v1/nutrition/diary-entries/",
+        {"date": "2026-06-12", "meal": meal["id"], "food": chicken.id, "quantity": "200"},
+        format="json",
+    )
+    resp = api.post(
+        "/api/v1/nutrition/meal-templates/from_meal/", {"meal": meal["id"]}, format="json"
+    )
+    assert resp.status_code == 201, resp.content
+    assert resp.json()["name"] == "Lunch"
+    assert [i["food"] for i in resp.json()["items"]] == [chicken.id]
+
+
+def test_meal_template_owner_isolation(api, other):
+    from apps.nutrition.models import MealTemplate
+
+    theirs = MealTemplate.objects.create(owner=other, name="Theirs")
+    assert api.get(f"/api/v1/nutrition/meal-templates/{theirs.id}/").status_code == 404

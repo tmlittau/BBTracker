@@ -421,6 +421,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nutrition/meal-templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_nutrition_meal_templates_list"];
+        put?: never;
+        post: operations["v1_nutrition_meal_templates_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/nutrition/meal-templates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_nutrition_meal_templates_retrieve"];
+        put: operations["v1_nutrition_meal_templates_update"];
+        post?: never;
+        delete: operations["v1_nutrition_meal_templates_destroy"];
+        options?: never;
+        head?: never;
+        patch: operations["v1_nutrition_meal_templates_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/nutrition/meal-templates/{id}/apply/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Create diary entries from this template into a target meal. */
+        post: operations["v1_nutrition_meal_templates_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/nutrition/meal-templates/from_meal/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Create a template from an existing meal's food entries. */
+        post: operations["v1_nutrition_meal_templates_from_meal_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nutrition/meals/": {
         parameters: {
             query?: never;
@@ -2822,6 +2888,32 @@ export interface components {
             name: string;
             order?: number;
         };
+        MealTemplate: {
+            readonly id: number;
+            name: string;
+            items: components["schemas"]["MealTemplateItem"][];
+        };
+        MealTemplateItem: {
+            readonly id: number;
+            food: number;
+            readonly food_name: string;
+            readonly unit: string;
+            serving?: number | null;
+            /** Format: decimal */
+            quantity?: string;
+            order?: number;
+        };
+        MealTemplateItemRequest: {
+            food: number;
+            serving?: number | null;
+            /** Format: decimal */
+            quantity?: string;
+            order?: number;
+        };
+        MealTemplateRequest: {
+            name: string;
+            items: components["schemas"]["MealTemplateItemRequest"][];
+        };
         Muscle: {
             readonly id: number;
             name: string;
@@ -3138,6 +3230,21 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Meal"][];
+        };
+        PaginatedMealTemplateList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["MealTemplate"][];
         };
         PaginatedNutrientTargetList: {
             /** @example 123 */
@@ -3507,6 +3614,10 @@ export interface components {
             date?: string;
             name?: string;
             order?: number;
+        };
+        PatchedMealTemplateRequest: {
+            name?: string;
+            items?: components["schemas"]["MealTemplateItemRequest"][];
         };
         PatchedNutrientTargetRequest: {
             nutrient?: number;
@@ -5202,6 +5313,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BarcodeDraft"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedMealTemplateList"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MealTemplateRequest"];
+                "multipart/form-data": components["schemas"]["MealTemplateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MealTemplateRequest"];
+                "multipart/form-data": components["schemas"]["MealTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_nutrition_meal_templates_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedMealTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedMealTemplateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedMealTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MealTemplateRequest"];
+                "multipart/form-data": components["schemas"]["MealTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
+                };
+            };
+        };
+    };
+    v1_nutrition_meal_templates_from_meal_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MealTemplateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MealTemplateRequest"];
+                "multipart/form-data": components["schemas"]["MealTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MealTemplate"];
                 };
             };
         };

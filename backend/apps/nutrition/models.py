@@ -234,3 +234,42 @@ class DiaryEntry(TimeStampedModel):
     def __str__(self):
         item = self.food or self.recipe
         return f"{self.date} · {item}"
+
+
+class MealTemplate(TimeStampedModel):
+    """A reusable named set of foods + amounts. Applying it to a meal creates the
+    diary entries in one tap (bodybuilding meals repeat a lot)."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="meal_templates"
+    )
+    name = models.CharField(max_length=80)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class MealTemplateItem(models.Model):
+    """One food + amount within a meal template (mirrors a DiaryEntry food log)."""
+
+    template = models.ForeignKey(
+        MealTemplate, on_delete=models.CASCADE, related_name="items"
+    )
+    food = models.ForeignKey(
+        Food, on_delete=models.PROTECT, related_name="meal_template_items"
+    )
+    serving = models.ForeignKey(
+        ServingSize, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="meal_template_items",
+    )
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1"))
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"{self.template.name}: {self.food}"

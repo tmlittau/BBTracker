@@ -51,6 +51,21 @@ export interface Meal {
 	order: number;
 }
 
+export interface MealTemplateItem {
+	id?: number;
+	food: number;
+	food_name?: string;
+	unit?: string;
+	serving?: number | null;
+	quantity: string;
+	order?: number;
+}
+export interface MealTemplate {
+	id: number;
+	name: string;
+	items: MealTemplateItem[];
+}
+
 export interface DiaryEntry {
 	id: number;
 	date: string;
@@ -199,6 +214,15 @@ export const nutritionApi = {
 	reorderMeals: (order: { id: number; order: number }[]) =>
 		req<{ updated: number }>('POST', '/meals/reorder/', order),
 	copyYesterdayMeals: (date: string) => req<Meal[]>('POST', '/meals/copy_yesterday/', { date }),
+
+	mealTemplates: () => req<Paginated<MealTemplate>>('GET', '/meal-templates/').then(list),
+	deleteMealTemplate: (id: number) => req<void>('DELETE', `/meal-templates/${id}/`),
+	// Save a meal's current foods as a reusable template.
+	templateFromMeal: (meal: number, name?: string) =>
+		req<MealTemplate>('POST', '/meal-templates/from_meal/', { meal, name }),
+	// Expand a template into diary entries on the given meal.
+	applyMealTemplate: (id: number, meal: number) =>
+		req<{ created: number }>('POST', `/meal-templates/${id}/apply/`, { meal }),
 
 	targets: () => req<Paginated<NutritionTarget>>('GET', '/targets/').then(list),
 	createTarget: (data: Partial<NutritionTarget>) =>
