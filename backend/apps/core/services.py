@@ -96,7 +96,7 @@ def dashboard_today(owner, on_date):
         workout = {
             "count": len(sessions),
             "completed": any(s.ended_at is not None for s in sessions),
-            "exercises": sum(s.logged_exercises.count() for s in sessions),
+            "exercises": sum(len(s.logged_exercises.all()) for s in sessions),
             "prs": prs,
             "name": sessions[0].name or (sessions[0].day.name if sessions[0].day else "Workout"),
         }

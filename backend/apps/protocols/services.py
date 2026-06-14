@@ -248,6 +248,17 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
     today_day = (today - start_date).days
     proj_start = max(start_date, today + timedelta(days=1))
 
+    # All logged doses for these compounds in ONE query (widest lookback), bucketed
+    # by compound — avoids a per-compound query inside the loop below.
+    min_lookback = start_dt - timedelta(days=min(120, 5 * max_hl_days))
+    doses_by_compound: dict[int, list] = {}
+    for cid, ta, amt in DoseLog.objects.filter(
+        owner=owner, compound_id__in=cids, status="taken",
+        taken_at__lte=now, taken_at__gte=min_lookback,
+    ).values_list("compound_id", "taken_at", "amount"):
+        if amt is not None:
+            doses_by_compound.setdefault(cid, []).append((ta, amt))
+
     compounds_out = []
     for g in grouped.values():
         c, factor = g["compound"], g["factor"]
@@ -258,11 +269,8 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         lookback = start_dt - timedelta(days=min(120, 5 * float(hl) / 24.0))
         doses = [
             ((ta - start_dt).total_seconds() / 86400.0, float(amt) * factor)
-            for ta, amt in DoseLog.objects.filter(
-                owner=owner, compound_id=c.id, status="taken",
-                taken_at__lte=now, taken_at__gte=lookback
-            ).values_list("taken_at", "amount")
-            if amt is not None
+            for ta, amt in doses_by_compound.get(c.id, [])
+            if ta >= lookback
         ]
 
         # Projected future doses (> today) from each item's schedule.
@@ -407,6 +415,19 @@ def phase_dose_matrix(owner, phase, protocol):
         d += timedelta(days=7)
 
     anchor = protocol.started_on or start
+
+    # All doses in the phase window in ONE query, bucketed by compound/supplement —
+    # avoids a per-item query inside the loop below.
+    logs_by_compound: dict[int, list] = {}
+    logs_by_supplement: dict[int, list] = {}
+    for cid, sid, ta, amt, st in DoseLog.objects.filter(
+        owner=owner, taken_at__date__gte=start, taken_at__date__lte=end
+    ).values_list("compound_id", "supplement_id", "taken_at", "amount", "status"):
+        if cid is not None:
+            logs_by_compound.setdefault(cid, []).append((ta, amt, st))
+        elif sid is not None:
+            logs_by_supplement.setdefault(sid, []).append((ta, amt, st))
+
     rows = []
     for item in protocol.items.select_related("compound", "supplement").all():
         obj = item.compound or item.supplement
@@ -436,14 +457,8 @@ def phase_dose_matrix(owner, phase, protocol):
                 "ancillary": "Ancillaries",
             }.get(item.compound.compound_class, "Other")
 
-        log_key = "compound_id" if is_compound else "supplement_id"
         log_val = item.compound_id if is_compound else item.supplement_id
-        logs = list(
-            DoseLog.objects.filter(
-                owner=owner, taken_at__date__gte=start, taken_at__date__lte=end,
-                **{log_key: log_val},
-            ).values_list("taken_at", "amount", "status")
-        )
+        logs = (logs_by_compound if is_compound else logs_by_supplement).get(log_val, [])
 
         cells = []
         for w in weeks:

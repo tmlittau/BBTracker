@@ -196,6 +196,7 @@ class WorkoutSession(TimeStampedModel):
 
     class Meta:
         ordering = ["-started_at"]
+        indexes = [models.Index(fields=["owner", "started_at"])]
 
     @property
     def is_completed(self) -> bool:
