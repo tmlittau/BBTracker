@@ -85,6 +85,10 @@ DATABASES = {
         default="postgres://bbtracker:bbtracker@db:5432/bbtracker",
     ),
 }
+# Reuse DB connections across requests (skip a connect handshake every request);
+# health-check a reused connection so a dropped one is replaced, not raised.
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 CACHES = {
     "default": {
@@ -92,6 +96,10 @@ CACHES = {
         "LOCATION": env("REDIS_URL", default="redis://redis:6379/0"),
     }
 }
+
+# Read sessions from the cache (Redis) with a DB write-through fallback, so an
+# authenticated request doesn't SELECT its session row from the DB every time.
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
 AUTH_USER_MODEL = "accounts.User"
 

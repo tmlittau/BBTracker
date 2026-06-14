@@ -489,3 +489,62 @@ def test_phase_dose_matrix(api, user, test_e, db):
     assert row["cells"][0]["taken_count"] == 1
     assert row["cells"][0]["skipped_count"] == 1
     assert float(row["cells"][0]["taken_amount"]) == 125.0
+
+
+def test_phase_matrix_is_not_n_plus_one(django_assert_max_num_queries, user, test_e, db):
+    """Dose-table matrix must not issue a query per item (batched dose fetch)."""
+    from datetime import date
+
+    from apps.core.models import Phase
+    from apps.protocols.services import phase_dose_matrix
+
+    start = date(2026, 5, 1)
+    phase = Phase.objects.create(
+        owner=user, name="Cut", start_date=start, end_date=start + timedelta(days=13)
+    )
+    p = Protocol.objects.create(owner=user, name="Cycle", started_on=start)
+    comps = [test_e] + [
+        Compound.objects.create(
+            name=f"PM{i}", compound_class="anabolic", default_unit="mg",
+            default_route="im", half_life_hours="120", active_fraction="0.800",
+        )
+        for i in range(4)
+    ]
+    for c in comps:
+        ProtocolItem.objects.create(
+            protocol=p, compound=c, dose_amount=100, dose_unit="mg",
+            route="im", frequency="2x_week",
+        )
+    # 5 items: the old per-item query would be ~6; batched is constant.
+    with django_assert_max_num_queries(4):
+        data = phase_dose_matrix(user, phase, p)
+    assert len(data["rows"]) == 5
+
+
+def test_release_curves_is_not_n_plus_one(django_assert_max_num_queries, user, test_e, db):
+    """Release curve must not issue a query per compound (batched dose fetch)."""
+    from apps.protocols.services import protocol_release_curves
+
+    p = Protocol.objects.create(
+        owner=user, name="Cycle", started_on=timezone.now().date() - timedelta(days=10)
+    )
+    comps = [test_e] + [
+        Compound.objects.create(
+            name=f"RC{i}", compound_class="anabolic", default_unit="mg",
+            default_route="im", half_life_hours="168", active_fraction="0.700",
+        )
+        for i in range(3)
+    ]
+    for c in comps:
+        ProtocolItem.objects.create(
+            protocol=p, compound=c, dose_amount=100, dose_unit="mg",
+            route="im", frequency="weekly",
+        )
+        DoseLog.objects.create(
+            owner=user, compound=c, taken_at=timezone.now() - timedelta(days=3),
+            amount=100, unit="mg", route="im",
+        )
+    # 4 compounds: old code did one query per compound; batched is constant.
+    with django_assert_max_num_queries(5):
+        data = protocol_release_curves(user, p, horizon_days=14)
+    assert len(data["compounds"]) == 4
