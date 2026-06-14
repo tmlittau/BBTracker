@@ -554,6 +554,34 @@ def supplement_nutrient_contribution(owner, date):
     return totals
 
 
+def supplement_nutrient_contribution_range(owner, start_date, end_date):
+    """{date: {nutrient_id: amount}} from supplement doses in [start, end] — one query.
+
+    Windowed sibling of supplement_nutrient_contribution for batched callers (e.g. the
+    weekly check-in), so they don't query supplements once per day.
+    """
+    from collections import defaultdict
+
+    from .models import DoseLog
+
+    out: dict = defaultdict(lambda: defaultdict(Decimal))
+    qs = (
+        DoseLog.objects.filter(
+            owner=owner, supplement__isnull=False, status="taken",
+            taken_at__date__gte=start_date, taken_at__date__lte=end_date,
+        )
+        .select_related("supplement")
+        .prefetch_related("supplement__supplement_nutrients")
+    )
+    for log in qs:
+        unit = (log.unit or "").lower()
+        servings = Decimal(str(log.amount or 1)) if unit in SERVING_UNITS else Decimal("1")
+        day = timezone.localtime(log.taken_at).date()
+        for sn in log.supplement.supplement_nutrients.all():
+            out[day][sn.nutrient_id] += _q(sn.amount_per_serving * servings)
+    return {d: dict(m) for d, m in out.items()}
+
+
 def flag_value(value, low, high) -> str:
     """low / in_range / high for a value against an explicit reference range."""
     v = Decimal(str(value))

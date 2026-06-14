@@ -122,6 +122,13 @@ class Command(BaseCommand):
                     defaults={"amount_per_100g": Decimal(str(amount))},
                 )
 
+        # Reference data changed → drop the cached nutrient list (see services).
+        from django.core.cache import cache
+
+        from apps.nutrition.services import NUTRIENTS_CACHE_KEY
+
+        cache.delete(NUTRIENTS_CACHE_KEY)
+
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded {len(by_slug)} nutrients and {len(FOODS)} foods ({created} new)."

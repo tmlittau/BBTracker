@@ -66,19 +66,13 @@ def current_phase_config(owner, on_date):
 
 def dashboard_today(owner, on_date):
     """Everything a coach glances at for one day, across all five domains."""
-    from apps.nutrition.services import daily_summary
+    from apps.nutrition.services import nutrition_headline
     from apps.protocols.models import DoseLog
     from apps.training.models import WorkoutSession
 
     phase, adjustment = current_phase_config(owner, on_date)
 
-    nutrition = daily_summary(owner, on_date)
-    nutrition_headline = {
-        "has_target": nutrition["has_target"],
-        "calories": nutrition["totals"]["calories"],
-        "protein_g": nutrition["totals"]["protein_g"],
-        "target_name": nutrition["target_name"],
-    }
+    nutrition = nutrition_headline(owner, on_date)
 
     sessions = list(
         WorkoutSession.objects.filter(owner=owner, started_at__date=on_date)
@@ -115,7 +109,7 @@ def dashboard_today(owner, on_date):
     return {
         "date": on_date.isoformat(),
         "phase": _phase_brief(phase, adjustment),
-        "nutrition": nutrition_headline,
+        "nutrition": nutrition,
         "workout": workout,
         "doses": doses,
     }
@@ -154,7 +148,7 @@ def weekly_checkin(owner, end_date):
     photos taken, and the latest bloodwork.
     """
     from apps.diary.models import CheckIn, ProgressPhoto
-    from apps.nutrition.services import daily_summary
+    from apps.nutrition.services import weekly_macro_adherence
     from apps.protocols.models import BloodResult, DoseLog
     from apps.training.models import LoggedSet, WorkoutSession
     from apps.training.services import weekly_muscle_volume
@@ -192,22 +186,8 @@ def weekly_checkin(owner, end_date):
         )[:5],
     }
 
-    # --- Nutrition adherence: average kcal/protein over days with any intake ---
-    cals, prots, target_name = [], [], None
-    for i in range(7):
-        day = start_date + timedelta(days=i)
-        summ = daily_summary(owner, day)
-        c = float(summ["totals"]["calories"])
-        if c > 0:
-            cals.append(c)
-            prots.append(float(summ["totals"]["protein_g"]))
-        target_name = target_name or summ["target_name"]
-    nutrition = {
-        "days_logged": len(cals),
-        "avg_calories": round(sum(cals) / len(cals), 0) if cals else None,
-        "avg_protein_g": round(sum(prots) / len(prots), 1) if prots else None,
-        "target_name": target_name,
-    }
+    # --- Nutrition adherence (batched: one entries + one supplement query) ---
+    nutrition = weekly_macro_adherence(owner, start_date, end_date)
 
     # --- Dose adherence (count) + photos + latest bloodwork ---
     dose_count = DoseLog.objects.filter(

@@ -175,3 +175,42 @@ def test_weekly_checkin_owner_isolation(api, other):
     data = api.get("/api/v1/checkin/weekly/").json()
     assert data["check_ins"] == 0
     assert data["bodyweight"] is None
+
+
+def test_weekly_checkin_batches_nutrition(django_assert_max_num_queries, user):
+    """Weekly check-in must batch nutrition (one entries + one supplement query),
+    not call daily_summary once per day."""
+    from apps.core.services import weekly_checkin
+    from apps.nutrition.models import DiaryEntry
+
+    end = date.today()
+    energy = Nutrient.objects.create(
+        name="Calories", slug="energy", category="energy", unit="kcal", is_energy=True
+    )
+    Nutrient.objects.create(name="Protein", slug="protein", category="macro", unit="g")
+    chicken = Food.objects.create(name="Chicken", source="seed")
+    FoodNutrient.objects.create(food=chicken, nutrient=energy, amount_per_100g=165)
+    for i in range(7):
+        DiaryEntry.objects.create(
+            owner=user, date=end - timedelta(days=i), food=chicken, quantity=200
+        )
+    with django_assert_max_num_queries(18):
+        data = weekly_checkin(user, end)
+    assert data["nutrition"]["days_logged"] == 7
+
+
+def test_dashboard_uses_light_headline(django_assert_max_num_queries, user):
+    """Dashboard headline must stay correct on the light (non per-nutrient) path."""
+    from apps.core.services import dashboard_today
+    from apps.nutrition.models import DiaryEntry
+
+    energy = Nutrient.objects.create(
+        name="Calories", slug="energy", category="energy", unit="kcal", is_energy=True
+    )
+    Nutrient.objects.create(name="Protein", slug="protein", category="macro", unit="g")
+    chicken = Food.objects.create(name="Chicken", source="seed")
+    FoodNutrient.objects.create(food=chicken, nutrient=energy, amount_per_100g=165)
+    DiaryEntry.objects.create(owner=user, date=date.today(), food=chicken, quantity=200)
+    with django_assert_max_num_queries(12):
+        data = dashboard_today(user, date.today())
+    assert data["nutrition"]["calories"] == "330.000"

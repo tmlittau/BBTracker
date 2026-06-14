@@ -10,6 +10,8 @@ import urllib.error
 import urllib.request
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from django.core.cache import cache
+
 HUNDRED = Decimal("100")
 
 
@@ -96,13 +98,45 @@ def daily_totals(entries) -> dict[int, Decimal]:
     return totals
 
 
+# Reference data (Nutrients) rarely changes — it's seeded — so cache it instead of
+# re-querying ~60 rows on every summary. `seed_nutrition` clears the key.
+NUTRIENTS_CACHE_KEY = "ref:nutrients:v1"
+REF_CACHE_TTL = 3600
+
+
+def cached_nutrients():
+    """All Nutrients as lightweight dicts (cached). Order matches Nutrient.objects.all()."""
+    data = cache.get(NUTRIENTS_CACHE_KEY)
+    if data is None:
+        from .models import Nutrient
+
+        data = [
+            {
+                "id": n.id, "name": n.name, "slug": n.slug, "unit": n.unit,
+                "category": n.category, "rda": n.rda, "display_order": n.display_order,
+            }
+            for n in Nutrient.objects.all()
+        ]
+        cache.set(NUTRIENTS_CACHE_KEY, data, REF_CACHE_TTL)
+    return data
+
+
+def _macro_ids():
+    """{slug: nutrient_id} for the macro slugs, from cached reference data."""
+    return {
+        n["slug"]: n["id"]
+        for n in cached_nutrients()
+        if n["slug"] in ("energy", "protein", "carbohydrate", "fat", "fiber")
+    }
+
+
 def daily_summary(owner, date):
     """Full day summary: per-nutrient totals vs the active target.
 
     Returns a dict with `date`, `totals` (macro headline numbers) and a
     `nutrients` list of {id,name,unit,category,amount,target,percent}.
     """
-    from .models import DiaryEntry, Nutrient, NutritionTarget
+    from .models import DiaryEntry, NutritionTarget
 
     entries = (
         DiaryEntry.objects.filter(owner=owner, date=date)
@@ -142,20 +176,20 @@ def daily_summary(owner, date):
             target_by_nutrient[nt.nutrient_id] = nt.amount
 
     nutrients = []
-    for n in Nutrient.objects.all():
-        amount = totals.get(n.id, Decimal("0"))
-        tgt = target_by_nutrient.get(n.id)
+    for n in cached_nutrients():
+        amount = totals.get(n["id"], Decimal("0"))
+        tgt = target_by_nutrient.get(n["id"])
         if tgt is None and target:
-            tgt = macro_targets.get(n.slug)
+            tgt = macro_targets.get(n["slug"])
         if tgt is None:
-            tgt = n.rda  # fall back to RDA for micros
+            tgt = n["rda"]  # fall back to RDA for micros
         nutrients.append(
             {
-                "id": n.id,
-                "name": n.name,
-                "slug": n.slug,
-                "unit": n.unit,
-                "category": n.category,
+                "id": n["id"],
+                "name": n["name"],
+                "slug": n["slug"],
+                "unit": n["unit"],
+                "category": n["category"],
                 "amount": _q(amount, "0.001"),
                 "target": tgt,
                 "percent": percent_of_target(amount, tgt),
@@ -206,6 +240,84 @@ def daily_summary(owner, date):
         "totals": headline,
         "nutrients": nutrients,
         "meals": meals,
+    }
+
+
+def macro_totals_by_day(owner, start_date, end_date):
+    """{date: {"calories": Decimal, "protein_g": Decimal}} over [start, end] inclusive.
+
+    Batched (one diary-entry query + one supplement query for the whole window),
+    energy + protein only — for the dashboard headline and the weekly check-in,
+    which don't need the full per-nutrient breakdown. Days with no intake are absent.
+    """
+    from collections import defaultdict
+
+    from .models import DiaryEntry
+
+    ids = _macro_ids()
+    energy_id, protein_id = ids.get("energy"), ids.get("protein")
+    by_day: dict = defaultdict(lambda: {"calories": Decimal("0"), "protein_g": Decimal("0")})
+
+    entries = (
+        DiaryEntry.objects.filter(owner=owner, date__gte=start_date, date__lte=end_date)
+        .select_related("food", "recipe", "serving")
+        .prefetch_related("food__food_nutrients", "recipe__items__food__food_nutrients")
+    )
+    grouped: dict = defaultdict(list)
+    for e in entries:
+        grouped[e.date].append(e)
+    for day, day_entries in grouped.items():
+        t = daily_totals(day_entries)
+        by_day[day]["calories"] += t.get(energy_id, Decimal("0"))
+        by_day[day]["protein_g"] += t.get(protein_id, Decimal("0"))
+
+    # Fold in supplement-provided energy/protein (windowed; mirrors daily_summary).
+    try:
+        from apps.protocols.services import supplement_nutrient_contribution_range
+
+        for day, contrib in supplement_nutrient_contribution_range(
+            owner, start_date, end_date
+        ).items():
+            by_day[day]["calories"] += contrib.get(energy_id, Decimal("0"))
+            by_day[day]["protein_g"] += contrib.get(protein_id, Decimal("0"))
+    except ImportError:
+        pass
+
+    return dict(by_day)
+
+
+def nutrition_headline(owner, date):
+    """Lightweight macro headline for the dashboard: the day's calories + protein and
+    the active target — without daily_summary's full per-nutrient list / per-meal work."""
+    from .models import NutritionTarget
+
+    day = macro_totals_by_day(owner, date, date).get(
+        date, {"calories": Decimal("0"), "protein_g": Decimal("0")}
+    )
+    target = NutritionTarget.objects.filter(owner=owner, is_active=True).only("name").first()
+    return {
+        "has_target": target is not None,
+        "calories": str(_q(day["calories"], "0.001")),
+        "protein_g": str(_q(day["protein_g"], "0.001")),
+        "target_name": target.name if target else None,
+    }
+
+
+def weekly_macro_adherence(owner, start_date, end_date):
+    """Avg calories/protein over days with intake in [start, end] + the active target —
+    the weekly check-in's nutrition block, batched (no per-day round-trips)."""
+    from .models import NutritionTarget
+
+    by_day = macro_totals_by_day(owner, start_date, end_date)
+    days = [v for v in by_day.values() if float(v["calories"]) > 0]
+    cals = [float(v["calories"]) for v in days]
+    prots = [float(v["protein_g"]) for v in days]
+    target = NutritionTarget.objects.filter(owner=owner, is_active=True).only("name").first()
+    return {
+        "days_logged": len(days),
+        "avg_calories": round(sum(cals) / len(cals), 0) if cals else None,
+        "avg_protein_g": round(sum(prots) / len(prots), 1) if prots else None,
+        "target_name": target.name if target else None,
     }
 
 
