@@ -195,20 +195,66 @@ def _intake_by_day(owner, start, end):
     return {d: v["calories"] for d, v in macro_totals_by_day(owner, start, end).items()}
 
 
-def _bloodwork_metrics(owner):
-    """Latest value per blood marker (one query) + a few atherogenic ratios.
+def free_testosterone(total_t_nmol, shbg_nmol, albumin_g_l=43.0):
+    """Vermeulen free + bioavailable testosterone from total T + SHBG (nmol/L) and
+    albumin (g/L; defaults to 43). Returns pmol/L + % + bioavailable nmol/L, or None."""
+    tt, shbg = _f(total_t_nmol), _f(shbg_nmol)
+    if not (tt and shbg):
+        return None
+    alb = _f(albumin_g_l) or 43.0
+    ct, cs = tt * 1e-9, shbg * 1e-9
+    ca = alb / 66500.0  # albumin g/L → mol/L (MW ≈ 66.5 kDa)
+    ka, kt = 3.6e4, 1.0e9  # T–albumin and T–SHBG association constants (L/mol)
+    n = ka * ca + 1.0
+    a = n * kt
+    b = n + kt * (cs - ct)
+    disc = b * b + 4.0 * a * ct  # quadratic a·FT² + b·FT − ct = 0
+    if a == 0 or disc < 0:
+        return None
+    ft = (-b + math.sqrt(disc)) / (2.0 * a)  # free T, mol/L
+    if ft <= 0:
+        return None
+    return {
+        "free_pmol_l": round(ft * 1e12, 1),
+        "free_pct": round(ft / ct * 100, 2),
+        "bioavailable_nmol_l": round(ft * n * 1e9, 2),
+    }
 
-    Marker slugs are matched defensively (the SI seed names can vary), and TG/HDL is
-    converted to mg/dL so the conventional cutoff applies; LDL/HDL + ApoB/ApoA1 are
-    unitless ratios.
+
+def egfr_ckdepi(creatinine_umol_l, age, sex):
+    """eGFR (CKD-EPI 2021, race-free), mL/min/1.73m². None if inputs missing."""
+    cr, a = _f(creatinine_umol_l), _f(age)
+    if not (cr and a):
+        return None
+    scr = cr / 88.42  # µmol/L → mg/dL
+    female = sex == "female"
+    k = 0.7 if female else 0.9
+    alpha = -0.241 if female else -0.302
+    egfr = (
+        142.0
+        * (min(scr / k, 1.0) ** alpha)
+        * (max(scr / k, 1.0) ** -1.200)
+        * (0.9938 ** a)
+        * (1.012 if female else 1.0)
+    )
+    return round(egfr)
+
+
+def _bloodwork_metrics(owner, sex=None, age=None):
+    """One pass over the owner's bloodwork → atherogenic ratios, derived values
+    (free testosterone, eGFR) and longitudinal flags (out of range, or in range but
+    trending toward a bound). Marker slugs are matched defensively (SI seed naming).
     """
     from apps.protocols.models import BloodResult
+    from apps.protocols.services import flag_value, result_range
 
     latest: dict = {}
+    by_marker: dict = {}
     for r in (
         BloodResult.objects.filter(owner=owner).select_related("marker").order_by("measured_on")
     ):
         latest[r.marker.slug] = _f(r.value)  # ascending → latest wins
+        by_marker.setdefault(r.marker_id, []).append(r)
 
     def pick(*slugs):
         for s in slugs:
@@ -229,7 +275,56 @@ def _bloodwork_metrics(owner):
         ratios["ldl_hdl"] = round(ldl / hdl, 2)
     if apob and apoa1:
         ratios["apob_apoa1"] = round(apob / apoa1, 2)
-    return {"ratios": ratios}
+
+    derived: dict = {}
+    free_t = free_testosterone(
+        pick("testosterone", "testosteron", "total_testosterone"),
+        pick("shbg", "sex_hormone_binding_globulin"),
+        pick("albumin", "albumine") or 43.0,
+    )
+    if free_t:
+        derived["free_testosterone"] = free_t
+    gfr = egfr_ckdepi(pick("creatinine", "creatinin", "kreatinine"), age, sex)
+    if gfr is not None:
+        derived["egfr"] = gfr
+
+    trends = []
+    for results in by_marker.values():
+        last = results[-1]
+        val = _f(last.value)
+        if val is None:
+            continue
+        low, high = result_range(last, sex)
+        flag = flag_value(val, low, high)
+        direction = "stable"
+        prev = _f(results[-2].value) if len(results) >= 2 else None
+        if prev is not None and val > prev * 1.02:
+            direction = "rising"
+        elif prev is not None and val < prev * 0.98:
+            direction = "falling"
+        note = None
+        if flag == "high":
+            note = "Above the reference range."
+        elif flag == "low":
+            note = "Below the reference range."
+        elif low is not None and high is not None and float(high) > float(low):
+            span = float(high) - float(low)
+            if direction == "rising" and (float(high) - val) < 0.1 * span:
+                note = "In range but rising toward the upper limit."
+            elif direction == "falling" and (val - float(low)) < 0.1 * span:
+                note = "In range but falling toward the lower limit."
+        if note:
+            trends.append({
+                "marker": last.marker.name,
+                "slug": last.marker.slug,
+                "value": val,
+                "unit": last.unit or last.marker.unit,
+                "flag": flag,
+                "direction": direction,
+                "note": note,
+            })
+    trends.sort(key=lambda t: 0 if t["flag"] != "in_range" else 1)
+    return {"ratios": ratios, "derived": derived, "trends": trends[:8]}
 
 
 def body_analysis(owner, on_date):
@@ -305,17 +400,21 @@ def body_analysis(owner, on_date):
         if energy["bmr"]:
             energy["activity_factor"] = round(adaptive["tdee"] / energy["bmr"], 2)
 
-    bloodwork = _bloodwork_metrics(owner)
+    bloodwork = _bloodwork_metrics(owner, sex, age)
     assessments = _assess(sex, composition, distribution, energy, bp, bloodwork)
+    comp_trend = composition_series(owner, on_date - timedelta(days=180), on_date, sex, height)
+    insights = _insights(comp_trend, energy)
 
     return {
         "date": on_date.isoformat(),
         "sex": sex,
         "composition": composition,
+        "composition_trend": comp_trend,
         "distribution": distribution,
         "energy": energy,
         "blood_pressure": ({"systolic": bp[0], "diastolic": bp[1]} if bp else None),
         "bloodwork": bloodwork,
+        "insights": insights,
         "assessments": assessments,
         "measurements": _measurements_payload(latest),
     }
@@ -413,3 +512,104 @@ def _card(key, label, status, value, detail, source):
         "detail": detail,
         "source": source,
     }
+
+
+def composition_series(owner, start_date, end_date, sex, height_cm):
+    """Lean/fat-mass over time for the recomposition chart. A point exists on each
+    date that has a body-fat source (a measured %, or circumferences for Navy/RFM)
+    paired with the nearest bodyweight on/before it."""
+    from apps.diary.models import CheckIn
+
+    from .models import BodyMeasurement
+
+    weights = sorted(
+        (c.date, _f(c.bodyweight))
+        for c in CheckIn.objects.filter(owner=owner, date__gte=start_date, date__lte=end_date)
+        if _f(c.bodyweight)
+    )
+
+    def weight_on(d):
+        w = None
+        for wd, wv in weights:
+            if wd <= d:
+                w = wv
+            else:
+                break
+        return w
+
+    by_date: dict = {}
+    for m in BodyMeasurement.objects.filter(
+        owner=owner, date__gte=start_date, date__lte=end_date
+    ).order_by("date"):
+        by_date.setdefault(m.date, {})[m.type] = m
+
+    series = []
+    for d in sorted(by_date):
+        day = by_date[d]
+        if "body_fat" in day:
+            bf, src = _f(day["body_fat"].value), (day["body_fat"].method or "measured")
+        else:
+            waist = _f(day["waist"].value) if "waist" in day else None
+            neck = _f(day["neck"].value) if "neck" in day else None
+            hip = _f(day["hip"].value) if "hip" in day else None
+            navy = navy_body_fat(sex, height_cm, neck, waist, hip)
+            if navy is not None:
+                bf, src = navy, "navy"
+            else:
+                r = rfm(sex, height_cm, waist)
+                bf, src = (r, "rfm") if r is not None else (None, None)
+        if bf is None:
+            continue
+        w = weight_on(d)
+        if w is None:
+            continue
+        fat, lean = lean_fat_mass(w, bf)
+        series.append({
+            "date": d.isoformat(),
+            "weight_kg": w,
+            "body_fat_pct": bf,
+            "fat_mass_kg": fat,
+            "lean_mass_kg": lean,
+            "source": src,
+        })
+    return series
+
+
+def _insight(key, title, detail, status):
+    return {"key": key, "title": title, "detail": detail, "status": status}
+
+
+def _insights(comp_trend, energy):
+    """Cross-metric narrative from the composition trend + energy balance."""
+    out = []
+    if len(comp_trend) >= 2:
+        first, last = comp_trend[0], comp_trend[-1]
+        df = last["fat_mass_kg"] - first["fat_mass_kg"]
+        dl = last["lean_mass_kg"] - first["lean_mass_kg"]
+        span = f"fat {df:+.1f} kg, lean {dl:+.1f} kg"
+        if df < -0.3 and dl >= -0.3:
+            out.append(_insight("cut_quality", "Effective cut",
+                                f"{span} — losing fat while holding muscle.", "good"))
+        elif dl > 0.3 and df <= dl:
+            out.append(_insight("lean_gain", "Productive gain",
+                                f"{span} — a favourable lean-to-fat gain ratio.", "good"))
+        elif df > 0.3 and dl <= 0:
+            out.append(_insight("fat_gain", "Mostly fat gain",
+                                f"{span} — trim the surplus or add training stimulus.", "watch"))
+        elif dl < -0.3 and df >= 0:
+            out.append(_insight("muscle_loss", "Losing muscle",
+                                f"{span} — check protein intake and training load.", "watch"))
+    adaptive = energy.get("adaptive")
+    bal = energy.get("balance")
+    if adaptive and bal is not None:
+        slope = adaptive["weight_slope_kg_wk"]
+        if bal <= -200:
+            detail = f"~{abs(bal)} kcal/day under maintenance ({slope:+.2f} kg/wk)."
+            out.append(_insight("deficit", "Calorie deficit", detail, "good"))
+        elif bal >= 200:
+            out.append(_insight("surplus", "Calorie surplus",
+                                f"~{bal} kcal/day over maintenance ({slope:+.2f} kg/wk).", "good"))
+        else:
+            out.append(_insight("maintenance", "Near maintenance",
+                                f"Intake ≈ expenditure ({slope:+.2f} kg/wk).", "good"))
+    return out
