@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import {
 		protocolsApi,
+		COMPOUND_CLASSES,
 		FREQUENCIES,
 		WEEKDAYS,
 		TIMES_OF_DAY,
@@ -16,6 +17,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import CompoundCreateModal from '$lib/protocols/CompoundCreateModal.svelte';
 	import SupplementCreateModal from '$lib/protocols/SupplementCreateModal.svelte';
+	import SearchSelect from '$lib/protocols/SearchSelect.svelte';
 
 	const protocolId = Number($page.params.id);
 
@@ -38,6 +40,20 @@
 	let showSupplementModal = $state(false);
 
 	const selectClass = 'rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100';
+
+	// Options for the searchable picker — compounds carry a class (chip filter) +
+	// ester hint; supplements are a plain searchable list.
+	const pickerOptions = $derived(
+		kind === 'compound'
+			? compounds.map((c) => ({
+					id: c.id,
+					label: c.name,
+					group: c.compound_class,
+					badge: c.ester || undefined
+				}))
+			: supplements.map((s) => ({ id: s.id, label: s.name }))
+	);
+	const pickerGroups = $derived(kind === 'compound' ? COMPOUND_CLASSES : []);
 
 	async function load() {
 		protocol = await protocolsApi.protocol(protocolId);
@@ -136,14 +152,16 @@
 				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; unit = 'mg'; }}>Compound</button>
 				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'supplement'; refId = null; unit = 'serving'; }}>Supplement</button>
 			</div>
-			<select bind:value={refId} class={selectClass}>
-				<option value={null}>Choose {kind}…</option>
-				{#if kind === 'compound'}
-					{#each compounds as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-				{:else}
-					{#each supplements as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
-				{/if}
-			</select>
+			<div class="min-w-56 flex-1">
+				{#key kind}
+					<SearchSelect
+						options={pickerOptions}
+						bind:value={refId}
+						groups={pickerGroups}
+						placeholder={`Search ${kind}…`}
+					/>
+				{/key}
+			</div>
 			<button
 				type="button"
 				class="rounded-md border border-neutral-700 px-2 py-1.5 text-sm text-indigo-300 hover:border-neutral-500"

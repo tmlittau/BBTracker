@@ -1,14 +1,30 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { protocolsApi, type Compound } from '$lib/protocols/api';
+	import {
+		protocolsApi,
+		COMPOUND_CLASSES,
+		compoundClassLabel,
+		type Compound
+	} from '$lib/protocols/api';
 	import CompoundCreateModal from '$lib/protocols/CompoundCreateModal.svelte';
 
 	let compounds = $state<Compound[]>([]);
 	let query = $state('');
+	let activeClass = $state<string | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let showModal = $state(false);
 	let editing = $state<Compound | null>(null);
+
+	// The whole reference list loads once; filtering by class + name is instant
+	// client-side (the API returns every compound, no 50-row page cap).
+	const filtered = $derived(
+		compounds.filter(
+			(c) =>
+				(activeClass == null || c.compound_class === activeClass) &&
+				c.name.toLowerCase().includes(query.trim().toLowerCase())
+		)
+	);
 
 	function onCreated(c: Compound) {
 		compounds = [c, ...compounds];
@@ -25,7 +41,7 @@
 	async function load() {
 		loading = true;
 		try {
-			compounds = await protocolsApi.compounds(query.trim());
+			compounds = await protocolsApi.compounds();
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -34,12 +50,6 @@
 	}
 
 	onMount(load);
-
-	let timer: ReturnType<typeof setTimeout>;
-	function onSearch() {
-		clearTimeout(timer);
-		timer = setTimeout(load, 200);
-	}
 </script>
 
 <CompoundCreateModal
@@ -65,13 +75,30 @@
 	curve combines a compound's logged and scheduled doses.
 </p>
 
-<div class="mt-4">
+<div class="mt-4 space-y-3">
 	<input
 		placeholder="Search compounds…"
 		bind:value={query}
-		oninput={onSearch}
 		class="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 outline-none focus:border-indigo-500"
 	/>
+	<div class="flex flex-wrap gap-1.5">
+		<button
+			type="button"
+			class="rounded-full px-3 py-1 text-xs {activeClass == null
+				? 'bg-indigo-600 text-white'
+				: 'border border-neutral-700 text-neutral-300'}"
+			onclick={() => (activeClass = null)}>All</button
+		>
+		{#each COMPOUND_CLASSES as g (g.key)}
+			<button
+				type="button"
+				class="rounded-full px-3 py-1 text-xs {activeClass === g.key
+					? 'bg-indigo-600 text-white'
+					: 'border border-neutral-700 text-neutral-300'}"
+				onclick={() => (activeClass = g.key)}>{g.label}</button
+			>
+		{/each}
+	</div>
 </div>
 
 {#if loading}
@@ -79,8 +106,9 @@
 {:else if error}
 	<p class="mt-6 text-red-400">{error}</p>
 {:else}
-	<ul class="mt-4 divide-y divide-neutral-800">
-		{#each compounds as c (c.id)}
+	<p class="mt-3 text-xs text-neutral-500">{filtered.length} of {compounds.length} compounds</p>
+	<ul class="mt-2 divide-y divide-neutral-800">
+		{#each filtered as c (c.id)}
 			<li class="flex items-start justify-between gap-2 py-3">
 				<div>
 					<span class="font-medium">{c.name}</span>
@@ -88,7 +116,7 @@
 					<span class="ml-2 rounded bg-indigo-900 px-1.5 py-0.5 text-xs text-indigo-300">Custom</span>
 				{/if}
 				<div class="text-xs text-neutral-500">
-					{c.compound_class}{c.ester ? ` · ${c.ester}` : ''}
+					{compoundClassLabel(c.compound_class)}{c.ester ? ` · ${c.ester}` : ''}
 					{#if c.half_life_hours}· t½ {Number(c.half_life_hours)} h{/if}
 					· active {(Number(c.active_fraction) * 100).toFixed(0)}%
 				</div>
@@ -102,4 +130,7 @@
 			</li>
 		{/each}
 	</ul>
+	{#if filtered.length === 0}
+		<p class="mt-4 text-sm text-neutral-500">No compounds match this filter.</p>
+	{/if}
 {/if}
