@@ -50,6 +50,10 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     """Global (seeded) + the user's custom exercises. Users can only edit their own."""
 
     serializer_class = ExerciseSerializer
+    # Bounded reference data — return the whole list so the exercise picker
+    # (program builder + live logger) can filter/search it client-side without
+    # the 50-row page cap cropping entries. Server ?q= / ?category= still work.
+    pagination_class = None
 
     def get_queryset(self):
         from django.db.models import Q

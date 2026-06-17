@@ -50,13 +50,56 @@ def test_requires_auth():
 def test_global_exercises_visible(api, bench):
     resp = api.get("/api/v1/training/exercises/")
     assert resp.status_code == 200
-    names = [e["name"] for e in resp.json()["results"]]
+    names = [e["name"] for e in resp.json()]
     assert "Bench Press" in names
 
 
 def test_exercise_search(api, bench):
-    assert api.get("/api/v1/training/exercises/?q=bench").json()["count"] == 1
-    assert api.get("/api/v1/training/exercises/?q=zzz").json()["count"] == 0
+    assert len(api.get("/api/v1/training/exercises/?q=bench").json()) == 1
+    assert len(api.get("/api/v1/training/exercises/?q=zzz").json()) == 0
+
+
+def test_exercises_not_paginated(api, user):
+    # Whole reference list is returned (no 50-row page cap), as a bare list, so
+    # the program builder + logger picker can filter/search every exercise.
+    Exercise.objects.bulk_create(
+        [Exercise(owner=user, name=f"Custom Ex {i:03d}") for i in range(55)]
+    )
+    data = api.get("/api/v1/training/exercises/").json()
+    assert isinstance(data, list)  # bare list, not {count, results}
+    assert len([e for e in data if e["name"].startswith("Custom Ex ")]) == 55
+
+
+def test_replace_logged_exercise_keeps_sets(api, bench):
+    # "Bench is taken" → swap the exercise on a logged exercise; its sets (with
+    # set types) stay attached.
+    other = Exercise.objects.create(name="Incline Press")  # global
+    started = timezone.now().isoformat()
+    sid = api.post(
+        "/api/v1/training/workout-sessions/",
+        {"name": "Push", "started_at": started},
+        format="json",
+    ).json()["id"]
+    leid = api.post(
+        "/api/v1/training/logged-exercises/",
+        {"session": sid, "exercise": bench.id, "order": 0},
+        format="json",
+    ).json()["id"]
+    api.post(
+        "/api/v1/training/logged-sets/",
+        {"logged_exercise": leid, "order": 0, "set_type": "top_set", "reps": 5, "weight": "100.00"},
+        format="json",
+    )
+    resp = api.patch(
+        f"/api/v1/training/logged-exercises/{leid}/", {"exercise": other.id}, format="json"
+    )
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["exercise"] == other.id
+    assert data["exercise_name"] == "Incline Press"
+    assert len(data["sets"]) == 1  # sets preserved
+    assert data["sets"][0]["set_type"] == "top_set"
+    assert data["sets"][0]["weight"] == "100.00"
 
 
 def test_custom_exercise_is_owned(api, user):

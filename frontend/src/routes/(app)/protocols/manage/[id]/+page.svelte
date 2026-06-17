@@ -17,7 +17,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import CompoundCreateModal from '$lib/protocols/CompoundCreateModal.svelte';
 	import SupplementCreateModal from '$lib/protocols/SupplementCreateModal.svelte';
-	import SearchSelect from '$lib/protocols/SearchSelect.svelte';
+	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 
 	const protocolId = Number($page.params.id);
 

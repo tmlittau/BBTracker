@@ -3220,36 +3220,6 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["DoseLog"][];
         };
-        PaginatedExerciseHistoryPointList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["ExerciseHistoryPoint"][];
-        };
-        PaginatedExerciseList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["Exercise"][];
-        };
         PaginatedExerciseSlotList: {
             /** @example 123 */
             count: number;
@@ -8557,10 +8527,7 @@ export interface operations {
     };
     v1_training_exercises_list: {
         parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -8572,7 +8539,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedExerciseList"];
+                    "application/json": components["schemas"]["Exercise"][];
                 };
             };
         };
@@ -8702,8 +8669,6 @@ export interface operations {
             query?: {
                 /** @description ISO date lower bound */
                 from?: string;
-                /** @description A page number within the paginated result set. */
-                page?: number;
             };
             header?: never;
             path: {
@@ -8718,7 +8683,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedExerciseHistoryPointList"];
+                    "application/json": components["schemas"]["ExerciseHistoryPoint"][];
                 };
             };
         };

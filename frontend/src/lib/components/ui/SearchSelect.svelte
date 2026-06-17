@@ -1,24 +1,33 @@
 <script lang="ts">
 	// Dependency-free searchable select (combobox) with optional type-filter chips.
-	// Used by the protocol builder to pick a compound/supplement from a long list:
-	// type to search, tap a chip to filter by class. Generic over numeric ids.
+	// Used wherever a long reference list needs to be picked from — protocol
+	// builder (compounds/supplements) and the training exercise picker: type to
+	// search, tap a chip to filter by group. Generic over numeric ids.
+	//
+	// Two usage modes:
+	//  • bind:value — keep the selection (form field).
+	//  • onchange + resetOnSelect — act on each pick and clear (e.g. "add exercise").
 	interface Option {
 		id: number;
 		label: string;
-		group?: string; // used by the chip filter (e.g. compound_class)
+		group?: string; // used by the chip filter (e.g. compound_class / exercise category)
 		badge?: string; // small trailing hint (e.g. ester)
 	}
 
 	let {
 		options,
-		value = $bindable(),
+		value = $bindable(null),
 		placeholder = 'Search…',
-		groups = []
+		groups = [],
+		resetOnSelect = false,
+		onchange
 	}: {
 		options: Option[];
-		value: number | null;
+		value?: number | null;
 		placeholder?: string;
 		groups?: { key: string; label: string }[];
+		resetOnSelect?: boolean;
+		onchange?: (id: number) => void;
 	} = $props();
 
 	let query = $state('');
@@ -44,8 +53,10 @@
 
 	function choose(o: Option) {
 		value = o.id;
+		onchange?.(o.id);
 		query = '';
 		open = false;
+		if (resetOnSelect) value = null;
 	}
 	function clear() {
 		value = null;

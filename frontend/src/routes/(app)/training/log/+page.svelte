@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import {
 		trainingApi,
+		EXERCISE_CATEGORIES,
 		type Exercise,
 		type LoggedExercise,
 		type LoggedSet,
@@ -13,6 +14,7 @@
 	import { estimated1rm, formatClock, formatDuration, formatHM, platesPerSide } from '$lib/training/calc';
 	import ExerciseCreateModal from '$lib/training/ExerciseCreateModal.svelte';
 	import StepperInput from '$lib/training/StepperInput.svelte';
+	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import { notificationsApi } from '$lib/notifications/api';
 
 	let session = $state<WorkoutSession | null>(null);
@@ -21,25 +23,36 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let showExerciseModal = $state(false);
-	let showPlatesFor = $state<number | null>(null);
+	let platesForSet = $state<number | null>(null);
+	let replaceFor = $state<number | null>(null);
 
 	const activeProgram = $derived(programs.find((p) => p.is_active) ?? null);
+	const exOptions = $derived(
+		exercises.map((ex) => ({ id: ex.id, label: ex.name, group: ex.category }))
+	);
 
 	interface Draft {
 		weight: string;
 		reps: string;
+		set_type: string;
 	}
 	let pendingDraft = $state<Record<number, Draft>>({});
-	let exDraft = $state<Record<number, Draft & { set_type: string }>>({});
 
 	const SET_TYPES = ['working', 'warmup', 'drop', 'top_set', 'backoff', 'amrap', 'failure'];
-	const NEW_EXERCISE = '__new__';
 
+	// Seed an editable draft for each not-yet-logged set, pre-filled from the set
+	// itself (a planned target weight carries over; an added set copies the
+	// previous set's weight + type).
 	$effect(() => {
 		for (const le of session?.logged_exercises ?? []) {
-			if (!exDraft[le.id]) exDraft[le.id] = { weight: '', reps: '', set_type: 'working' };
 			for (const s of le.sets) {
-				if (!s.is_completed && !pendingDraft[s.id]) pendingDraft[s.id] = { weight: '', reps: '' };
+				if (!s.is_completed && !pendingDraft[s.id]) {
+					pendingDraft[s.id] = {
+						weight: s.weight ?? '',
+						reps: s.reps != null ? String(s.reps) : '',
+						set_type: s.set_type
+					};
+				}
 			}
 		}
 	});
@@ -85,11 +98,6 @@
 		session = await trainingApi.startFromDay(dayId);
 	}
 
-	function restForExercise(le: LoggedExercise): number {
-		const withRest = le.sets.filter((s) => s.rest_seconds != null);
-		return withRest.length ? (withRest[withRest.length - 1].rest_seconds as number) : 90;
-	}
-
 	// Start the rest countdown + schedule a backend "Rest over" notification (so it
 	// fires even if the phone is locked). Ending the rest cancels the pending one.
 	function startRest(seconds: number) {
@@ -105,6 +113,7 @@
 		const d = pendingDraft[s.id];
 		if (!d) return;
 		await trainingApi.updateLoggedSet(s.id, {
+			set_type: d.set_type,
 			reps: d.reps === '' ? null : Number(d.reps),
 			weight: d.weight === '' ? null : String(Number(d.weight)),
 			is_completed: true
@@ -113,18 +122,19 @@
 		await refresh();
 	}
 
-	async function logNew(le: LoggedExercise) {
-		const d = exDraft[le.id];
-		if (!d) return;
+	// "+ Add set" — append another editable row, defaulting to the previous set's
+	// type + weight ("one more like the last"). is_completed:false so it renders
+	// as a pending row (the model defaults new sets to completed).
+	async function addSet(le: LoggedExercise) {
+		const last = le.sets[le.sets.length - 1];
 		await trainingApi.createLoggedSet({
 			logged_exercise: le.id,
 			order: le.sets.length,
-			set_type: d.set_type,
-			weight: d.weight === '' ? null : String(Number(d.weight)),
-			reps: d.reps === '' ? null : Number(d.reps)
+			set_type: last?.set_type ?? 'working',
+			weight: last?.weight ?? null,
+			reps: null,
+			is_completed: false
 		});
-		d.reps = '';
-		startRest(restForExercise(le));
 		await refresh();
 	}
 
@@ -142,13 +152,16 @@
 		});
 		await refresh();
 	}
-	function onPick(value: string) {
-		if (value === NEW_EXERCISE) showExerciseModal = true;
-		else if (value) addExercise(Number(value));
-	}
 	async function onExerciseCreated(ex: Exercise) {
 		exercises = [...exercises, ex].sort((a, b) => a.name.localeCompare(b.name));
 		await addExercise(ex.id);
+	}
+	// Swap an exercise mid-workout (e.g. the machine is taken) — keeps the same
+	// sets and set types attached to the logged exercise.
+	async function replaceExercise(leId: number, exerciseId: number) {
+		await trainingApi.updateLoggedExercise(leId, { exercise: exerciseId });
+		replaceFor = null;
+		await refresh();
 	}
 	async function removeExercise(id: number) {
 		await trainingApi.deleteLoggedExercise(id);
@@ -180,19 +193,17 @@
 		endRest();
 	}
 
-	function liveE1rm(leId: number): number | null {
-		const d = exDraft[leId];
+	function pendingE1rm(setId: number): number | null {
+		const d = pendingDraft[setId];
 		if (!d) return null;
 		return estimated1rm(d.weight === '' ? null : Number(d.weight), d.reps === '' ? null : Number(d.reps));
 	}
 	const plateResult = $derived.by(() => {
-		if (showPlatesFor == null) return null;
-		const d = exDraft[showPlatesFor];
+		if (platesForSet == null) return null;
+		const d = pendingDraft[platesForSet];
 		if (!d || d.weight === '') return null;
 		return platesPerSide(Number(d.weight));
 	});
-
-	const fieldClass = 'rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100';
 </script>
 
 <ExerciseCreateModal bind:open={showExerciseModal} oncreated={onExerciseCreated} />
@@ -269,10 +280,24 @@
 						<div class="flex items-center gap-3 text-xs text-neutral-500">
 							<button class="text-base hover:text-white disabled:opacity-30" aria-label="Move up" disabled={ei === 0} onclick={() => moveExercise(ei, -1)}>↑</button>
 							<button class="text-base hover:text-white disabled:opacity-30" aria-label="Move down" disabled={ei === session.logged_exercises.length - 1} onclick={() => moveExercise(ei, 1)}>↓</button>
+							<button class="hover:text-white {replaceFor === le.id ? 'text-white' : ''}" onclick={() => (replaceFor = replaceFor === le.id ? null : le.id)}>Replace</button>
 							<button class="text-red-400 hover:text-red-300" onclick={() => removeExercise(le.id)}>Remove</button>
 						</div>
 					{/if}
 				</div>
+
+				{#if !session.is_completed && replaceFor === le.id}
+					<div class="mt-2 rounded-md border border-neutral-800 bg-neutral-900/50 p-2">
+						<SearchSelect
+							options={exOptions}
+							groups={EXERCISE_CATEGORIES}
+							placeholder="Replace with…"
+							resetOnSelect
+							onchange={(id) => replaceExercise(le.id, id)}
+						/>
+						<p class="mt-1 text-xs text-neutral-500">Swaps the exercise, keeping these sets and their types.</p>
+					</div>
+				{/if}
 
 				{#if le.sets.length > 0}
 					<div class="mt-3 space-y-2">
@@ -290,69 +315,64 @@
 								</div>
 							{:else if !session.is_completed && pendingDraft[s.id]}
 								<div data-testid="set-pending" class="rounded-md border border-neutral-800 p-3">
-									<div class="text-xs text-neutral-400">Set {i + 1} · {s.set_type}</div>
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-neutral-500">Set {i + 1}</span>
+										<select bind:value={pendingDraft[s.id].set_type} aria-label="Set type" class="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-xs text-neutral-100">
+											{#each SET_TYPES as t (t)}<option value={t}>{t}</option>{/each}
+										</select>
+										<button class="ml-auto text-xs text-neutral-500 hover:text-neutral-300" onclick={() => (platesForSet = platesForSet === s.id ? null : s.id)}>Plates</button>
+										<button class="text-neutral-600 hover:text-red-400" aria-label="Remove set" onclick={() => deleteSet(s.id)}>✕</button>
+									</div>
 									<div class="mt-2 grid grid-cols-2 gap-2">
 										<StepperInput label="Weight" step={2.5} bind:value={pendingDraft[s.id].weight} placeholder="kg" />
 										<StepperInput label="Reps" step={1} inputmode="numeric" bind:value={pendingDraft[s.id].reps} placeholder="reps" />
 									</div>
-									<div class="mt-2">
-										<button class="w-full rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logPending(s)}>Log</button>
-									</div>
+									<button class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logPending(s)}>Log</button>
+									{#if pendingE1rm(s.id) !== null}
+										<p class="mt-1 text-xs text-neutral-500">Est. 1RM: {pendingE1rm(s.id)} kg</p>
+									{/if}
+									{#if platesForSet === s.id && plateResult}
+										<p class="mt-1 text-xs text-neutral-400">
+											Per side (20 kg bar): {plateResult.perSide.length ? plateResult.perSide.join(' + ') + ' kg' : 'just the bar'}
+											{#if plateResult.remainder > 0}· {plateResult.remainder} kg not loadable{/if}
+										</p>
+									{/if}
 								</div>
 							{/if}
 						{/each}
 					</div>
 				{/if}
 
-				{#if !session.is_completed && exDraft[le.id]}
-					<!-- Add an extra / freeform set -->
-					<div class="mt-3 space-y-2 border-t border-neutral-800 pt-3">
-						<div class="flex gap-2">
-							<label class="flex flex-1 flex-col text-xs text-neutral-500">Type
-								<select bind:value={exDraft[le.id].set_type} class="mt-1 {fieldClass}">
-									{#each SET_TYPES as t (t)}<option value={t}>{t}</option>{/each}
-								</select>
-							</label>
-						</div>
-						<div class="grid grid-cols-2 gap-2">
-							<StepperInput label="Weight" step={2.5} bind:value={exDraft[le.id].weight} placeholder="kg" />
-							<StepperInput label="Reps" step={1} inputmode="numeric" bind:value={exDraft[le.id].reps} placeholder="reps" />
-						</div>
-						<div class="flex gap-2">
-							<button class="flex-1 rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logNew(le)}>Log set</button>
-							<button class="rounded-md border border-neutral-700 px-3 py-2.5 text-sm hover:border-neutral-500" onclick={() => (showPlatesFor = showPlatesFor === le.id ? null : le.id)}>Plates</button>
-						</div>
-						{#if liveE1rm(le.id) !== null}
-							<p class="text-xs text-neutral-500">Estimated 1RM for this set: {liveE1rm(le.id)} kg</p>
-						{/if}
-						{#if showPlatesFor === le.id && plateResult}
-							<p class="text-xs text-neutral-400">
-								Per side (20 kg bar): {plateResult.perSide.length ? plateResult.perSide.join(' + ') + ' kg' : 'just the bar'}
-								{#if plateResult.remainder > 0}· {plateResult.remainder} kg not loadable{/if}
-							</p>
-						{/if}
-					</div>
+				{#if !session.is_completed}
+					<button
+						class="mt-3 w-full rounded-md border border-dashed border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-neutral-500 hover:text-white"
+						onclick={() => addSet(le)}
+					>
+						+ Add set
+					</button>
 				{/if}
 			</div>
 		{/each}
 	</div>
 
 	{#if !session.is_completed}
-		<div class="mt-5">
-			<select
-				value=""
-				onchange={(e) => {
-					onPick(e.currentTarget.value);
-					e.currentTarget.value = '';
-				}}
-				class="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-100"
+		<div class="mt-5 flex items-center gap-2">
+			<div class="flex-1">
+				<SearchSelect
+					options={exOptions}
+					groups={EXERCISE_CATEGORIES}
+					placeholder="+ Add exercise to workout…"
+					resetOnSelect
+					onchange={(id) => addExercise(id)}
+				/>
+			</div>
+			<button
+				type="button"
+				class="shrink-0 rounded-md border border-neutral-700 px-3 py-2.5 text-sm text-indigo-300 hover:border-neutral-500"
+				onclick={() => (showExerciseModal = true)}
 			>
-				<option value="">+ Add exercise to workout…</option>
-				<option value={NEW_EXERCISE}>＋ New custom exercise…</option>
-				{#each exercises as ex (ex.id)}
-					<option value={ex.id}>{ex.name}</option>
-				{/each}
-			</select>
+				＋ New
+			</button>
 		</div>
 
 		<!-- Primary action lives at the bottom so it's reachable right after the last set. -->
