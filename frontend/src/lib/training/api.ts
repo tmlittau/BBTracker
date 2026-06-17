@@ -130,6 +130,21 @@ export interface MuscleVolume {
 	tonnage: string;
 }
 
+export interface BestSet {
+	weight: string | null;
+	reps: number | null;
+	e1rm: string | null;
+	date: string;
+}
+export interface LastSession {
+	date: string;
+	sets: { set_type: string; weight: string | null; reps: number | null }[];
+}
+export interface ExercisePerformance {
+	best: BestSet | null;
+	last: LastSession | null;
+}
+
 interface Paginated<T> {
 	count: number;
 	results: T[];
@@ -169,6 +184,8 @@ export const trainingApi = {
 	deleteExercise: (id: number) => req<void>('DELETE', `/exercises/${id}/`),
 	exerciseHistory: (id: number) =>
 		req<ExerciseHistoryPoint[]>('GET', `/exercises/${id}/history/`),
+	lastPerformance: (id: number) =>
+		req<ExercisePerformance>('GET', `/exercises/${id}/last_performance/`),
 
 	programs: () => req<Paginated<Program>>('GET', '/programs/').then(list),
 	program: (id: number) => req<Program>('GET', `/programs/${id}/`),

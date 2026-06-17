@@ -154,3 +154,10 @@ class MuscleVolumeSerializer(serializers.Serializer):
     muscle = serializers.CharField()
     sets = serializers.IntegerField()
     tonnage = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class ExercisePerformanceSerializer(serializers.Serializer):
+    """At-a-glance logger stats: best (heaviest) set + last finished session's sets."""
+
+    best = serializers.DictField(allow_null=True)
+    last = serializers.DictField(allow_null=True)

@@ -1841,6 +1841,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/training/exercises/{id}/last_performance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Best-ever set + last finished session's sets — for the live logger's
+         *     at-a-glance stats and next-workout pre-fill.
+         */
+        get: operations["v1_training_exercises_last_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/training/logged-exercises/": {
         parameters: {
             query?: never;
@@ -2832,6 +2852,15 @@ export interface components {
             top_weight: string | null;
             /** Format: decimal */
             volume: string;
+        };
+        /** @description At-a-glance logger stats: best (heaviest) set + last finished session's sets. */
+        ExercisePerformance: {
+            best: {
+                [key: string]: unknown;
+            } | null;
+            last: {
+                [key: string]: unknown;
+            } | null;
         };
         ExerciseRequest: {
             name: string;
@@ -8732,6 +8761,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExerciseHistoryPoint"][];
+                };
+            };
+        };
+    };
+    v1_training_exercises_last_performance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExercisePerformance"];
                 };
             };
         };
