@@ -23,6 +23,7 @@ from .models import (
 )
 from .serializers import (
     ExerciseHistoryPointSerializer,
+    ExercisePerformanceSerializer,
     ExerciseSerializer,
     ExerciseSlotSerializer,
     LoggedExerciseSerializer,
@@ -35,7 +36,7 @@ from .serializers import (
     WorkoutSessionListSerializer,
     WorkoutSessionSerializer,
 )
-from .services import exercise_history, weekly_muscle_volume
+from .services import exercise_history, last_performance, weekly_muscle_volume
 
 
 @extend_schema(tags=["training"])
@@ -92,6 +93,14 @@ class ExerciseViewSet(viewsets.ModelViewSet):
         exercise = self.get_object()
         data = exercise_history(request.user, exercise)
         return Response(ExerciseHistoryPointSerializer(data, many=True).data)
+
+    @extend_schema(responses=ExercisePerformanceSerializer)
+    @action(detail=True, methods=["get"], url_path="last_performance")
+    def performance(self, request, pk=None):
+        """Best-ever set + last finished session's sets — for the live logger's
+        at-a-glance stats and next-workout pre-fill."""
+        exercise = self.get_object()
+        return Response(last_performance(request.user, exercise))
 
 
 @extend_schema(tags=["training"])

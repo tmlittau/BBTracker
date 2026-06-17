@@ -146,6 +146,63 @@ def exercise_history(owner, exercise):
     return history
 
 
+def last_performance(owner, exercise):
+    """At-a-glance stats for the live logger: the all-time best (heaviest) set for
+    an exercise — with its reps + e1RM — and the sets from the most recent
+    *finished* session, used to pre-fill the next workout."""
+    from .models import LoggedExercise, LoggedSet
+
+    best_set = (
+        LoggedSet.objects.filter(
+            logged_exercise__session__owner=owner,
+            logged_exercise__exercise=exercise,
+            is_completed=True,
+            weight__isnull=False,
+        )
+        .select_related("logged_exercise__session")
+        .order_by("-weight", "-reps")
+        .first()
+    )
+    best = None
+    if best_set:
+        # Stringify decimals so they match the rest of the API (DecimalField →
+        # string); a raw dict through DictField would otherwise emit JSON numbers.
+        best = {
+            "weight": str(best_set.weight),
+            "reps": best_set.reps,
+            "e1rm": str(best_set.e1rm) if best_set.e1rm is not None else None,
+            "date": best_set.logged_exercise.session.started_at.date().isoformat(),
+        }
+
+    # Most recent *finished* session that logged this exercise (excludes the
+    # current in-progress one), so the next workout pre-fills from last time.
+    last_le = (
+        LoggedExercise.objects.filter(
+            session__owner=owner,
+            exercise=exercise,
+            session__ended_at__isnull=False,
+            sets__is_completed=True,
+        )
+        .select_related("session")
+        .order_by("-session__started_at")
+        .distinct()
+        .first()
+    )
+    last = None
+    if last_le:
+        sets = [
+            {
+                "set_type": s.set_type,
+                "weight": str(s.weight) if s.weight is not None else None,
+                "reps": s.reps,
+            }
+            for s in last_le.sets.filter(is_completed=True).order_by("order")
+        ]
+        if sets:
+            last = {"date": last_le.session.started_at.date().isoformat(), "sets": sets}
+    return {"best": best, "last": last}
+
+
 def weekly_muscle_volume(owner, since=None):
     """Working-set counts and tonnage grouped by muscle since a given datetime.
 

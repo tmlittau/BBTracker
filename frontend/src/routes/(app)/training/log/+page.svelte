@@ -4,6 +4,7 @@
 		trainingApi,
 		EXERCISE_CATEGORIES,
 		type Exercise,
+		type ExercisePerformance,
 		type LoggedExercise,
 		type LoggedSet,
 		type Program,
@@ -54,6 +55,44 @@
 					};
 				}
 			}
+		}
+	});
+
+	// Per-exercise best-ever + last-time stats, for the at-a-glance line and to
+	// pre-fill the next workout. Loaded lazily for whatever exercises are in the
+	// session; a failure degrades to no stats (and no pre-fill).
+	let perf = $state<Record<number, ExercisePerformance>>({});
+	async function ensurePerf(ids: number[]) {
+		const missing = [...new Set(ids)].filter((id) => !(id in perf));
+		if (!missing.length) return;
+		const results = await Promise.all(
+			missing.map((id) =>
+				trainingApi
+					.lastPerformance(id)
+					.catch(() => ({ best: null, last: null }) as ExercisePerformance)
+			)
+		);
+		missing.forEach((id, i) => (perf[id] = results[i]));
+	}
+	$effect(() => {
+		ensurePerf((session?.logged_exercises ?? []).map((le) => le.exercise));
+	});
+
+	// Pre-fill an untouched pending set from the matching set (by position) last
+	// time — never clobbers what you've already typed or a planned weight.
+	$effect(() => {
+		for (const le of session?.logged_exercises ?? []) {
+			const lastSets = perf[le.exercise]?.last?.sets;
+			if (!lastSets) continue;
+			le.sets.forEach((s, i) => {
+				if (s.is_completed) return;
+				const d = pendingDraft[s.id];
+				const prior = lastSets[i];
+				if (d && prior && s.weight == null && d.weight === '' && d.reps === '') {
+					if (prior.weight != null) d.weight = prior.weight;
+					if (prior.reps != null) d.reps = String(prior.reps);
+				}
+			});
 		}
 	});
 
@@ -193,6 +232,24 @@
 		endRest();
 	}
 
+	// Abort = delete the session (cascades its exercises + sets) — no trace left.
+	async function abortWorkout() {
+		if (!session) return;
+		if (!confirm('Discard this workout? It will be deleted with all its sets — this cannot be undone.'))
+			return;
+		try {
+			await trainingApi.deleteSession(session.id);
+			endRest();
+			session = null;
+			pendingDraft = {};
+			perf = {};
+			replaceFor = null;
+			platesForSet = null;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	function pendingE1rm(setId: number): number | null {
 		const d = pendingDraft[setId];
 		if (!d) return null;
@@ -273,11 +330,17 @@
 
 	<div class="mt-5 space-y-5">
 		{#each session.logged_exercises as le, ei (le.id)}
+			{@const best = perf[le.exercise]?.best}
 			<div class="rounded-lg border border-neutral-800 p-3 sm:p-4">
-				<div class="flex items-center justify-between gap-2">
-					<h2 class="font-medium">{le.exercise_name}</h2>
+				<div class="flex items-start justify-between gap-2">
+					<div>
+						<h2 class="font-medium">{le.exercise_name}</h2>
+						{#if best}
+							<p class="text-xs text-neutral-500">PR {best.weight} kg × {best.reps}{#if best.e1rm} · e1RM {best.e1rm}{/if}</p>
+						{/if}
+					</div>
 					{#if !session.is_completed}
-						<div class="flex items-center gap-3 text-xs text-neutral-500">
+						<div class="flex shrink-0 items-center gap-3 text-xs text-neutral-500">
 							<button class="text-base hover:text-white disabled:opacity-30" aria-label="Move up" disabled={ei === 0} onclick={() => moveExercise(ei, -1)}>↑</button>
 							<button class="text-base hover:text-white disabled:opacity-30" aria-label="Move down" disabled={ei === session.logged_exercises.length - 1} onclick={() => moveExercise(ei, 1)}>↓</button>
 							<button class="hover:text-white {replaceFor === le.id ? 'text-white' : ''}" onclick={() => (replaceFor = replaceFor === le.id ? null : le.id)}>Replace</button>
@@ -382,6 +445,14 @@
 				onclick={finish}
 			>
 				Finish workout
+			</button>
+		</div>
+		<div class="mt-3">
+			<button
+				class="w-full rounded-md border border-red-900/60 px-4 py-2.5 text-sm text-red-400 hover:bg-red-950/40"
+				onclick={abortWorkout}
+			>
+				Cancel workout
 			</button>
 		</div>
 	{/if}

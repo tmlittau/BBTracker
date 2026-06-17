@@ -136,6 +136,45 @@ def test_global_exercise_delete_blocked_when_used(api, bench):
     assert Exercise.objects.filter(id=bench.id).exists()
 
 
+def test_last_performance_best_and_last(api, bench):
+    started = timezone.now().isoformat()
+    sid = api.post(
+        "/api/v1/training/workout-sessions/", {"name": "Push", "started_at": started}, format="json"
+    ).json()["id"]
+    leid = api.post(
+        "/api/v1/training/logged-exercises/",
+        {"session": sid, "exercise": bench.id, "order": 0},
+        format="json",
+    ).json()["id"]
+    api.post(
+        "/api/v1/training/logged-sets/",
+        {"logged_exercise": leid, "order": 0, "set_type": "working", "reps": 5, "weight": "100.00"},
+        format="json",
+    )
+    api.post(
+        "/api/v1/training/logged-sets/",
+        {"logged_exercise": leid, "order": 1, "set_type": "top_set", "reps": 3, "weight": "110.00"},
+        format="json",
+    )
+    api.post(
+        f"/api/v1/training/workout-sessions/{sid}/finish/",
+        {"drop_incomplete": False},
+        format="json",
+    )
+
+    data = api.get(f"/api/v1/training/exercises/{bench.id}/last_performance/").json()
+    assert data["best"]["weight"] == "110.00"  # heaviest set
+    assert data["best"]["reps"] == 3
+    assert len(data["last"]["sets"]) == 2  # last finished session's sets, in order
+    assert data["last"]["sets"][0]["weight"] == "100.00"
+    assert data["last"]["sets"][1]["set_type"] == "top_set"
+
+
+def test_last_performance_empty(api, bench):
+    data = api.get(f"/api/v1/training/exercises/{bench.id}/last_performance/").json()
+    assert data == {"best": None, "last": None}
+
+
 def test_program_owner_isolation(api, user, other):
     mine = Program.objects.create(owner=user, name="PPL")
     theirs = Program.objects.create(owner=other, name="Theirs")

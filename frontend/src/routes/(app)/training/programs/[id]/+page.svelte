@@ -42,6 +42,8 @@
 
 	async function load() {
 		program = await trainingApi.program(programId);
+		// Days start collapsed by default; preserve the user's toggles across reloads.
+		for (const d of program.days) if (!(d.id in collapsed)) collapsed[d.id] = true;
 	}
 
 	onMount(async () => {
@@ -57,9 +59,10 @@
 	async function addDay(e: SubmitEvent) {
 		e.preventDefault();
 		if (!newDayName.trim() || !program) return;
-		await trainingApi.createDay({ program: programId, name: newDayName.trim(), order: program.days.length });
+		const day = await trainingApi.createDay({ program: programId, name: newDayName.trim(), order: program.days.length });
 		newDayName = '';
 		await load();
+		collapsed[day.id] = false; // a just-added day opens so you can fill it
 	}
 
 	async function removeDay(id: number) {
