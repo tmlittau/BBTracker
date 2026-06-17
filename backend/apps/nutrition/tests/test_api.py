@@ -90,13 +90,28 @@ def test_create_custom_food_with_nested(api, user, nutrients):
     assert food.food_nutrients.count() == 2
 
 
-def test_cannot_edit_global_food(api, chicken):
+def test_global_food_is_editable(api, chicken):
+    # Single-user app: seeded foods can be edited too.
     resp = api.patch(
-        f"/api/v1/nutrition/foods/{chicken.id}/", {"name": "Hacked"}, format="json"
+        f"/api/v1/nutrition/foods/{chicken.id}/", {"name": "Chicken thigh"}, format="json"
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200, resp.content
     chicken.refresh_from_db()
-    assert chicken.name == "Chicken breast"
+    assert chicken.name == "Chicken thigh"
+
+
+def test_global_food_delete_blocked_when_logged(api, chicken):
+    spare = Food.objects.create(name="Spare Global", owner=None)  # unused → deletable
+    assert api.delete(f"/api/v1/nutrition/foods/{spare.id}/").status_code == 204
+    api.post(
+        "/api/v1/nutrition/diary-entries/",
+        {"date": "2026-05-30", "food": chicken.id, "quantity": "150"},
+        format="json",
+    )
+    resp = api.delete(f"/api/v1/nutrition/foods/{chicken.id}/")
+    assert resp.status_code == 400
+    assert "used" in str(resp.json()).lower()
+    assert Food.objects.filter(id=chicken.id).exists()
 
 
 def test_log_diary_entry_resolves_grams(api, chicken):

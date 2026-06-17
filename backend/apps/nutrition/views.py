@@ -1,6 +1,6 @@
 from datetime import date as date_cls
 
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -81,17 +81,16 @@ class FoodViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user, source="custom")
 
-    def _ensure_owned(self, instance):
-        if instance.owner_id != self.request.user.id:
-            raise PermissionDenied("You can only modify your own foods.")
-
-    def perform_update(self, serializer):
-        self._ensure_owned(serializer.instance)
-        serializer.save()
-
     def perform_destroy(self, instance):
-        self._ensure_owned(instance)
-        instance.delete()
+        # Single-user app: seeded foods are deletable too, but block (clearly)
+        # when the food is still referenced by a diary entry or recipe.
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ValidationError(
+                "Can't delete — this food is still used in your diary or a recipe. "
+                "Remove those entries first."
+            ) from None
 
     @extend_schema(
         request=BarcodeImportSerializer,

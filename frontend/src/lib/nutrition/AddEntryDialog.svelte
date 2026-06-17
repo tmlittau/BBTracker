@@ -7,20 +7,31 @@
 		food,
 		meal,
 		onconfirm,
-		oncancel
+		oncancel,
+		mode = 'add',
+		initialServing = undefined,
+		initialQuantity = '1'
 	}: {
 		food: Food;
 		meal: string;
 		onconfirm: (data: { serving: number | null; quantity: string }) => void;
 		oncancel: () => void;
+		mode?: 'add' | 'edit';
+		initialServing?: number | null;
+		initialQuantity?: string;
 	} = $props();
 
 	// Mounted only while a food is pending, so it opens immediately.
 	let open = $state(true);
 
-	const defaultServing = $derived(food.servings.find((s) => s.is_default) ?? food.servings[0]);
-	let servingId = $state<number | null>(defaultServing ? defaultServing.id : null);
-	let quantity = $state('1');
+	// `food` is fixed for this dialog's lifetime (remounted per pending food), so a
+	// plain const is fine here.
+	const defaultServing = food.servings.find((s) => s.is_default) ?? food.servings[0];
+	// In edit mode seed from the existing entry (initialServing may be null = grams).
+	let servingId = $state<number | null>(
+		initialServing !== undefined ? initialServing : (defaultServing ? defaultServing.id : null)
+	);
+	let quantity = $state(initialQuantity);
 
 	// Resolve grams for the live preview: quantity × serving grams, or quantity as grams.
 	const grams = $derived.by(() => {
@@ -44,7 +55,7 @@
 
 <Modal bind:open title={food.name} size="sm" onclose={oncancel}>
 	{#if food.brand}<p class="-mt-2 text-sm text-neutral-500">{food.brand}</p>{/if}
-	<p class="mt-1 text-xs text-neutral-500">Adding to {meal}</p>
+	<p class="mt-1 text-xs text-neutral-500">{mode === 'edit' ? 'Editing in' : 'Adding to'} {meal}</p>
 
 	<div class="mt-4 flex gap-2">
 		<label class="flex flex-1 flex-col text-xs text-neutral-500">
@@ -90,7 +101,7 @@
 			class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
 			onclick={add}
 		>
-			Add
+			{mode === 'edit' ? 'Save' : 'Add'}
 		</button>
 	</div>
 </Modal>

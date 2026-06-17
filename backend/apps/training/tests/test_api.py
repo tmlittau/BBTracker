@@ -108,13 +108,32 @@ def test_custom_exercise_is_owned(api, user):
     assert Exercise.objects.get(name="My Curl").owner == user
 
 
-def test_cannot_edit_global_exercise(api, bench):
+def test_global_exercise_is_editable(api, bench):
+    # Single-user app: seeded exercises can be edited too.
     resp = api.patch(
-        f"/api/v1/training/exercises/{bench.id}/", {"name": "Hacked"}, format="json"
+        f"/api/v1/training/exercises/{bench.id}/", {"name": "Flat Bench Press"}, format="json"
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200, resp.content
     bench.refresh_from_db()
-    assert bench.name == "Bench Press"
+    assert bench.name == "Flat Bench Press"
+
+
+def test_global_exercise_delete_blocked_when_used(api, bench):
+    spare = Exercise.objects.create(name="Spare Global")  # unused → deletable
+    assert api.delete(f"/api/v1/training/exercises/{spare.id}/").status_code == 204
+    started = timezone.now().isoformat()
+    sid = api.post(
+        "/api/v1/training/workout-sessions/", {"name": "P", "started_at": started}, format="json"
+    ).json()["id"]
+    api.post(
+        "/api/v1/training/logged-exercises/",
+        {"session": sid, "exercise": bench.id, "order": 0},
+        format="json",
+    )
+    resp = api.delete(f"/api/v1/training/exercises/{bench.id}/")
+    assert resp.status_code == 400
+    assert "used" in str(resp.json()).lower()
+    assert Exercise.objects.filter(id=bench.id).exists()
 
 
 def test_program_owner_isolation(api, user, other):

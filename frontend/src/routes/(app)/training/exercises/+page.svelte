@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { trainingApi, type Exercise, type Muscle } from '$lib/training/api';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
@@ -94,7 +95,7 @@
 			await trainingApi.deleteExercise(ex.id);
 			await load();
 		} catch (err) {
-			error = (err as Error).message;
+			error = apiErrorMessage(err);
 		}
 	}
 </script>
@@ -166,12 +167,10 @@
 							: ''}
 					</div>
 				</div>
-				{#if !ex.is_global}
-					<div class="flex shrink-0 items-center gap-3 text-xs">
-						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(ex)}>Edit</button>
-						<button class="text-red-400 hover:text-red-300" onclick={() => remove(ex)}>Delete</button>
-					</div>
-				{/if}
+				<div class="flex shrink-0 items-center gap-3 text-xs">
+					<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(ex)}>Edit</button>
+					<button class="text-red-400 hover:text-red-300" onclick={() => remove(ex)}>Delete</button>
+				</div>
 			</li>
 		{/each}
 	</ul>
