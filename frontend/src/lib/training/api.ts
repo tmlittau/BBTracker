@@ -159,9 +159,10 @@ const list = <T>(p: Paginated<T> | T[]): T[] => (Array.isArray(p) ? p : p.result
 export const trainingApi = {
 	muscles: () => req<Muscle[] | Paginated<Muscle>>('GET', '/muscles/').then(list),
 	exercises: (q = '') =>
-		req<Paginated<Exercise>>('GET', `/exercises/${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(
-			list
-		),
+		req<Paginated<Exercise> | Exercise[]>(
+			'GET',
+			`/exercises/${q ? `?q=${encodeURIComponent(q)}` : ''}`
+		).then(list),
 	createExercise: (data: Partial<Exercise>) => req<Exercise>('POST', '/exercises/', data),
 	updateExercise: (id: number, data: Partial<Exercise>) =>
 		req<Exercise>('PATCH', `/exercises/${id}/`, data),
@@ -212,6 +213,10 @@ export const trainingApi = {
 
 	createLoggedExercise: (data: { session: number; exercise: number; order: number }) =>
 		req<LoggedExercise>('POST', '/logged-exercises/', data),
+	updateLoggedExercise: (
+		id: number,
+		data: Partial<Pick<LoggedExercise, 'exercise' | 'order' | 'notes'>>
+	) => req<LoggedExercise>('PATCH', `/logged-exercises/${id}/`, data),
 	deleteLoggedExercise: (id: number) => req<void>('DELETE', `/logged-exercises/${id}/`),
 	reorderLoggedExercises: (order: { id: number; order: number }[]) =>
 		req<{ updated: number }>('POST', '/logged-exercises/reorder/', order),
@@ -223,3 +228,19 @@ export const trainingApi = {
 
 	volume: (days = 7) => req<MuscleVolume[]>('GET', `/volume/?days=${days}`)
 };
+
+// Equipment categories (mirror backend ExerciseCategory) — used for the
+// type-filter chips in the exercise picker.
+export const EXERCISE_CATEGORIES = [
+	{ key: 'barbell', label: 'Barbell' },
+	{ key: 'dumbbell', label: 'Dumbbell' },
+	{ key: 'machine', label: 'Machine' },
+	{ key: 'cable', label: 'Cable' },
+	{ key: 'bodyweight', label: 'Bodyweight' },
+	{ key: 'smith', label: 'Smith' },
+	{ key: 'kettlebell', label: 'Kettlebell' },
+	{ key: 'banded', label: 'Band' },
+	{ key: 'other', label: 'Other' }
+];
+export const exerciseCategoryLabel = (k: string) =>
+	EXERCISE_CATEGORIES.find((c) => c.key === k)?.label ?? k;

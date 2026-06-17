@@ -4,6 +4,7 @@
 	import { dndzone } from 'svelte-dnd-action';
 	import {
 		trainingApi,
+		EXERCISE_CATEGORIES,
 		type Exercise,
 		type ExerciseSlot,
 		type PlannedSet,
@@ -11,6 +12,7 @@
 		type TrainingDay
 	} from '$lib/training/api';
 	import ExerciseCreateModal from '$lib/training/ExerciseCreateModal.svelte';
+	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -32,7 +34,11 @@
 	const SET_TYPES = [
 		'working', 'warmup', 'top_set', 'backoff', 'drop', 'amrap', 'failure', 'rest_pause', 'myo_rep', 'cluster'
 	];
-	const NEW_EXERCISE = '__new__';
+
+	// Options for the searchable exercise picker (label + equipment-category chip).
+	const exOptions = $derived(
+		exercises.map((ex) => ({ id: ex.id, label: ex.name, group: ex.category }))
+	);
 
 	async function load() {
 		program = await trainingApi.program(programId);
@@ -72,15 +78,6 @@
 			});
 		}
 		await load();
-	}
-
-	function onExercisePick(day: TrainingDay, value: string) {
-		if (value === NEW_EXERCISE) {
-			pendingDayId = day.id;
-			showExerciseModal = true;
-		} else if (value) {
-			addSlot(day, Number(value));
-		}
 	}
 
 	async function onExerciseCreated(ex: Exercise) {
@@ -266,21 +263,26 @@
 						</div>
 					{/if}
 
-					<div class="mt-3">
-						<select
-							value=""
-							onchange={(e) => {
-								onExercisePick(day, e.currentTarget.value);
-								e.currentTarget.value = '';
+					<div class="mt-3 flex items-center gap-2">
+						<div class="flex-1">
+							<SearchSelect
+								options={exOptions}
+								groups={EXERCISE_CATEGORIES}
+								placeholder="+ Add exercise…"
+								resetOnSelect
+								onchange={(id) => addSlot(day, id)}
+							/>
+						</div>
+						<button
+							type="button"
+							class="shrink-0 rounded-md border border-neutral-700 px-3 py-2 text-sm text-indigo-300 hover:border-neutral-500"
+							onclick={() => {
+								pendingDayId = day.id;
+								showExerciseModal = true;
 							}}
-							class="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
 						>
-							<option value="">+ Add exercise…</option>
-							<option value={NEW_EXERCISE}>＋ New custom exercise…</option>
-							{#each exercises as ex (ex.id)}
-								<option value={ex.id}>{ex.name}</option>
-							{/each}
-						</select>
+							＋ New
+						</button>
 					</div>
 					{/if}
 				</Card>
