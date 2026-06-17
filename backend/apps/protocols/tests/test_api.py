@@ -51,13 +51,24 @@ def test_requires_auth():
 
 
 def test_global_compound_visible(api, test_e):
-    names = [c["name"] for c in api.get("/api/v1/protocols/compounds/").json()["results"]]
+    names = [c["name"] for c in api.get("/api/v1/protocols/compounds/").json()]
     assert "Testosterone Enanthate" in names
 
 
 def test_compound_search(api, test_e):
-    assert api.get("/api/v1/protocols/compounds/?q=enanth").json()["count"] == 1
-    assert api.get("/api/v1/protocols/compounds/?q=zzz").json()["count"] == 0
+    assert len(api.get("/api/v1/protocols/compounds/?q=enanth").json()) == 1
+    assert len(api.get("/api/v1/protocols/compounds/?q=zzz").json()) == 0
+
+
+def test_compounds_not_paginated(api, user):
+    # Whole reference list is returned (no 50-row page cap), as a bare list, so
+    # the library + protocol-builder picker can filter/search every compound.
+    Compound.objects.bulk_create(
+        [Compound(owner=user, name=f"Custom {i:03d}", compound_class="anabolic") for i in range(55)]
+    )
+    data = api.get("/api/v1/protocols/compounds/").json()
+    assert isinstance(data, list)  # bare list, not {count, results}
+    assert len([c for c in data if c["name"].startswith("Custom ")]) == 55
 
 
 def test_custom_compound_owned(api, user):
@@ -379,7 +390,7 @@ def test_bp_log(api, user):
 def test_compound_owner_isolation(api, other, test_e):
     Compound.objects.create(owner=None, name="Global one")  # visible to all
     Compound.objects.create(owner=other, name="Their custom")  # not visible
-    listed = api.get("/api/v1/protocols/compounds/").json()["results"]
+    listed = api.get("/api/v1/protocols/compounds/").json()
     names = {c["name"] for c in listed}
     assert "Global one" in names
     assert "Their custom" not in names

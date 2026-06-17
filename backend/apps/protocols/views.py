@@ -85,6 +85,10 @@ class CompoundViewSet(GlobalOrOwnedViewSet):
     model = Compound
     serializer_class = CompoundSerializer
     search_fields = ["name", "ester"]
+    # Bounded reference data (global seed + a user's customs) — return the whole
+    # list so the library and the protocol-builder picker can filter/search it
+    # client-side without the 50-row page cap cropping entries.
+    pagination_class = None
 
 
 @extend_schema(tags=["protocols"])
@@ -92,6 +96,7 @@ class SupplementViewSet(GlobalOrOwnedViewSet):
     model = Supplement
     serializer_class = SupplementSerializer
     search_fields = ["name", "brand"]
+    pagination_class = None
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related("supplement_nutrients__nutrient")

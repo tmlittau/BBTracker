@@ -3190,21 +3190,6 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["CheckIn"][];
         };
-        PaginatedCompoundList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["Compound"][];
-        };
         PaginatedDiaryEntryList: {
             /** @example 123 */
             count: number;
@@ -3534,21 +3519,6 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Recipe"][];
-        };
-        PaginatedSupplementList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["Supplement"][];
         };
         PaginatedTrainingDayList: {
             /** @example 123 */
@@ -7387,10 +7357,7 @@ export interface operations {
     };
     v1_protocols_compounds_list: {
         parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -7402,7 +7369,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedCompoundList"];
+                    "application/json": components["schemas"]["Compound"][];
                 };
             };
         };
@@ -8138,10 +8105,7 @@ export interface operations {
     };
     v1_protocols_supplements_list: {
         parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -8153,7 +8117,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedSupplementList"];
+                    "application/json": components["schemas"]["Supplement"][];
                 };
             };
         };

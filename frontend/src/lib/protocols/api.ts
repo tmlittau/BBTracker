@@ -284,16 +284,17 @@ export interface PhaseDoseMatrix {
 
 export const protocolsApi = {
 	compounds: (q = '') =>
-		req<Paginated<Compound>>('GET', `/compounds/${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(
-			list
-		),
+		req<Paginated<Compound> | Compound[]>(
+			'GET',
+			`/compounds/${q ? `?q=${encodeURIComponent(q)}` : ''}`
+		).then(list),
 	createCompound: (data: Partial<Compound>) => req<Compound>('POST', '/compounds/', data),
 	updateCompound: (id: number, data: Partial<Compound>) =>
 		req<Compound>('PATCH', `/compounds/${id}/`, data),
 	deleteCompound: (id: number) => req<void>('DELETE', `/compounds/${id}/`),
 
 	supplements: (q = '') =>
-		req<Paginated<Supplement>>(
+		req<Paginated<Supplement> | Supplement[]>(
 			'GET',
 			`/supplements/${q ? `?q=${encodeURIComponent(q)}` : ''}`
 		).then(list),
@@ -381,6 +382,18 @@ export const protocolsApi = {
 	logBp: (data: { systolic: number; diastolic: number; pulse?: number; measured_at: string }) =>
 		req<BloodPressureLog>('POST', '/bp-logs/', data)
 };
+
+// Compound classes (mirror backend CompoundClass) — used for type filtering in
+// the compound library and the protocol-builder picker.
+export const COMPOUND_CLASSES = [
+	{ key: 'anabolic', label: 'Anabolic' },
+	{ key: 'peptide', label: 'Peptide' },
+	{ key: 'sarm', label: 'SARM' },
+	{ key: 'ancillary', label: 'Ancillary' },
+	{ key: 'other', label: 'Other' }
+];
+export const compoundClassLabel = (k: string) =>
+	COMPOUND_CLASSES.find((c) => c.key === k)?.label ?? k;
 
 export const FREQUENCIES = [
 	{ key: 'daily', label: 'Daily' },
