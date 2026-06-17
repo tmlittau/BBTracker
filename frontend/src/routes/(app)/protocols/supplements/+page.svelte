@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { protocolsApi, type Supplement } from '$lib/protocols/api';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { num } from '$lib/protocols/calc';
 	import Button from '$lib/components/ui/Button.svelte';
 	import SupplementCreateModal from '$lib/protocols/SupplementCreateModal.svelte';
@@ -36,8 +37,12 @@
 
 	async function remove(id: number) {
 		if (!confirm('Delete this supplement?')) return;
-		await protocolsApi.deleteSupplement(id);
-		await load();
+		try {
+			await protocolsApi.deleteSupplement(id);
+			await load();
+		} catch (e) {
+			error = apiErrorMessage(e);
+		}
 	}
 </script>
 
@@ -85,12 +90,10 @@
 						{/if}
 					</div>
 				</div>
-				{#if !s.is_global}
-					<div class="flex shrink-0 items-center gap-3">
-						<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = s; showModal = true; }}>Edit</button>
-						<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(s.id)}>Delete</button>
-					</div>
-				{/if}
+				<div class="flex shrink-0 items-center gap-3">
+					<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = s; showModal = true; }}>Edit</button>
+					<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(s.id)}>Delete</button>
+				</div>
 			</li>
 		{/each}
 	</ul>

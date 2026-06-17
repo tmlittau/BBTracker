@@ -1237,10 +1237,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         get: operations["v1_protocols_compounds_list"];
         put?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         post: operations["v1_protocols_compounds_create"];
         delete?: never;
         options?: never;
@@ -1255,16 +1263,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         get: operations["v1_protocols_compounds_retrieve"];
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         put: operations["v1_protocols_compounds_update"];
         post?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         delete: operations["v1_protocols_compounds_destroy"];
         options?: never;
         head?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         patch: operations["v1_protocols_compounds_partial_update"];
         trace?: never;
     };
@@ -1578,10 +1602,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         get: operations["v1_protocols_supplements_list"];
         put?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         post: operations["v1_protocols_supplements_create"];
         delete?: never;
         options?: never;
@@ -1596,16 +1628,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         get: operations["v1_protocols_supplements_retrieve"];
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         put: operations["v1_protocols_supplements_update"];
         post?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         delete: operations["v1_protocols_supplements_destroy"];
         options?: never;
         head?: never;
-        /** @description Reference items visible if global (owner=None) or owned; editable only if owned. */
+        /**
+         * @description Reference items visible if global (owner=None) or owned. Single-user app:
+         *     seeded globals are editable + deletable too; deletion is blocked (with a clear
+         *     message) only when the item is still referenced by logged history.
+         */
         patch: operations["v1_protocols_supplements_partial_update"];
         trace?: never;
     };

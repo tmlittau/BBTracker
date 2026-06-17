@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, viewsets
@@ -72,17 +72,16 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
-    def _ensure_owned(self, instance):
-        if instance.owner_id != self.request.user.id:
-            raise PermissionDenied("You can only modify your own exercises.")
-
-    def perform_update(self, serializer):
-        self._ensure_owned(serializer.instance)
-        serializer.save()
-
     def perform_destroy(self, instance):
-        self._ensure_owned(instance)
-        instance.delete()
+        # Single-user app: seeded exercises are deletable too, but block (clearly)
+        # when the exercise is still referenced by a program slot or logged set.
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ValidationError(
+                "Can't delete — this exercise is still used in a program or logged "
+                "workout. Remove those first."
+            ) from None
 
     @extend_schema(
         parameters=[OpenApiParameter("from", str, description="ISO date lower bound")],

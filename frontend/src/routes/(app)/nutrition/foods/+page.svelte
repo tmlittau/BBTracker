@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { nutritionApi, type BarcodeLookup, type Food } from '$lib/nutrition/api';
+	import { apiErrorMessage } from '$lib/api/errors';
 	import { num } from '$lib/nutrition/calc';
 	import Button from '$lib/components/ui/Button.svelte';
 	import FoodCreateModal from '$lib/nutrition/FoodCreateModal.svelte';
@@ -106,9 +107,13 @@
 	}
 
 	async function remove(id: number) {
-		if (!confirm('Delete this custom food?')) return;
-		await nutritionApi.deleteFood(id);
-		await load();
+		if (!confirm('Delete this food?')) return;
+		try {
+			await nutritionApi.deleteFood(id);
+			await load();
+		} catch (e) {
+			error = apiErrorMessage(e);
+		}
 	}
 
 	function kcalOf(food: Food): string {
@@ -207,12 +212,10 @@
 					{/if}
 					<div class="text-xs text-neutral-500">{kcalOf(food)}</div>
 				</div>
-				{#if !food.is_global}
-					<div class="flex shrink-0 items-center gap-3 text-xs">
-						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(food)}>Edit</button>
-						<button class="text-red-400 hover:text-red-300" onclick={() => remove(food.id)}>Delete</button>
-					</div>
-				{/if}
+				<div class="flex shrink-0 items-center gap-3 text-xs">
+					<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(food)}>Edit</button>
+					<button class="text-red-400 hover:text-red-300" onclick={() => remove(food.id)}>Delete</button>
+				</div>
 			</li>
 		{/each}
 	</ul>

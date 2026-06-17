@@ -7,6 +7,7 @@
 		type Compound
 	} from '$lib/protocols/api';
 	import CompoundCreateModal from '$lib/protocols/CompoundCreateModal.svelte';
+	import { apiErrorMessage } from '$lib/api/errors';
 
 	let compounds = $state<Compound[]>([]);
 	let query = $state('');
@@ -34,8 +35,12 @@
 	}
 	async function remove(c: Compound) {
 		if (!confirm(`Delete "${c.name}"?`)) return;
-		await protocolsApi.deleteCompound(c.id);
-		compounds = compounds.filter((x) => x.id !== c.id);
+		try {
+			await protocolsApi.deleteCompound(c.id);
+			compounds = compounds.filter((x) => x.id !== c.id);
+		} catch (e) {
+			error = apiErrorMessage(e);
+		}
 	}
 
 	async function load() {
@@ -121,12 +126,10 @@
 					· active {(Number(c.active_fraction) * 100).toFixed(0)}%
 				</div>
 				</div>
-				{#if !c.is_global}
-					<div class="flex shrink-0 items-center gap-3 text-xs">
-						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
-						<button class="text-red-400 hover:text-red-300" onclick={() => remove(c)}>Delete</button>
-					</div>
-				{/if}
+				<div class="flex shrink-0 items-center gap-3 text-xs">
+					<button class="text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
+					<button class="text-red-400 hover:text-red-300" onclick={() => remove(c)}>Delete</button>
+				</div>
 			</li>
 		{/each}
 	</ul>

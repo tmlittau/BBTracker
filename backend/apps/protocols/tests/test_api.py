@@ -81,11 +81,29 @@ def test_custom_compound_owned(api, user):
     assert Compound.objects.get(name="My Peptide").owner == user
 
 
-def test_cannot_edit_global_compound(api, test_e):
+def test_global_compound_is_editable(api, test_e):
+    # Single-user app: seeded globals can be edited too.
     resp = api.patch(
-        f"/api/v1/protocols/compounds/{test_e.id}/", {"name": "x"}, format="json"
+        f"/api/v1/protocols/compounds/{test_e.id}/", {"name": "Renamed"}, format="json"
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200, resp.content
+    test_e.refresh_from_db()
+    assert test_e.name == "Renamed"
+
+
+def test_global_compound_delete_blocked_when_referenced(api, test_e):
+    spare = Compound.objects.create(name="Spare Global")  # unused global → deletable
+    assert api.delete(f"/api/v1/protocols/compounds/{spare.id}/").status_code == 204
+    api.post(
+        "/api/v1/protocols/dose-logs/",
+        {"compound": test_e.id, "taken_at": timezone.now().isoformat(),
+         "amount": "100", "unit": "mg", "route": "im"},
+        format="json",
+    )
+    resp = api.delete(f"/api/v1/protocols/compounds/{test_e.id}/")
+    assert resp.status_code == 400
+    assert "used" in str(resp.json()).lower()
+    assert Compound.objects.filter(id=test_e.id).exists()
 
 
 def test_create_supplement_with_nutrients(api, user, db):

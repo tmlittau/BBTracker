@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
@@ -50,7 +50,9 @@ from .services import (
 
 
 class GlobalOrOwnedViewSet(viewsets.ModelViewSet):
-    """Reference items visible if global (owner=None) or owned; editable only if owned."""
+    """Reference items visible if global (owner=None) or owned. Single-user app:
+    seeded globals are editable + deletable too; deletion is blocked (with a clear
+    message) only when the item is still referenced by logged history."""
 
     search_fields: list[str] = ["name"]
 
@@ -67,17 +69,14 @@ class GlobalOrOwnedViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
-    def _ensure_owned(self, instance):
-        if instance.owner_id != self.request.user.id:
-            raise PermissionDenied("You can only modify your own items.")
-
-    def perform_update(self, serializer):
-        self._ensure_owned(serializer.instance)
-        serializer.save()
-
     def perform_destroy(self, instance):
-        self._ensure_owned(instance)
-        instance.delete()
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ValidationError(
+                "Can't delete — it's still used in your protocols or logged doses. "
+                "Remove those first."
+            ) from None
 
 
 @extend_schema(tags=["protocols"])

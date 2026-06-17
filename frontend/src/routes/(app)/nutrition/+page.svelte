@@ -37,6 +37,12 @@
 	let pendingMealId = $state<number | null>(null);
 	let newMealName = $state('');
 
+	// Editing an existing entry's amount reuses AddEntryDialog, seeded with the
+	// entry's current serving + quantity.
+	let editingEntryId = $state<number | null>(null);
+	let editServing = $state<number | null>(null);
+	let editQuantity = $state('1');
+
 	// "＋ New food" while adding to a meal: remember the meal, open the modal, then
 	// drop straight into the add-to-meal dialog once it's created.
 	let showFoodModal = $state(false);
@@ -143,25 +149,52 @@
 		if (pendingMealForNew != null) startAdd(food, pendingMealForNew);
 		pendingMealForNew = null;
 	}
-	async function confirmAdd(data: { serving: number | null; quantity: string }) {
-		if (!pendingFood || pendingMealId == null) return;
+	async function startEdit(entry: DiaryEntry) {
+		if (entry.food == null) return; // amount editing is for food entries
 		try {
-			await nutritionApi.logEntry({
-				date,
-				meal: pendingMealId,
-				food: pendingFood.id,
-				serving: data.serving,
-				quantity: data.quantity
-			});
-			pendingFood = null;
+			pendingFood = await nutritionApi.food(entry.food);
+			pendingMealId = entry.meal;
+			editingEntryId = entry.id;
+			editServing = entry.serving;
+			editQuantity = entry.quantity;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+	function closeDialog() {
+		pendingFood = null;
+		editingEntryId = null;
+	}
+	async function confirmEntry(data: { serving: number | null; quantity: string }) {
+		if (!pendingFood) return;
+		try {
+			if (editingEntryId != null) {
+				await nutritionApi.updateEntry(editingEntryId, {
+					serving: data.serving,
+					quantity: data.quantity
+				});
+			} else if (pendingMealId != null) {
+				await nutritionApi.logEntry({
+					date,
+					meal: pendingMealId,
+					food: pendingFood.id,
+					serving: data.serving,
+					quantity: data.quantity
+				});
+			}
+			closeDialog();
 			await load();
 		} catch (e) {
 			error = (e as Error).message;
 		}
 	}
 	async function removeEntry(id: number) {
-		await nutritionApi.deleteEntry(id);
-		await load();
+		try {
+			await nutritionApi.deleteEntry(id);
+			await load();
+		} catch (e) {
+			error = (e as Error).message;
+		}
 	}
 
 	const macro = (slug: string) => summary?.nutrients.find((n) => n.slug === slug);
@@ -301,12 +334,17 @@
 					{#if entriesFor(m.id).length > 0}
 						<ul class="mt-2 divide-y divide-neutral-800">
 							{#each entriesFor(m.id) as entry (entry.id)}
-								<li class="flex items-center justify-between py-2 text-sm">
+								<li class="flex items-center justify-between gap-2 py-2 text-sm">
 									<span>
 										{entry.item_name}
 										<span class="text-neutral-500">· {entry.grams ?? entry.quantity} {entry.unit}</span>
 									</span>
-									<button class="text-xs text-neutral-600 hover:text-red-400" aria-label="Remove entry" onclick={() => removeEntry(entry.id)}>✕</button>
+									<span class="flex shrink-0 items-center gap-3 text-xs">
+										{#if entry.food != null}
+											<button class="text-neutral-500 hover:text-emerald-300" onclick={() => startEdit(entry)}>Edit</button>
+										{/if}
+										<button class="text-neutral-600 hover:text-red-400" aria-label="Remove entry" onclick={() => removeEntry(entry.id)}>✕</button>
+									</span>
 								</li>
 							{/each}
 						</ul>
@@ -360,8 +398,11 @@
 	<AddEntryDialog
 		food={pendingFood}
 		meal={pendingMealName}
-		onconfirm={confirmAdd}
-		oncancel={() => (pendingFood = null)}
+		mode={editingEntryId != null ? 'edit' : 'add'}
+		initialServing={editingEntryId != null ? editServing : undefined}
+		initialQuantity={editingEntryId != null ? editQuantity : '1'}
+		onconfirm={confirmEntry}
+		oncancel={closeDialog}
 	/>
 {/if}
 

@@ -182,6 +182,7 @@ export const nutritionApi = {
 
 	foods: (q = '') =>
 		req<Paginated<Food>>('GET', `/foods/${q ? `?q=${encodeURIComponent(q)}` : ''}`).then(list),
+	food: (id: number) => req<Food>('GET', `/foods/${id}/`),
 	createFood: (data: FoodInput) => req<Food>('POST', '/foods/', data),
 	updateFood: (id: number, data: FoodInput) => req<Food>('PATCH', `/foods/${id}/`, data),
 	deleteFood: (id: number) => req<void>('DELETE', `/foods/${id}/`),
@@ -204,6 +205,8 @@ export const nutritionApi = {
 		serving?: number | null;
 		quantity: string;
 	}) => req<DiaryEntry>('POST', '/diary-entries/', data),
+	updateEntry: (id: number, data: { serving?: number | null; quantity: string }) =>
+		req<DiaryEntry>('PATCH', `/diary-entries/${id}/`, data),
 	deleteEntry: (id: number) => req<void>('DELETE', `/diary-entries/${id}/`),
 
 	meals: (date: string) => req<Paginated<Meal>>('GET', `/meals/?date=${date}`).then(list),
