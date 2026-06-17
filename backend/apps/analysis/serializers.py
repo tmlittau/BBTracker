@@ -24,5 +24,7 @@ class BodyAnalysisSerializer(serializers.Serializer):
     energy = serializers.DictField()
     blood_pressure = serializers.DictField(allow_null=True)
     bloodwork = serializers.DictField()
+    composition_trend = serializers.ListField(child=serializers.DictField())
+    insights = serializers.ListField(child=serializers.DictField())
     assessments = serializers.ListField(child=serializers.DictField())
     measurements = serializers.ListField(child=serializers.DictField())

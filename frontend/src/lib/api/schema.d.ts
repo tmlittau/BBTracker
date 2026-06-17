@@ -2496,6 +2496,12 @@ export interface components {
             bloodwork: {
                 [key: string]: unknown;
             };
+            composition_trend: {
+                [key: string]: unknown;
+            }[];
+            insights: {
+                [key: string]: unknown;
+            }[];
             assessments: {
                 [key: string]: unknown;
             }[];

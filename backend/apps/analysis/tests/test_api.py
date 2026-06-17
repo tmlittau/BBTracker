@@ -109,3 +109,39 @@ def test_body_analysis_endpoint(api, user):
     whtr = next(a for a in data["assessments"] if a["key"] == "whtr")
     assert whtr["status"] == "good"
     assert any(a["key"] == "blood_pressure" and a["status"] == "good" for a in data["assessments"])
+
+
+def test_free_testosterone_and_egfr():
+    ft = services.free_testosterone(20, 30, 43)  # TT 20 nmol/L, SHBG 30, albumin 43 g/L
+    assert ft is not None
+    assert 300 < ft["free_pmol_l"] < 600  # ~2% of total → normal free T
+    assert ft["free_pct"] > 1
+    gfr = services.egfr_ckdepi(80, 35, "male")  # creatinine 80 µmol/L, 35yo male
+    assert 90 < gfr < 130
+
+
+def test_composition_series_and_insights(user):
+    from apps.diary.models import CheckIn
+
+    base = date(2026, 1, 1)
+    CheckIn.objects.create(owner=user, date=base, bodyweight=90)
+    CheckIn.objects.create(owner=user, date=base + timedelta(days=60), bodyweight=87)
+    BodyMeasurement.objects.create(owner=user, date=base, type="body_fat", value=20, method="dexa")
+    BodyMeasurement.objects.create(
+        owner=user, date=base + timedelta(days=60), type="body_fat", value=15, method="dexa"
+    )
+    series = services.composition_series(
+        user, base - timedelta(days=1), base + timedelta(days=61), "male", 180
+    )
+    assert len(series) == 2
+    assert series[0]["fat_mass_kg"] == 18.0
+    assert series[-1]["fat_mass_kg"] == 13.05  # 87 * 0.15
+    ins = services._insights(series, {})
+    assert any(i["key"] == "cut_quality" for i in ins)  # fat down, lean held
+
+
+def test_phase2_keys_in_endpoint(api):
+    data = api.get("/api/v1/analysis/body/").json()
+    assert isinstance(data["composition_trend"], list)
+    assert isinstance(data["insights"], list)
+    assert "derived" in data["bloodwork"] and "trends" in data["bloodwork"]

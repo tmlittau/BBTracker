@@ -74,10 +74,24 @@
 		risk: 'border-red-800/60 bg-red-950/20 text-red-300'
 	};
 	const DOT: Record<string, string> = { good: 'bg-green-500', watch: 'bg-amber-500', risk: 'bg-red-500' };
+	const FLAG: Record<string, string> = {
+		high: 'border-red-800/60 bg-red-950/20 text-red-300',
+		low: 'border-red-800/60 bg-red-950/20 text-red-300',
+		in_range: 'border-amber-800/60 bg-amber-950/20 text-amber-300'
+	};
+	const ARROW: Record<string, string> = { rising: '↑', falling: '↓', stable: '→' };
 
 	const comp = $derived(analysis?.composition);
 	const energy = $derived(analysis?.energy);
 	const adaptive = $derived(energy?.adaptive ?? null);
+	const insights = $derived(analysis?.insights ?? []);
+	const bwDerived = $derived(analysis?.bloodwork.derived);
+	const bwTrends = $derived(analysis?.bloodwork.trends ?? []);
+	const compTrend = $derived(analysis?.composition_trend ?? []);
+	const compSeries = $derived([
+		{ points: compTrend.map((p) => ({ x: p.date, y: p.fat_mass_kg })), color: '#fb7185', label: 'Fat', dots: true },
+		{ points: compTrend.map((p) => ({ x: p.date, y: p.lean_mass_kg })), color: '#34d399', label: 'Lean', dots: true }
+	]);
 
 	// Trend: history for the selected measurement type (oldest→newest).
 	const trendSeries = $derived([
@@ -158,6 +172,40 @@
 		</div>
 	</section>
 
+	<!-- Coach insights (cross-metric narrative) -->
+	{#if insights.length}
+		<section class="mt-8">
+			<h2 class="font-medium">Coach insights</h2>
+			<div class="mt-3 grid gap-2 sm:grid-cols-2">
+				{#each insights as i (i.key)}
+					<div class="rounded-lg border p-3 {STATUS[i.status]}">
+						<span class="flex items-center gap-2 text-sm font-medium">
+							<span class="h-2 w-2 rounded-full {DOT[i.status]}"></span>{i.title}
+						</span>
+						<p class="mt-1 text-xs text-neutral-400">{i.detail}</p>
+					</div>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
+	<!-- Composition trend (lean vs fat mass over time) -->
+	{#if compTrend.length > 1}
+		<section class="mt-8 rounded-lg border border-neutral-800 p-4">
+			<div class="flex items-center justify-between">
+				<h2 class="font-medium">Composition trend</h2>
+				<div class="flex items-center gap-3 text-xs text-neutral-400">
+					<span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-rose-400"></span>Fat</span>
+					<span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>Lean</span>
+				</div>
+			</div>
+			<div class="mt-3"><LineChart series={compSeries} unit="kg" /></div>
+			<p class="mt-2 text-xs text-neutral-500">
+				Bodyweight split into fat vs lean mass at each body-fat reading over the last ~6 months.
+			</p>
+		</section>
+	{/if}
+
 	<!-- Assessments -->
 	{#if analysis.assessments.length}
 		<section class="mt-8">
@@ -179,18 +227,50 @@
 		</section>
 	{/if}
 
-	<!-- Bloodwork ratios -->
-	{#if Object.keys(analysis.bloodwork.ratios).length}
+	<!-- Bloodwork: ratios + derived values + trending-out-of-range flags -->
+	{#if Object.keys(analysis.bloodwork.ratios).length || (bwDerived && Object.keys(bwDerived).length) || bwTrends.length}
 		<section class="mt-8">
-			<h2 class="font-medium">Bloodwork ratios</h2>
-			<div class="mt-2 flex flex-wrap gap-4 text-sm">
+			<h2 class="font-medium">Bloodwork</h2>
+			<div class="mt-2 flex flex-wrap gap-2 text-sm">
 				{#each Object.entries(analysis.bloodwork.ratios) as [k, v] (k)}
 					<span class="rounded border border-neutral-800 px-3 py-1.5">
 						<span class="text-neutral-500">{k.replace('_', '/').toUpperCase()}</span>
 						<span class="ml-1 font-medium tabular-nums">{v}</span>
 					</span>
 				{/each}
+				{#if bwDerived?.free_testosterone}
+					<span class="rounded border border-neutral-800 px-3 py-1.5">
+						<span class="text-neutral-500">Free T</span>
+						<span class="ml-1 font-medium tabular-nums">{bwDerived.free_testosterone.free_pmol_l} pmol/L</span>
+						<span class="ml-1 text-xs text-neutral-600">({bwDerived.free_testosterone.free_pct}%)</span>
+					</span>
+				{/if}
+				{#if bwDerived?.egfr != null}
+					<span class="rounded border border-neutral-800 px-3 py-1.5">
+						<span class="text-neutral-500">eGFR</span>
+						<span class="ml-1 font-medium tabular-nums">{bwDerived.egfr}</span>
+						<span class="ml-1 text-xs text-neutral-600">mL/min/1.73m²</span>
+					</span>
+				{/if}
 			</div>
+			{#if bwTrends.length}
+				<div class="mt-3 grid gap-2 sm:grid-cols-2">
+					{#each bwTrends as t (t.slug)}
+						<div class="rounded-lg border p-3 {FLAG[t.flag] ?? FLAG.in_range}">
+							<div class="flex items-center justify-between">
+								<span class="text-sm font-medium">{t.marker}</span>
+								<span class="text-sm tabular-nums">
+									{t.value} {t.unit} <span class="text-neutral-500">{ARROW[t.direction]}</span>
+								</span>
+							</div>
+							<p class="mt-1 text-xs text-neutral-400">{t.note}</p>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			<p class="mt-2 text-[10px] text-neutral-600">
+				Free testosterone: Vermeulen. eGFR: CKD-EPI 2021. Trends compare your two most recent results.
+			</p>
 		</section>
 	{/if}
 

@@ -31,6 +31,38 @@ export interface AdaptiveTDEE {
 	confidence: string;
 }
 
+export interface FreeTestosterone {
+	free_pmol_l: number;
+	free_pct: number;
+	bioavailable_nmol_l: number;
+}
+
+export interface BloodTrend {
+	marker: string;
+	slug: string;
+	value: number;
+	unit: string;
+	flag: string;
+	direction: 'rising' | 'falling' | 'stable';
+	note: string;
+}
+
+export interface CompositionPoint {
+	date: string;
+	weight_kg: number;
+	body_fat_pct: number;
+	fat_mass_kg: number;
+	lean_mass_kg: number;
+	source: string;
+}
+
+export interface Insight {
+	key: string;
+	title: string;
+	detail: string;
+	status: 'good' | 'watch' | 'risk';
+}
+
 export interface BodyAnalysis {
 	date: string;
 	sex: string;
@@ -55,7 +87,13 @@ export interface BodyAnalysis {
 		activity_factor?: number;
 	};
 	blood_pressure: { systolic: number; diastolic: number } | null;
-	bloodwork: { ratios: Record<string, number> };
+	bloodwork: {
+		ratios: Record<string, number>;
+		derived: { free_testosterone?: FreeTestosterone; egfr?: number };
+		trends: BloodTrend[];
+	};
+	composition_trend: CompositionPoint[];
+	insights: Insight[];
 	assessments: Assessment[];
 	measurements: { type: string; value: number; unit: string; date: string; method: string }[];
 }
