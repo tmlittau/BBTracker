@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 
-	type Icon = 'home' | 'dumbbell' | 'food' | 'vial' | 'camera';
+	type Icon = 'home' | 'dumbbell' | 'food' | 'vial' | 'camera' | 'body';
 	type Tab = { href: string; label: string; accent: string; icon: Icon; match?: (p: string) => boolean };
 
 	// The five primary sections, thumb-reachable. Active tab uses the per-domain
@@ -11,7 +11,8 @@
 		{ href: '/training', label: 'Training', accent: 'text-indigo-400', icon: 'dumbbell' },
 		{ href: '/nutrition', label: 'Nutrition', accent: 'text-emerald-400', icon: 'food' },
 		{ href: '/protocols', label: 'Protocols', accent: 'text-violet-400', icon: 'vial' },
-		{ href: '/diary', label: 'Diary', accent: 'text-sky-400', icon: 'camera' }
+		{ href: '/diary', label: 'Diary', accent: 'text-sky-400', icon: 'camera' },
+		{ href: '/body', label: 'Body', accent: 'text-rose-400', icon: 'body' }
 	];
 
 	function isActive(t: Tab): boolean {
@@ -43,6 +44,8 @@
 					<path d="M9 3h6M10 3v10a3 3 0 0 0 6 0V3M9.5 13h7" />
 				{:else if t.icon === 'camera'}
 					<path d="M3 8a2 2 0 0 1 2-2h2l1.4-2h7.2L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.2" />
+				{:else if t.icon === 'body'}
+					<circle cx="12" cy="4.5" r="2.5" /><path d="M12 7v8M12 9l-4 2M12 9l4 2M12 15l-3 5M12 15l3 5" />
 				{/if}
 			</svg>
 			<span>{t.label}</span>
