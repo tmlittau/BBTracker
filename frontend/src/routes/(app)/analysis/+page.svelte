@@ -2,13 +2,12 @@
 	import { onMount } from 'svelte';
 	import {
 		analysisApi,
-		BODY_FAT_METHODS,
 		MEASUREMENT_TYPES,
 		typeLabel,
 		type BodyAnalysis,
 		type BodyMeasurement
 	} from '$lib/analysis/api';
-	import { isoDate } from '$lib/date';
+	import { measurementsVersion } from '$lib/analysis/store';
 	import LineChart from '$lib/components/ui/LineChart.svelte';
 
 	let analysis = $state<BodyAnalysis | null>(null);
@@ -16,21 +15,10 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Entry form
-	let mType = $state('waist');
-	let mValue = $state('');
-	let mMethod = $state('dexa');
-	let mDate = $state(isoDate());
-	let saving = $state(false);
-	const isBodyFat = $derived(mType === 'body_fat');
-
 	let trendType = $state('waist');
 
 	async function load() {
-		[analysis, measurements] = await Promise.all([
-			analysisApi.body(),
-			analysisApi.measurements()
-		]);
+		[analysis, measurements] = await Promise.all([analysisApi.body(), analysisApi.measurements()]);
 	}
 	onMount(async () => {
 		try {
@@ -42,26 +30,16 @@
 		}
 	});
 
-	async function addMeasurement(e: SubmitEvent) {
-		e.preventDefault();
-		if (mValue === '') return;
-		saving = true;
-		error = null;
-		try {
-			await analysisApi.addMeasurement({
-				date: mDate,
-				type: mType,
-				value: String(Number(mValue)),
-				method: isBodyFat ? mMethod : undefined
-			});
-			mValue = '';
-			await load();
-		} catch (err) {
-			error = (err as Error).message;
-		} finally {
-			saving = false;
+	// Reload when a measurement is added via the layout's modal.
+	let lastVer = 0;
+	$effect(() => {
+		const v = $measurementsVersion;
+		if (v !== lastVer) {
+			lastVer = v;
+			load();
 		}
-	}
+	});
+
 	async function removeMeasurement(id: number) {
 		await analysisApi.deleteMeasurement(id);
 		await load();
@@ -105,14 +83,10 @@
 		}
 	]);
 	const recent = $derived(measurements.slice(0, 12));
-	const fmtNum = (v: number | null | undefined, d = 1) =>
-		v == null ? '—' : Number(v).toFixed(d);
+	const fmtNum = (v: number | null | undefined, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 </script>
 
-<div class="flex items-center justify-between">
-	<h1 class="text-xl font-semibold">Body analysis</h1>
-</div>
-<p class="mt-1 rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+<p class="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
 	Estimates from anthropometric formulas — informational, not medical advice. Each figure shows its
 	source; a DEXA/scan reading always overrides an estimate.
 </p>
@@ -274,33 +248,10 @@
 		</section>
 	{/if}
 
-	<!-- Add measurement -->
-	<section class="mt-8">
-		<h2 class="font-medium">Add a measurement</h2>
-		<form class="mt-3 flex flex-wrap items-end gap-2" onsubmit={addMeasurement}>
-			<label class="flex flex-col text-xs text-neutral-500">Measurement
-				<select bind:value={mType} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100">
-					{#each MEASUREMENT_TYPES as t (t.key)}<option value={t.key}>{t.label}</option>{/each}
-				</select>
-			</label>
-			<label class="flex flex-col text-xs text-neutral-500">Value ({unitFor(mType)})
-				<input type="number" step="0.1" bind:value={mValue} class="mt-1 w-24 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100" />
-			</label>
-			{#if isBodyFat}
-				<label class="flex flex-col text-xs text-neutral-500">Method
-					<select bind:value={mMethod} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100">
-						{#each BODY_FAT_METHODS as m (m.key)}<option value={m.key}>{m.label}</option>{/each}
-					</select>
-				</label>
-			{/if}
-			<label class="flex flex-col text-xs text-neutral-500">Date
-				<input type="date" bind:value={mDate} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100" />
-			</label>
-			<button type="submit" disabled={saving} class="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50">
-				{saving ? 'Saving…' : 'Add'}
-			</button>
-		</form>
-		{#if recent.length}
+	<!-- Recent measurements -->
+	{#if recent.length}
+		<section class="mt-8">
+			<h2 class="font-medium">Recent measurements</h2>
 			<ul class="mt-3 divide-y divide-neutral-800 text-sm">
 				{#each recent as m (m.id)}
 					<li class="flex items-center justify-between py-1.5">
@@ -312,8 +263,8 @@
 					</li>
 				{/each}
 			</ul>
-		{/if}
-	</section>
+		</section>
+	{/if}
 
 	<!-- Trend -->
 	<section class="mt-8 rounded-lg border border-neutral-800 p-4">

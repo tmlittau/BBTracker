@@ -190,6 +190,30 @@ export interface ProtocolRelease {
 	excluded: string[];
 }
 
+// Stateless cycle plotter (POST /protocols/plot/).
+export interface PlotItemInput {
+	compound: number;
+	dose_amount: number;
+	dose_unit?: string;
+	frequency?: string;
+	days_of_week?: number[];
+	times_of_day?: string[];
+	start_day?: number;
+	duration_days?: number;
+}
+export interface PlotCompound {
+	compound_id: number;
+	name: string;
+	half_life_hours: number;
+	points: { day: number; level: number }[];
+}
+export interface CompoundPlot {
+	horizon_days: number;
+	unit: string;
+	compounds: PlotCompound[];
+	excluded: string[];
+}
+
 export interface AdherenceRow {
 	item_id: number;
 	name: string;
@@ -338,6 +362,8 @@ export const protocolsApi = {
 
 	releaseCurves: (id: number, horizonDays = 84) =>
 		req<ProtocolRelease>('GET', `/protocols/${id}/release/?horizon_days=${horizonDays}`),
+	plot: (payload: { horizon_days: number; items: PlotItemInput[] }) =>
+		req<CompoundPlot>('POST', '/plot/', payload),
 
 	phaseMatrix: (protocolId: number, phaseId?: number) =>
 		req<PhaseDoseMatrix>(

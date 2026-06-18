@@ -265,6 +265,41 @@ def test_protocol_release_excludes_non_mass_units(api, user):
     assert "hCG" in data["excluded"]
 
 
+def test_compound_plot(api, test_e):
+    # Stateless cycle planner: post a hypothetical item → an overlaid concentration curve.
+    resp = api.post(
+        "/api/v1/protocols/plot/",
+        {"horizon_days": 60, "items": [
+            {"compound": test_e.id, "dose_amount": 250, "dose_unit": "mg",
+             "frequency": "weekly", "start_day": 0, "duration_days": 56},
+        ]},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.content
+    data = resp.json()
+    assert data["unit"] == "relative"
+    assert len(data["compounds"]) == 1
+    c = data["compounds"][0]
+    assert c["compound_id"] == test_e.id
+    assert len(c["points"]) == 61  # day 0..60 inclusive
+    assert max(p["level"] for p in c["points"]) > 0
+
+
+def test_compound_plot_excludes_non_mass(api):
+    hcg = Compound.objects.create(
+        name="hCG plot", compound_class="ancillary", default_unit="iu",
+        default_route="subq", half_life_hours="33", active_fraction="1.000",
+    )
+    data = api.post(
+        "/api/v1/protocols/plot/",
+        {"items": [{"compound": hcg.id, "dose_amount": 500, "dose_unit": "iu",
+                    "frequency": "daily"}]},
+        format="json",
+    ).json()
+    assert data["compounds"] == []
+    assert "hCG plot" in data["excluded"]
+
+
 def test_parse_pdf(api, monkeypatch):
     # Stub the bytes→text step so no binary PDF fixture is needed; exercise the
     # endpoint + marker matching against a seeded marker.
