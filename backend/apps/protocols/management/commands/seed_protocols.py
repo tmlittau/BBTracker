@@ -23,28 +23,28 @@ CC = CompoundClass
 
 # name, class, default_unit, default_route, half_life_hours, ester, active_fraction,
 # tmax_hours, bioavailability, pk_source
-# Tmax / bioavailability (and their sources) come from the steroidplotter PK dataset's
-# cited studies; "" = unknown (the concentration model then falls back to instantaneous
-# absorption). Half-lives / active fractions are our existing curated values.
+# Half-life / Tmax / bioavailability (and their sources) come from the steroidplotter PK
+# dataset's cited studies; "" = unknown (the concentration model then falls back to
+# instantaneous absorption). Active fractions are ester/salt weight corrections.
 COMPOUNDS = [
     # Anabolics (ester active fraction = free steroid / ester weight)
-    ("Testosterone Enanthate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "168", "Enanthate", "0.700",
+    ("Testosterone Enanthate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "172.6", "Enanthate", "0.700",
      "33.3", "0.72", "Yin et al. 2014 (PMC4721027)"),
-    ("Testosterone Cypionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "192", "Cypionate", "0.690",
+    ("Testosterone Cypionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "165.6", "Cypionate", "0.690",
      "108", "0.70", "psp4.12287 / ajpendo.00502.2001"),
-    ("Testosterone Propionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "20", "Propionate", "0.800",
+    ("Testosterone Propionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "24.9", "Propionate", "0.800",
      "25.5", "0.84", "JCEM 63/6/1361"),
-    ("Testosterone Undecanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "504", "Undecanoate", "0.630",
-     "240", "0.65", "Nebido PI / jandrol.109.009597"),
-    ("Nandrolone Decanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "144", "Decanoate", "0.640",
+    ("Testosterone Undecanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "813.6",
+     "Undecanoate", "0.630", "240", "0.65", "Nebido PI / jandrol.109.009597"),
+    ("Nandrolone Decanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "244.8", "Decanoate", "0.640",
      "44", "0.73", "JCEM 90/5/2624"),
-    ("Trenbolone Acetate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "24", "Acetate", "0.870",
+    ("Trenbolone Acetate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "36", "Acetate", "0.870",
      "", "0.87", "ScienceDirect S002228602030452X"),
-    ("Boldenone Undecylenate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "336", "Undecylenate", "0.620",
+    ("Boldenone Undecylenate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "123", "Undecylenate", "0.620",
      "144", "0.63", "pubmed 17348894"),
     ("Masteron (Drostanolone Propionate)", CC.ANABOLIC, DoseUnit.MG, Route.IM, "48",
      "Propionate", "0.800", "", "0.84", "Llewellyn, Anabolics 2011"),
-    ("Oxandrolone (Anavar)", CC.ANABOLIC, DoseUnit.MG, Route.ORAL, "9", "", "1.000",
+    ("Oxandrolone (Anavar)", CC.ANABOLIC, DoseUnit.MG, Route.ORAL, "6.7", "", "1.000",
      "1.6", "0.625", "PMC7134583"),
     # Anabolics — extended roster (PK from the steroidplotter dataset's cited studies)
     ("Testosterone Suspension", CC.ANABOLIC, DoseUnit.MG, Route.IM, "33", "", "1.000",
@@ -81,24 +81,24 @@ COMPOUNDS = [
     ("BPC-157", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "4", "", "1.000", "", "", ""),
     ("Ipamorelin", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "2", "", "1.000", "", "", ""),
     ("CJC-1295 (no DAC)", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "0.5", "", "1.000", "", "", ""),
-    ("Semaglutide", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "168", "", "1.000",
+    ("Semaglutide", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "156", "", "1.000",
      "30", "0.89", "PMC7854449"),
     ("Tesamorelin", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "0.6", "", "1.000", "", "", ""),
     # Ancillaries / pharmaceuticals
-    ("Anastrozole", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "48", "", "1.000",
+    ("Anastrozole", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "46.8", "", "1.000",
      "1.0", "0.80", "pubmed 19470631"),
-    ("Exemestane", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000",
+    ("Exemestane", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "22.7", "", "1.000",
      "1.4", "0.05", "PMC1884784"),
-    ("Tamoxifen", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "120", "", "1.000",
+    ("Tamoxifen", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "47.4", "", "1.000",
      "8.3", "0.15", "Nolvadex FDA biopharmr"),
     ("Enclomiphene", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "240", "", "1.000", "", "", ""),
-    ("hCG", CC.ANCILLARY, DoseUnit.IU, Route.SUBQ, "33", "", "1.000",
+    ("hCG", CC.ANCILLARY, DoseUnit.IU, Route.SUBQ, "47.1", "", "1.000",
      "24", "0.45", "PMC8301557"),
-    ("Telmisartan", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000",
+    ("Telmisartan", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "23.3", "", "1.000",
      "1.7", "0.43", "pubmed 17009837"),
     ("Isotretinoin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "21", "", "1.000", "", "", ""),
     ("Finasteride", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000", "", "", ""),
-    ("Cialis (Tadalafil)", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "17.5", "", "1.000",
+    ("Cialis (Tadalafil)", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "17", "", "1.000",
      "2.5", "", "PMC1885023"),
     ("Metformin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000", "", "", ""),
 ]

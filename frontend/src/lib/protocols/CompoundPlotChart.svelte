@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Dependency-free SVG overlay of relative concentration curves for the cycle
+	// Dependency-free SVG overlay of estimated concentration curves for the cycle
 	// plotter. One coloured line per compound over a day axis (labelled in weeks).
 	import type { CompoundPlot } from './api';
 
@@ -59,7 +59,7 @@
 			fill="#a3a3a3"
 			font-size="10"
 			text-anchor="middle"
-			transform="rotate(-90)">Active level ({data.unit})</text
+			transform="rotate(-90)">Est. serum level</text
 		>
 
 		<!-- compound lines -->
@@ -79,8 +79,8 @@
 		{/each}
 	</div>
 	<p class="mt-2 text-xs text-neutral-500">
-		Relative active serum level (Bateman absorption + elimination), comparable shapes — not calibrated
-		ng/mL.{#if data.excluded.length}
+		Estimated serum concentration (one-compartment Bateman model from dose, ester fraction,
+		bioavailability + half-life) — realistic shape, approximate scale (not calibrated ng/mL).{#if data.excluded.length}
 			Not plotted: {data.excluded.join(', ')} (non-mass units or no half-life).{/if}
 	</p>
 {/if}
