@@ -1,9 +1,12 @@
+import math
 from datetime import date
 from types import SimpleNamespace
 
 from apps.protocols.services import (
+    absorption_constant_per_day,
     active_amount,
     adherence_pct,
+    concentration_series,
     decay_constant_per_day,
     expected_doses,
     marker_in_range,
@@ -67,6 +70,51 @@ class TestReleaseRate:
     def test_no_half_life_empty(self):
         assert release_rate_series([(0, 100)], 0, 1, 0, 5) == []
         assert release_rate_series([(0, 100)], None, 1, 0, 5) == []
+
+
+class TestAbsorptionConstant:
+    def test_reproduces_tmax(self):
+        ke = decay_constant_per_day(168)  # t½ 7 days
+        ka = absorption_constant_per_day(33.3, ke)  # tmax ≈ 1.39 days
+        assert ka is not None and ka > ke
+        tmax_days = math.log(ka / ke) / (ka - ke)
+        assert abs(tmax_days - 33.3 / 24.0) < 0.01
+
+    def test_missing_tmax_is_none(self):
+        ke = decay_constant_per_day(168)
+        assert absorption_constant_per_day(None, ke) is None
+        assert absorption_constant_per_day(0, ke) is None
+
+
+class TestConcentration:
+    def test_single_dose_rises_to_peak_then_falls(self):
+        pts = concentration_series([(0, 100)], half_life_hours=168, tmax_hours=48,
+                                   bioavailability=1, active_fraction=1,
+                                   start_day=0, end_day=20, step_days=1)
+        levels = [v for _, v in pts]
+        assert levels[0] < levels[2]  # absorption phase: starts low, rising
+        peak_i = max(range(len(levels)), key=lambda i: levels[i])
+        assert 1 <= peak_i <= 3  # peaks near tmax (~2 days)
+        assert levels[-1] < levels[peak_i]  # decays after the peak
+
+    def test_fallback_is_exponential_decay(self):
+        # No tmax → instantaneous absorption: starts at max, halves each half-life.
+        pts = concentration_series([(0, 100)], half_life_hours=24, tmax_hours=None,
+                                   bioavailability=1, active_fraction=1,
+                                   start_day=0, end_day=2, step_days=1)
+        assert pts[0][1] == 100.0
+        assert round(pts[1][1], 5) == 50.0
+        assert round(pts[2][1], 5) == 25.0
+
+    def test_bioavailability_and_fraction_scale(self):
+        full = concentration_series([(0, 100)], 24, None, 1.0, 1.0, 0, 0)[0][1]
+        half_bio = concentration_series([(0, 100)], 24, None, 0.5, 1.0, 0, 0)[0][1]
+        half_f = concentration_series([(0, 100)], 24, None, 1.0, 0.5, 0, 0)[0][1]
+        assert round(half_bio, 6) == round(full * 0.5, 6)
+        assert round(half_f, 6) == round(full * 0.5, 6)
+
+    def test_no_half_life_empty(self):
+        assert concentration_series([(0, 100)], 0, None, 1, 1, 0, 5) == []
 
 
 class TestScheduledDoses:

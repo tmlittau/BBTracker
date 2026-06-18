@@ -65,6 +65,19 @@ class Compound(TimeStampedModel):
         max_digits=4, decimal_places=3, default=Decimal("1.000"),
         help_text="Fraction of dose that is active drug (ester/salt weight correction).",
     )
+    # Pharmacokinetics for the concentration (Bateman) model. Optional: with no
+    # tmax the model degrades to instantaneous absorption (exponential decay).
+    tmax_hours = models.DecimalField(
+        max_digits=9, decimal_places=3, null=True, blank=True,
+        help_text="Time to peak (hours) — drives the absorption phase of the curve.",
+    )
+    bioavailability = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True,
+        help_text="Fraction absorbed (0–1); treated as 1 when unknown.",
+    )
+    pk_source = models.TextField(
+        blank=True, help_text="Source(s) for the half-life / Tmax / bioavailability values.",
+    )
     notes = models.TextField(blank=True)
 
     class Meta:

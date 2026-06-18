@@ -14,6 +14,9 @@ export interface Compound {
 	half_life_hours: string | null;
 	ester: string;
 	active_fraction: string;
+	tmax_hours: string | null;
+	bioavailability: string | null;
+	pk_source: string;
 	notes: string;
 	is_global: boolean;
 }

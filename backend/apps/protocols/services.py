@@ -90,6 +90,80 @@ def release_rate_series(doses, half_life_hours, active_fraction, start_day, end_
     return points
 
 
+def absorption_constant_per_day(tmax_hours, ke) -> float | None:
+    """First-order absorption rate constant ka (per day) whose single-dose peak
+    falls at `tmax_hours`, given elimination constant `ke`.
+
+    Bateman peak time tmax = ln(ka/ke)/(ka−ke) is strictly decreasing in ka (→∞ as
+    ka→0, →0 as ka→∞), so a bisection finds the unique ka. None if tmax is missing
+    or outside the achievable range.
+    """
+    if not tmax_hours or float(tmax_hours) <= 0 or not ke or ke <= 0:
+        return None
+    tmax = float(tmax_hours) / 24.0
+
+    def peak_time(ka):
+        if abs(ka - ke) < 1e-9:
+            return 1.0 / ke  # limit of ln(ka/ke)/(ka−ke) as ka→ke
+        return math.log(ka / ke) / (ka - ke)
+
+    lo, hi = 1e-6, 1e6
+    if not (peak_time(hi) <= tmax <= peak_time(lo)):
+        return None
+    for _ in range(100):  # geometric bisection — ka spans orders of magnitude
+        mid = math.sqrt(lo * hi)
+        if peak_time(mid) > tmax:
+            lo = mid
+        else:
+            hi = mid
+    return math.sqrt(lo * hi)
+
+
+def concentration_series(doses, half_life_hours, tmax_hours, bioavailability,
+                         active_fraction, start_day, end_day, step_days=1):
+    """Relative active serum level over day-offsets [start_day, end_day].
+
+    One-compartment model with first-order absorption + elimination (Bateman): a
+    dose D on day dᵢ contributes F·f·D·(ka/(ka−ke))·(e^−ke·Δ − e^−ka·Δ), Δ = t−dᵢ ≥ 0,
+    where ke = ln2/half-life, ka is fitted from `tmax_hours`, F = bioavailability
+    (default 1), f = active fraction. With no usable tmax it degrades to
+    instantaneous absorption F·f·D·e^−ke·Δ (the older exponential shape). Output is
+    a relative level (Vd = 1, arbitrary units) comparable across compounds — not a
+    calibrated ng/mL. `doses` = iterable of (day_offset, amount). Returns [(day, level)].
+    """
+    ke = decay_constant_per_day(half_life_hours)
+    if ke is None:
+        return []
+    f = 1.0 if active_fraction is None else float(active_fraction)
+    bio = 1.0 if bioavailability is None else float(bioavailability)
+    scale = f * bio
+    ka = absorption_constant_per_day(tmax_hours, ke)
+
+    if ka is not None and abs(ka - ke) > 1e-9:
+        coef = ka / (ka - ke)
+
+        def kernel(dt):
+            return coef * (math.exp(-ke * dt) - math.exp(-ka * dt))
+    else:
+        def kernel(dt):
+            return math.exp(-ke * dt)
+
+    ds = sorted((float(d), float(a)) for d, a in doses if a is not None)
+    points = []
+    n = 0
+    t = start_day
+    while t <= end_day + 1e-9:
+        total = 0.0
+        for d_i, a_i in ds:
+            if d_i > t:
+                break
+            total += scale * a_i * kernel(t - d_i)
+        points.append((round(t, 4), round(total, 5)))
+        n += 1
+        t = start_day + n * step_days
+    return points
+
+
 def times_per_day_count(times_of_day, frequency) -> int:
     """Administrations per dosing day (multi-select times, or legacy 2×/day)."""
     n = len(times_of_day) if times_of_day else 0
@@ -189,7 +263,7 @@ _MG_PER_UNIT = {"mg": 1.0, "mcg": 0.001}
 
 def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
                             step_days=1, max_history_days=365):
-    """Per-compound active-release (mg/day) curves for a whole protocol.
+    """Per-compound active serum-level (relative, Bateman) curves for a whole protocol.
 
     The past (≤ today) uses the owner's actual `DoseLog`s for each compound; the
     future (> today) is projected from each item's schedule (frequency + days/times).
@@ -220,7 +294,7 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         )["items"].append(it)
 
     empty = {"now": today.isoformat(), "today_day": 0, "start": None, "end": None,
-             "unit": "mg/day", "compounds": [], "excluded": excluded}
+             "unit": "relative", "compounds": [], "excluded": excluded}
     if not grouped:
         return empty
 
@@ -287,11 +361,14 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         if not doses:               # nothing logged or planned → no meaningful line
             continue
 
-        series = release_rate_series(doses, hl, c.active_fraction, 0, total_days, step_days)
+        series = concentration_series(
+            doses, hl, c.tmax_hours, c.bioavailability, c.active_fraction,
+            0, total_days, step_days,
+        )
         compounds_out.append({
             "compound_id": c.id,
             "name": c.name,
-            "unit": "mg/day",
+            "unit": "relative",
             "half_life_hours": float(hl),
             "active_fraction": float(c.active_fraction),
             "points": [
@@ -307,7 +384,7 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         "today_day": today_day,
         "start": start_date.isoformat(),
         "end": plot_end.isoformat(),
-        "unit": "mg/day",
+        "unit": "relative",
         "compounds": compounds_out,
         "excluded": excluded,
     }

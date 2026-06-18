@@ -21,36 +21,55 @@ from apps.protocols.models import BloodMarker, Compound, InjectionSite
 
 CC = CompoundClass
 
-# name, class, default_unit, default_route, half_life_hours, ester, active_fraction
+# name, class, default_unit, default_route, half_life_hours, ester, active_fraction,
+# tmax_hours, bioavailability, pk_source
+# Tmax / bioavailability (and their sources) come from the steroidplotter PK dataset's
+# cited studies; "" = unknown (the concentration model then falls back to instantaneous
+# absorption). Half-lives / active fractions are our existing curated values.
 COMPOUNDS = [
     # Anabolics (ester active fraction = free steroid / ester weight)
-    ("Testosterone Enanthate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "168", "Enanthate", "0.700"),
-    ("Testosterone Cypionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "192", "Cypionate", "0.690"),
-    ("Testosterone Propionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "20", "Propionate", "0.800"),
-    ("Testosterone Undecanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "504", "Undecanoate", "0.630"),
-    ("Nandrolone Decanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "144", "Decanoate", "0.640"),
-    ("Trenbolone Acetate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "24", "Acetate", "0.870"),
-    ("Boldenone Undecylenate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "336", "Undecylenate", "0.620"),
+    ("Testosterone Enanthate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "168", "Enanthate", "0.700",
+     "33.3", "0.72", "Yin et al. 2014 (PMC4721027)"),
+    ("Testosterone Cypionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "192", "Cypionate", "0.690",
+     "108", "0.70", "psp4.12287 / ajpendo.00502.2001"),
+    ("Testosterone Propionate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "20", "Propionate", "0.800",
+     "25.5", "0.84", "JCEM 63/6/1361"),
+    ("Testosterone Undecanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "504", "Undecanoate", "0.630",
+     "240", "0.65", "Nebido PI / jandrol.109.009597"),
+    ("Nandrolone Decanoate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "144", "Decanoate", "0.640",
+     "44", "0.73", "JCEM 90/5/2624"),
+    ("Trenbolone Acetate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "24", "Acetate", "0.870",
+     "", "0.87", "ScienceDirect S002228602030452X"),
+    ("Boldenone Undecylenate", CC.ANABOLIC, DoseUnit.MG, Route.IM, "336", "Undecylenate", "0.620",
+     "144", "0.63", "pubmed 17348894"),
     ("Masteron (Drostanolone Propionate)", CC.ANABOLIC, DoseUnit.MG, Route.IM, "48",
-     "Propionate", "0.800"),
-    ("Oxandrolone (Anavar)", CC.ANABOLIC, DoseUnit.MG, Route.ORAL, "9", "", "1.000"),
+     "Propionate", "0.800", "", "0.84", "Llewellyn, Anabolics 2011"),
+    ("Oxandrolone (Anavar)", CC.ANABOLIC, DoseUnit.MG, Route.ORAL, "9", "", "1.000",
+     "1.6", "0.625", "PMC7134583"),
     # Peptides
-    ("BPC-157", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "4", "", "1.000"),
-    ("Ipamorelin", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "2", "", "1.000"),
-    ("CJC-1295 (no DAC)", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "0.5", "", "1.000"),
-    ("Semaglutide", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "168", "", "1.000"),
-    ("Tesamorelin", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "0.6", "", "1.000"),
+    ("BPC-157", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "4", "", "1.000", "", "", ""),
+    ("Ipamorelin", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "2", "", "1.000", "", "", ""),
+    ("CJC-1295 (no DAC)", CC.PEPTIDE, DoseUnit.MCG, Route.SUBQ, "0.5", "", "1.000", "", "", ""),
+    ("Semaglutide", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "168", "", "1.000",
+     "30", "0.89", "PMC7854449"),
+    ("Tesamorelin", CC.PEPTIDE, DoseUnit.MG, Route.SUBQ, "0.6", "", "1.000", "", "", ""),
     # Ancillaries / pharmaceuticals
-    ("Anastrozole", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "48", "", "1.000"),
-    ("Exemestane", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000"),
-    ("Tamoxifen", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "120", "", "1.000"),
-    ("Enclomiphene", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "240", "", "1.000"),
-    ("hCG", CC.ANCILLARY, DoseUnit.IU, Route.SUBQ, "33", "", "1.000"),
-    ("Telmisartan", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000"),
-    ("Isotretinoin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "21", "", "1.000"),
-    ("Finasteride", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000"),
-    ("Cialis (Tadalafil)", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "17.5", "", "1.000"),
-    ("Metformin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000"),
+    ("Anastrozole", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "48", "", "1.000",
+     "1.0", "0.80", "pubmed 19470631"),
+    ("Exemestane", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000",
+     "1.4", "0.05", "PMC1884784"),
+    ("Tamoxifen", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "120", "", "1.000",
+     "8.3", "0.15", "Nolvadex FDA biopharmr"),
+    ("Enclomiphene", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "240", "", "1.000", "", "", ""),
+    ("hCG", CC.ANCILLARY, DoseUnit.IU, Route.SUBQ, "33", "", "1.000",
+     "24", "0.45", "PMC8301557"),
+    ("Telmisartan", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "24", "", "1.000",
+     "1.7", "0.43", "pubmed 17009837"),
+    ("Isotretinoin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "21", "", "1.000", "", "", ""),
+    ("Finasteride", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000", "", "", ""),
+    ("Cialis (Tadalafil)", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "17.5", "", "1.000",
+     "2.5", "", "PMC1885023"),
+    ("Metformin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000", "", "", ""),
 ]
 
 # region, side, x%, y% (front-facing body map viewbox 0..100)
@@ -213,7 +232,7 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         c_new = 0
-        for name, cls, unit, route, half_life, ester, active in COMPOUNDS:
+        for name, cls, unit, route, half_life, ester, active, tmax, bio, src in COMPOUNDS:
             _, created = Compound.objects.update_or_create(
                 owner=None,
                 name=name,
@@ -225,6 +244,9 @@ class Command(BaseCommand):
                     "half_life_hours": Decimal(half_life),
                     "ester": ester,
                     "active_fraction": Decimal(active),
+                    "tmax_hours": Decimal(tmax) if tmax else None,
+                    "bioavailability": Decimal(bio) if bio else None,
+                    "pk_source": src,
                 },
             )
             c_new += created

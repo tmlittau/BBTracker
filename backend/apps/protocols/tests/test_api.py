@@ -239,7 +239,7 @@ def test_protocol_release_curve(api, user, test_e):
     resp = api.get(f"/api/v1/protocols/protocols/{p.id}/release/?horizon_days=28")
     assert resp.status_code == 200, resp.content
     data = resp.json()
-    assert data["unit"] == "mg/day"
+    assert data["unit"] == "relative"
     assert len(data["compounds"]) == 1
     series = data["compounds"][0]
     assert series["compound_id"] == test_e.id
