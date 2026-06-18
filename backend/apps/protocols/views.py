@@ -1,11 +1,12 @@
 from django.db.models import ProtectedError, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import viewsets
+from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.core.viewsets import OwnerScopedViewSet
 
@@ -26,6 +27,8 @@ from .serializers import (
     BloodMarkerSerializer,
     BloodPressureLogSerializer,
     BloodResultSerializer,
+    CompoundPlotRequestSerializer,
+    CompoundPlotSerializer,
     CompoundSerializer,
     DoseLogSerializer,
     InjectionSiteSerializer,
@@ -43,6 +46,7 @@ from .services import (
     injection_site_recency,
     marker_trend,
     phase_dose_matrix,
+    plot_compounds,
     protocol_adherence,
     protocol_release_curves,
     suggest_next_site,
@@ -88,6 +92,25 @@ class CompoundViewSet(GlobalOrOwnedViewSet):
     # list so the library and the protocol-builder picker can filter/search it
     # client-side without the 50-row page cap cropping entries.
     pagination_class = None
+
+
+@extend_schema(tags=["protocols"], request=CompoundPlotRequestSerializer,
+               responses=CompoundPlotSerializer)
+class CompoundPlotView(APIView):
+    """Stateless cycle planner: POST a set of {compound, dose, frequency, …} items →
+    overlaid relative concentration curves. Plans without touching any protocol."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        ser = CompoundPlotRequestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = plot_compounds(
+            request.user,
+            ser.validated_data["items"],
+            ser.validated_data.get("horizon_days", 84),
+        )
+        return Response(data)
 
 
 @extend_schema(tags=["protocols"])

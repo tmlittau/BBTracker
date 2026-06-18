@@ -13,7 +13,7 @@
 		{ href: '/nutrition', label: 'Nutrition', accent: 'text-emerald-300' },
 		{ href: '/protocols', label: 'Protocols', accent: 'text-violet-300' },
 		{ href: '/diary', label: 'Diary', accent: 'text-sky-300' },
-		{ href: '/body', label: 'Body', accent: 'text-rose-300' },
+		{ href: '/analysis', label: 'Analysis', accent: 'text-rose-300' },
 		{ href: '/phases', label: 'Phases', accent: 'text-amber-300' }
 	];
 

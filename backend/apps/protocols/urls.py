@@ -1,9 +1,11 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
     BloodMarkerViewSet,
     BloodPressureLogViewSet,
     BloodResultViewSet,
+    CompoundPlotView,
     CompoundViewSet,
     DoseLogViewSet,
     InjectionSiteViewSet,
@@ -25,4 +27,7 @@ router.register("vials", VialViewSet, basename="vial")
 router.register("blood-results", BloodResultViewSet, basename="bloodresult")
 router.register("bp-logs", BloodPressureLogViewSet, basename="bploh")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("plot/", CompoundPlotView.as_view(), name="compound-plot"),
+    *router.urls,
+]

@@ -1388,6 +1388,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/plot/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Stateless cycle planner: POST a set of {compound, dose, frequency, …} items →
+         *     overlaid relative concentration curves. Plans without touching any protocol.
+         */
+        post: operations["v1_protocols_plot_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols/protocol-items/": {
         parameters: {
             query?: never;
@@ -2684,6 +2704,31 @@ export interface components {
          * @enum {string}
          */
         CompoundClassEnum: "anabolic" | "peptide" | "sarm" | "ancillary" | "other";
+        CompoundPlot: {
+            horizon_days: number;
+            unit: string;
+            compounds: {
+                [key: string]: unknown;
+            }[];
+            excluded: string[];
+        };
+        /** @description One planned compound row for the stateless cycle plotter. */
+        CompoundPlotItemRequest: {
+            compound: number;
+            /** Format: double */
+            dose_amount: number;
+            dose_unit?: string;
+            frequency?: string;
+            days_of_week?: number[];
+            times_of_day?: string[];
+            start_day?: number;
+            duration_days?: number;
+        };
+        CompoundPlotRequestRequest: {
+            /** @default 84 */
+            horizon_days: number;
+            items: components["schemas"]["CompoundPlotItemRequest"][];
+        };
         CompoundRequest: {
             name: string;
             compound_class?: components["schemas"]["CompoundClassEnum"];
@@ -7796,6 +7841,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SiteRecency"];
+                };
+            };
+        };
+    };
+    v1_protocols_plot_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompoundPlotRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CompoundPlotRequestRequest"];
+                "multipart/form-data": components["schemas"]["CompoundPlotRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompoundPlot"];
                 };
             };
         };

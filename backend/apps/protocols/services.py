@@ -8,7 +8,7 @@ user's own logged data.
 from __future__ import annotations
 
 import math
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.utils import timezone
@@ -388,6 +388,67 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
         "compounds": compounds_out,
         "excluded": excluded,
     }
+
+
+def plot_compounds(user, items, horizon_days=84, step_days=1):
+    """Stateless cycle-planner curves: overlay per-compound concentration for a set
+    of hypothetical items over `horizon_days` from day 0. No DB writes.
+
+    Each item = {compound (id), dose_amount, dose_unit?, frequency?, days_of_week?,
+    times_of_day?, start_day?, duration_days?}. One line per compound (same-compound
+    items merge their doses). Non-mass units / missing half-life → excluded. Returns
+    {horizon_days, unit, compounds:[…], excluded:[…]}.
+    """
+    from django.db.models import Q
+
+    from .models import Compound
+
+    horizon = max(1, min(int(horizon_days or 84), 730))
+    anchor = date(2000, 1, 3)  # a Monday → sane weekday scheduling
+    by_id = {c.id: c for c in Compound.objects.filter(Q(owner=user) | Q(owner__isnull=True))}
+
+    grouped: dict[int, dict] = {}
+    excluded: list[str] = []
+    for it in items or []:
+        c = by_id.get(it.get("compound"))
+        if c is None:
+            continue
+        factor = _MG_PER_UNIT.get(it.get("dose_unit") or c.default_unit)
+        dose = it.get("dose_amount")
+        if not c.half_life_hours or float(c.half_life_hours) <= 0 or factor is None or not dose:
+            if c.name not in excluded:
+                excluded.append(c.name)
+            continue
+        start_day = max(0, int(it.get("start_day") or 0))
+        duration = int(it.get("duration_days") or horizon)
+        last_day = min(start_day + max(0, duration) - 1, horizon)
+        if last_day < start_day:
+            continue
+        freq = it.get("frequency") or "daily"
+        amt_mg = float(dose) * factor * times_per_day_count(it.get("times_of_day"), freq)
+        s, e = anchor + timedelta(days=start_day), anchor + timedelta(days=last_day)
+        bucket = grouped.setdefault(c.id, {"compound": c, "doses": []})
+        for d in scheduled_dose_dates(freq, it.get("days_of_week") or [], s, e, anchor):
+            bucket["doses"].append(((d - anchor).days, amt_mg))
+
+    compounds_out = []
+    for g in grouped.values():
+        if not g["doses"]:
+            continue
+        c = g["compound"]
+        series = concentration_series(
+            g["doses"], c.half_life_hours, c.tmax_hours, c.bioavailability,
+            c.active_fraction, 0, horizon, step_days,
+        )
+        compounds_out.append({
+            "compound_id": c.id,
+            "name": c.name,
+            "half_life_hours": float(c.half_life_hours),
+            "points": [{"day": int(d), "level": v} for d, v in series],
+        })
+    compounds_out.sort(key=lambda x: x["name"])
+    return {"horizon_days": horizon, "unit": "relative",
+            "compounds": compounds_out, "excluded": excluded}
 
 
 def injection_site_recency(owner, days=30):

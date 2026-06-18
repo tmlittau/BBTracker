@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Dependency-free SVG chart of per-compound active serum level (relative, Bateman
+	// Dependency-free SVG chart of per-compound estimated serum concentration (Bateman
 	// absorption + elimination) over a whole protocol. One coloured line per compound;
 	// the logged-doses portion (≤ today) is solid and the schedule-projected portion
 	// (> today) is dashed, split at a "today" marker. Data: GET /protocols/{id}/release/.
@@ -89,7 +89,7 @@
 			text-anchor="middle"
 			transform={`rotate(-90 12 ${cy})`}
 		>
-			Active level ({data.unit})
+			Est. serum level
 		</text>
 
 		<!-- today marker -->
@@ -134,8 +134,9 @@
 		{/each}
 	</div>
 	<p class="mt-1 text-xs text-neutral-500">
-		Solid = logged doses · dashed = projected from the schedule. Relative active serum level
-		(Bateman absorption + elimination), comparable shapes — not calibrated ng/mL.{#if data.excluded.length}
+		Solid = logged doses · dashed = projected from the schedule. Estimated serum concentration
+		(one-compartment model from dose, ester fraction, bioavailability + half-life) — realistic shape,
+		approximate scale.{#if data.excluded.length}
 			Not plotted: {data.excluded.join(', ')} (non-mass units).{/if}
 	</p>
 {/if}

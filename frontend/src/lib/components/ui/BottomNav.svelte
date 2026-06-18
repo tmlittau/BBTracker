@@ -12,7 +12,7 @@
 		{ href: '/nutrition', label: 'Nutrition', accent: 'text-emerald-400', icon: 'food' },
 		{ href: '/protocols', label: 'Protocols', accent: 'text-violet-400', icon: 'vial' },
 		{ href: '/diary', label: 'Diary', accent: 'text-sky-400', icon: 'camera' },
-		{ href: '/body', label: 'Body', accent: 'text-rose-400', icon: 'body' }
+		{ href: '/analysis', label: 'Analysis', accent: 'text-rose-400', icon: 'body' }
 	];
 
 	function isActive(t: Tab): boolean {

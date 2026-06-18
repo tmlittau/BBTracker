@@ -204,6 +204,31 @@ class ProtocolReleaseSerializer(serializers.Serializer):
     excluded = serializers.ListField(child=serializers.CharField())
 
 
+class CompoundPlotItemSerializer(serializers.Serializer):
+    """One planned compound row for the stateless cycle plotter."""
+
+    compound = serializers.IntegerField()
+    dose_amount = serializers.FloatField()
+    dose_unit = serializers.CharField(required=False, allow_blank=True)
+    frequency = serializers.CharField(required=False, allow_blank=True)
+    days_of_week = serializers.ListField(child=serializers.IntegerField(), required=False)
+    times_of_day = serializers.ListField(child=serializers.CharField(), required=False)
+    start_day = serializers.IntegerField(required=False)
+    duration_days = serializers.IntegerField(required=False)
+
+
+class CompoundPlotRequestSerializer(serializers.Serializer):
+    horizon_days = serializers.IntegerField(required=False, default=84)
+    items = CompoundPlotItemSerializer(many=True)
+
+
+class CompoundPlotSerializer(serializers.Serializer):
+    horizon_days = serializers.IntegerField()
+    unit = serializers.CharField()
+    compounds = serializers.ListField(child=serializers.DictField())
+    excluded = serializers.ListField(child=serializers.CharField())
+
+
 class SiteRecencySerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
