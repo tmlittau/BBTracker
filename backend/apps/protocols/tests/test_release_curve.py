@@ -11,8 +11,8 @@ pytestmark = pytest.mark.django_db
 
 
 def test_release_rate_accumulates_with_steady_dosing(db):
-    """Steady daily dosing makes the active-release rate RISE toward a plateau
-    (≈ dose × active fraction), not decrease.
+    """Steady daily dosing makes the active serum-level curve RISE toward a steady
+    state, not decrease.
 
     Regression for a reported 'no matter how often I log it still decreases':
     the curve is correct — it's sparse / no-schedule dosing that decays after the
@@ -34,9 +34,9 @@ def test_release_rate_accumulates_with_steady_dosing(db):
             amount=50, unit="mg", route="im",
         )
     data = protocol_release_curves(u, p, horizon_days=14)
+    assert data["unit"] == "relative"
     logged = [pt["rate"] for pt in data["compounds"][0]["points"] if not pt["projected"]]
-    # Climbs over the dosing period toward the 50 mg × 0.70 = 35 mg/day plateau
-    # (still approaching it at day 20). The point: more doses → higher, not lower.
+    # Climbs over the dosing period toward a steady-state level (still approaching
+    # it at day 20). The point: more doses → higher, not lower.
     assert logged[1] < logged[len(logged) // 2] < logged[-1]
     assert logged[-1] > 2 * logged[2]
-    assert 25 < logged[-1] < 35

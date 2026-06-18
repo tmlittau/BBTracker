@@ -22,7 +22,8 @@ class CompoundSerializer(serializers.ModelSerializer):
         model = Compound
         fields = [
             "id", "name", "slug", "compound_class", "default_unit", "default_route",
-            "half_life_hours", "ester", "active_fraction", "notes", "is_global",
+            "half_life_hours", "ester", "active_fraction",
+            "tmax_hours", "bioavailability", "pk_source", "notes", "is_global",
         ]
         read_only_fields = ["slug", "is_global"]
 

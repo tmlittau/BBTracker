@@ -2660,6 +2660,18 @@ export interface components {
              * @description Fraction of dose that is active drug (ester/salt weight correction).
              */
             active_fraction?: string;
+            /**
+             * Format: decimal
+             * @description Time to peak (hours) — drives the absorption phase of the curve.
+             */
+            tmax_hours?: string | null;
+            /**
+             * Format: decimal
+             * @description Fraction absorbed (0–1); treated as 1 when unknown.
+             */
+            bioavailability?: string | null;
+            /** @description Source(s) for the half-life / Tmax / bioavailability values. */
+            pk_source?: string;
             notes?: string;
             readonly is_global: boolean;
         };
@@ -2688,6 +2700,18 @@ export interface components {
              * @description Fraction of dose that is active drug (ester/salt weight correction).
              */
             active_fraction?: string;
+            /**
+             * Format: decimal
+             * @description Time to peak (hours) — drives the absorption phase of the curve.
+             */
+            tmax_hours?: string | null;
+            /**
+             * Format: decimal
+             * @description Fraction absorbed (0–1); treated as 1 when unknown.
+             */
+            bioavailability?: string | null;
+            /** @description Source(s) for the half-life / Tmax / bioavailability values. */
+            pk_source?: string;
             notes?: string;
         };
         Csrf: {
@@ -3679,6 +3703,18 @@ export interface components {
              * @description Fraction of dose that is active drug (ester/salt weight correction).
              */
             active_fraction?: string;
+            /**
+             * Format: decimal
+             * @description Time to peak (hours) — drives the absorption phase of the curve.
+             */
+            tmax_hours?: string | null;
+            /**
+             * Format: decimal
+             * @description Fraction absorbed (0–1); treated as 1 when unknown.
+             */
+            bioavailability?: string | null;
+            /** @description Source(s) for the half-life / Tmax / bioavailability values. */
+            pk_source?: string;
             notes?: string;
         };
         PatchedDiaryEntryRequest: {
