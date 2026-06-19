@@ -9,7 +9,6 @@
 		type Supplement
 	} from '$lib/protocols/api';
 	import { num } from '$lib/protocols/calc';
-	import BodyMap from '$lib/protocols/BodyMap.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let compounds = $state<Compound[]>([]);
@@ -33,6 +32,17 @@
 	let saving = $state(false);
 
 	const isInjection = $derived(route === 'im' || route === 'subq');
+	// Sites for the current route (im / subq) only.
+	const routeSites = $derived(sites.filter((s) => s.route === route));
+	const SITE_DOT: Record<string, string> = {
+		rested: 'bg-green-500',
+		recovering: 'bg-amber-500',
+		fresh: 'bg-red-500'
+	};
+	// Clear the chosen site when switching route (it belongs to the other route).
+	$effect(() => {
+		if (siteId != null && !routeSites.some((s) => s.id === siteId)) siteId = null;
+	});
 	const todayISO = new Date().toISOString().slice(0, 10);
 
 	async function loadSites() {
@@ -266,13 +276,33 @@
 			<Button type="submit" disabled={saving}>{saving ? 'Logging…' : 'Log dose'}</Button>
 		</form>
 
-		<!-- Body map (injections only) -->
+		<!-- Injection site (injections only) -->
 		<div>
 			{#if isInjection && kind === 'compound'}
-				<BodyMap {sites} bind:selected={siteId} />
+				<p class="text-xs text-neutral-500">
+					Injection site <span class="uppercase text-neutral-400">· {route}</span>
+				</p>
+				<div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+					{#each routeSites as s (s.id)}
+						<button
+							type="button"
+							onclick={() => (siteId = siteId === s.id ? null : s.id)}
+							class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm {siteId ===
+							s.id
+								? 'border-violet-500 bg-violet-950/40 text-white'
+								: 'border-neutral-700 text-neutral-200 hover:border-neutral-500'}"
+						>
+							<span>{s.name}</span>
+							<span
+								class="h-2 w-2 shrink-0 rounded-full {SITE_DOT[s.status] ?? 'bg-neutral-600'}"
+								title={s.days_since != null ? `${s.days_since} d ago` : 'not used recently'}
+							></span>
+						</button>
+					{/each}
+				</div>
 			{:else}
 				<p class="text-sm text-neutral-500">
-					The injection-site map appears for intramuscular / subcutaneous routes.
+					The injection-site picker appears for intramuscular / subcutaneous routes.
 				</p>
 			{/if}
 		</div>

@@ -47,6 +47,7 @@ export interface InjectionSite {
 	slug: string;
 	region: string;
 	side: string;
+	route: string;
 	x: string;
 	y: string;
 }
@@ -81,6 +82,7 @@ export interface ProtocolItem {
 	dose_amount: string | null;
 	dose_unit: string;
 	route: string;
+	compound_route: string;
 	frequency: string;
 	days_of_week: number[];
 	times_of_day: string[];

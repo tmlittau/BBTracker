@@ -103,20 +103,29 @@ COMPOUNDS = [
     ("Metformin", CC.ANCILLARY, DoseUnit.MG, Route.ORAL, "6", "", "1.000", "", "", ""),
 ]
 
-# region, side, x%, y% (front-facing body map viewbox 0..100)
+# name, region, side, route, x%, y% (body-map viewbox 0..100). Route drives the
+# route-filtered site picker; x/y position the dot on the body-map fallback.
 SITES = [
-    ("Left ventroglute", "ventroglute", Side.LEFT, "38", "52"),
-    ("Right ventroglute", "ventroglute", Side.RIGHT, "62", "52"),
-    ("Left glute", "glute", Side.LEFT, "40", "56"),
-    ("Right glute", "glute", Side.RIGHT, "60", "56"),
-    ("Left quad", "quad", Side.LEFT, "42", "70"),
-    ("Right quad", "quad", Side.RIGHT, "58", "70"),
-    ("Left delt", "delt", Side.LEFT, "30", "30"),
-    ("Right delt", "delt", Side.RIGHT, "70", "30"),
-    ("Left pec", "pec", Side.LEFT, "43", "32"),
-    ("Right pec", "pec", Side.RIGHT, "57", "32"),
-    ("Left abdomen (SubQ)", "abdomen", Side.LEFT, "45", "46"),
-    ("Right abdomen (SubQ)", "abdomen", Side.RIGHT, "55", "46"),
+    # Intramuscular
+    ("Left pec", "pec", Side.LEFT, Route.IM, "43", "32"),
+    ("Right pec", "pec", Side.RIGHT, Route.IM, "57", "32"),
+    ("Left lat", "lats", Side.LEFT, Route.IM, "34", "44"),
+    ("Right lat", "lats", Side.RIGHT, Route.IM, "66", "44"),
+    ("Left front delt", "front_delt", Side.LEFT, Route.IM, "35", "29"),
+    ("Right front delt", "front_delt", Side.RIGHT, Route.IM, "65", "29"),
+    ("Left rear delt", "rear_delt", Side.LEFT, Route.IM, "30", "28"),
+    ("Right rear delt", "rear_delt", Side.RIGHT, Route.IM, "70", "28"),
+    ("Left glute", "glute", Side.LEFT, Route.IM, "40", "56"),
+    ("Right glute", "glute", Side.RIGHT, Route.IM, "60", "56"),
+    ("Left quad", "quad", Side.LEFT, Route.IM, "42", "70"),
+    ("Right quad", "quad", Side.RIGHT, Route.IM, "58", "70"),
+    # Subcutaneous
+    ("Left glute (SubQ)", "glute", Side.LEFT, Route.SUBQ, "41", "57"),
+    ("Right glute (SubQ)", "glute", Side.RIGHT, Route.SUBQ, "59", "57"),
+    ("Left lower back", "lower_back", Side.LEFT, Route.SUBQ, "40", "49"),
+    ("Right lower back", "lower_back", Side.RIGHT, Route.SUBQ, "60", "49"),
+    ("Left lower belly", "lower_belly", Side.LEFT, Route.SUBQ, "45", "46"),
+    ("Right lower belly", "lower_belly", Side.RIGHT, Route.SUBQ, "55", "46"),
 ]
 
 # name, unit, category, ref_low, ref_high, ref_low_male, ref_high_male,
@@ -282,14 +291,16 @@ class Command(BaseCommand):
             )
             c_new += created
 
-        for name, region, side, x, y in SITES:
+        for name, region, side, route, x, y in SITES:
             InjectionSite.objects.update_or_create(
                 slug=slugify(name),
                 defaults={
-                    "name": name, "region": region, "side": side,
+                    "name": name, "region": region, "side": side, "route": route,
                     "x": Decimal(x), "y": Decimal(y),
                 },
             )
+        # Prune superseded sites (DoseLog.injection_site is SET_NULL, so safe).
+        InjectionSite.objects.exclude(slug__in={slugify(s[0]) for s in SITES}).delete()
 
         m_new = 0
         for (name, unit, cat, lo, hi, lom, him, lof, hif, order, aliases) in MARKERS:

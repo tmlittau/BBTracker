@@ -100,13 +100,18 @@ TIME_OF_DAY_UI = [
 
 
 class BodyRegion(models.TextChoices):
-    GLUTE = "glute", "Glute (dorsogluteal)"
+    GLUTE = "glute", "Glute"
     VENTROGLUTE = "ventroglute", "Ventrogluteal"
-    QUAD = "quad", "Quad (vastus lateralis)"
+    QUAD = "quad", "Quad"
     DELT = "delt", "Deltoid"
+    FRONT_DELT = "front_delt", "Front delt"
+    REAR_DELT = "rear_delt", "Rear delt"
     LAT_DELT = "lat_delt", "Lateral delt (SubQ)"
+    LATS = "lats", "Lats"
+    PEC = "pec", "Pec / chest"
     ABDOMEN = "abdomen", "Abdomen (SubQ)"
-    PEC = "pec", "Pec"
+    LOWER_BACK = "lower_back", "Lower back"
+    LOWER_BELLY = "lower_belly", "Lower belly"
     BICEP = "bicep", "Biceps"
     TRICEP = "tricep", "Triceps"
     CALF = "calf", "Calf"

@@ -166,9 +166,14 @@
 
 	// --- logging (injectables prompt for a site first) ---
 	const INJECTABLE = new Set(['im', 'subq']);
+	// The item's own route is often blank, so fall back to the compound's default.
+	const effectiveRoute = (item: ProtocolItem) => item.route || item.compound_route || '';
+	const isInjectable = (item: ProtocolItem) =>
+		item.compound != null && INJECTABLE.has(effectiveRoute(item));
 	let pendingInjectable = $state<ProtocolItem | null>(null);
 	let pendingTakenAt = $state<string | undefined>(undefined);
 	let showSiteModal = $state(false);
+	const pendingRoute = $derived(pendingInjectable ? effectiveRoute(pendingInjectable) : '');
 
 	async function logItem(
 		item: ProtocolItem,
@@ -185,7 +190,7 @@
 				taken_at: takenAt,
 				amount: item.dose_amount ?? '0',
 				unit: item.dose_unit,
-				route: item.route || undefined,
+				route: effectiveRoute(item) || undefined,
 				injection_site: injectionSite
 			});
 			await Promise.all([loadDoses(), loadSites()]);
@@ -196,7 +201,7 @@
 		}
 	}
 	function quickLog(item: ProtocolItem) {
-		if (item.compound != null && item.route && INJECTABLE.has(item.route)) {
+		if (isInjectable(item)) {
 			pendingInjectable = item;
 			showSiteModal = true;
 		} else {
@@ -216,7 +221,7 @@
 	function logMissed(m: { item: ProtocolItem; slotKey: string }) {
 		const time = SLOT_TIME[m.slotKey] ?? '20:00';
 		const takenAt = new Date(`${yesterday}T${time}:00`).toISOString();
-		if (m.item.compound != null && m.item.route && INJECTABLE.has(m.item.route)) {
+		if (isInjectable(m.item)) {
 			pendingInjectable = m.item;
 			pendingTakenAt = takenAt;
 			showSiteModal = true;
@@ -261,7 +266,14 @@
 	const freqLabel = (k: string) => FREQUENCIES.find((f) => f.key === k)?.label ?? k;
 </script>
 
-<SiteSelectModal bind:open={showSiteModal} {sites} {suggestion} onconfirm={onSiteChosen} />
+<SiteSelectModal
+	bind:open={showSiteModal}
+	{sites}
+	{suggestion}
+	route={pendingRoute}
+	compound={pendingInjectable?.item_name ?? ''}
+	onconfirm={onSiteChosen}
+/>
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Protocols</h1>
@@ -312,7 +324,7 @@
 						<span class="block truncate font-medium">{m.item.item_name}</span>
 						<span class="text-xs text-neutral-500">
 							{m.item.dose_amount ?? '—'}{m.item.dose_unit} · {m.slotLabel}
-							{#if m.item.compound != null && (m.item.route === 'im' || m.item.route === 'subq')}· 💉{/if}
+							{#if isInjectable(m.item)}· 💉{/if}
 						</span>
 					</button>
 				{/each}
@@ -347,7 +359,7 @@
 										<span class="block truncate font-medium">{item.item_name}</span>
 										<span class="text-xs text-neutral-500">
 											{item.dose_amount ?? '—'}{item.dose_unit}
-											{#if item.compound != null && (item.route === 'im' || item.route === 'subq')}· 💉{/if}
+											{#if isInjectable(item)}· 💉{/if}
 											{logging === item.id ? '· …' : ''}
 										</span>
 									</button>

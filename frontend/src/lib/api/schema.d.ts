@@ -3040,6 +3040,7 @@ export interface components {
             slug: string;
             region: components["schemas"]["RegionEnum"];
             side?: components["schemas"]["SideEnum"];
+            route?: components["schemas"]["RouteEnum"];
             /** Format: decimal */
             x?: string;
             /** Format: decimal */
@@ -4202,6 +4203,11 @@ export interface components {
             dose_amount?: string | null;
             dose_unit?: components["schemas"]["DoseUnitEnum"];
             route?: components["schemas"]["RouteEnum"] | components["schemas"]["BlankEnum"];
+            /**
+             * @description The compound's default route — lets the client detect injectables even
+             *     when the item's own route is blank.
+             */
+            readonly compound_route: string;
             frequency?: components["schemas"]["FrequencyEnum"];
             days_of_week?: unknown;
             times_of_day?: unknown;
@@ -4271,19 +4277,24 @@ export interface components {
             notes?: string;
         };
         /**
-         * @description * `glute` - Glute (dorsogluteal)
+         * @description * `glute` - Glute
          *     * `ventroglute` - Ventrogluteal
-         *     * `quad` - Quad (vastus lateralis)
+         *     * `quad` - Quad
          *     * `delt` - Deltoid
+         *     * `front_delt` - Front delt
+         *     * `rear_delt` - Rear delt
          *     * `lat_delt` - Lateral delt (SubQ)
+         *     * `lats` - Lats
+         *     * `pec` - Pec / chest
          *     * `abdomen` - Abdomen (SubQ)
-         *     * `pec` - Pec
+         *     * `lower_back` - Lower back
+         *     * `lower_belly` - Lower belly
          *     * `bicep` - Biceps
          *     * `tricep` - Triceps
          *     * `calf` - Calf
          * @enum {string}
          */
-        RegionEnum: "glute" | "ventroglute" | "quad" | "delt" | "lat_delt" | "abdomen" | "pec" | "bicep" | "tricep" | "calf";
+        RegionEnum: "glute" | "ventroglute" | "quad" | "delt" | "front_delt" | "rear_delt" | "lat_delt" | "lats" | "pec" | "abdomen" | "lower_back" | "lower_belly" | "bicep" | "tricep" | "calf";
         ReleaseCompound: {
             compound_id: number;
             name: string;
@@ -4394,6 +4405,7 @@ export interface components {
             slug: string;
             region: string;
             side: string;
+            route: string;
             /** Format: decimal */
             x: string;
             /** Format: decimal */
