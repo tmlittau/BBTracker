@@ -156,6 +156,8 @@ class InjectionSite(models.Model):
     slug = models.SlugField(max_length=60, unique=True)
     region = models.CharField(max_length=12, choices=BodyRegion.choices)
     side = models.CharField(max_length=8, choices=Side.choices, default=Side.LEFT)
+    # Injection route this site is used for (im / subq) — drives the route-filtered picker.
+    route = models.CharField(max_length=8, choices=Route.choices, default=Route.IM)
     # SVG body-map coordinates (percent of viewbox), for the interactive picker.
     x = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("50"))
     y = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("50"))

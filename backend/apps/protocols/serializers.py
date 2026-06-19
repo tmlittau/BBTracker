@@ -72,7 +72,7 @@ class SupplementSerializer(serializers.ModelSerializer):
 class InjectionSiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = InjectionSite
-        fields = ["id", "name", "slug", "region", "side", "x", "y"]
+        fields = ["id", "name", "slug", "region", "side", "route", "x", "y"]
 
 
 class BloodMarkerSerializer(serializers.ModelSerializer):
@@ -87,12 +87,13 @@ class BloodMarkerSerializer(serializers.ModelSerializer):
 
 class ProtocolItemSerializer(serializers.ModelSerializer):
     item_name = serializers.SerializerMethodField()
+    compound_route = serializers.SerializerMethodField()
 
     class Meta:
         model = ProtocolItem
         fields = [
             "id", "protocol", "compound", "supplement", "item_name",
-            "dose_amount", "dose_unit", "route", "frequency",
+            "dose_amount", "dose_unit", "route", "compound_route", "frequency",
             "days_of_week", "times_of_day",
             "target_benefit", "notes", "order",
         ]
@@ -100,6 +101,11 @@ class ProtocolItemSerializer(serializers.ModelSerializer):
     def get_item_name(self, obj) -> str:
         item = obj.compound or obj.supplement
         return str(item) if item else ""
+
+    def get_compound_route(self, obj) -> str:
+        """The compound's default route — lets the client detect injectables even
+        when the item's own route is blank."""
+        return obj.compound.default_route if obj.compound_id else ""
 
     def validate(self, attrs):
         compound = attrs.get("compound", getattr(self.instance, "compound", None))
@@ -235,6 +241,7 @@ class SiteRecencySerializer(serializers.Serializer):
     slug = serializers.CharField()
     region = serializers.CharField()
     side = serializers.CharField()
+    route = serializers.CharField()
     x = serializers.DecimalField(max_digits=5, decimal_places=2)
     y = serializers.DecimalField(max_digits=5, decimal_places=2)
     last_used = serializers.CharField(allow_null=True)

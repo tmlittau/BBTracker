@@ -476,6 +476,7 @@ def injection_site_recency(owner, days=30):
                 "slug": site.slug,
                 "region": site.region,
                 "side": site.side,
+                "route": site.route,
                 "x": site.x,
                 "y": site.y,
                 "last_used": last.isoformat() if last else None,

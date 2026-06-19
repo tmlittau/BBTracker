@@ -300,6 +300,29 @@ def test_compound_plot_excludes_non_mass(api):
     assert "hCG plot" in data["excluded"]
 
 
+def test_injection_sites_carry_route(api):
+    InjectionSite.objects.create(
+        name="L Glute", slug="l-glute", region="glute", side="left", route="im"
+    )
+    InjectionSite.objects.create(
+        name="L Belly", slug="l-belly", region="lower_belly", side="left", route="subq"
+    )
+    routes = {s["name"]: s["route"] for s in api.get("/api/v1/protocols/injection-sites/").json()}
+    assert routes["L Glute"] == "im"
+    assert routes["L Belly"] == "subq"
+
+
+def test_protocol_item_exposes_compound_route(api, user, test_e):
+    # test_e is an injectable (default_route=im); the item's own route is left blank.
+    p = Protocol.objects.create(owner=user, name="Cyc")
+    ProtocolItem.objects.create(
+        protocol=p, compound=test_e, dose_amount=100, dose_unit="mg", frequency="weekly"
+    )
+    item = api.get(f"/api/v1/protocols/protocols/{p.id}/").json()["items"][0]
+    assert item["route"] == ""  # not set on the item
+    assert item["compound_route"] == "im"  # so the client falls back to this
+
+
 def test_parse_pdf(api, monkeypatch):
     # Stub the bytes→text step so no binary PDF fixture is needed; exercise the
     # endpoint + marker matching against a seeded marker.
