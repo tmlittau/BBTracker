@@ -289,7 +289,7 @@
 {:else if !session}
 	<!-- Entry screen: empty workout + the active program's days -->
 	<button
-		class="mt-6 w-full rounded-md bg-indigo-600 px-4 py-3 font-medium text-white hover:bg-indigo-500 sm:w-auto sm:px-6"
+		class="mt-6 w-full rounded-full bg-brand px-4 py-3 font-medium text-white hover:brightness-110 sm:w-auto sm:px-6"
 		onclick={startEmpty}
 	>
 		Start empty workout
@@ -307,7 +307,7 @@
 							<p class="text-xs text-neutral-500">{day.slots.length} exercise(s)</p>
 						</div>
 						<button
-							class="shrink-0 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+							class="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 							onclick={() => startDay(day.id)}
 						>
 							Start
@@ -318,7 +318,7 @@
 		</section>
 	{:else}
 		<p class="mt-6 text-sm text-neutral-500">
-			No active program. <a class="text-indigo-400" href="/training/programs">Build one →</a> to start workouts from a plan.
+			No active program. <a class="text-orange-400 hover:text-orange-300" href="/training/programs">Build one →</a> to start workouts from a plan.
 		</p>
 	{/if}
 {:else}
@@ -390,7 +390,7 @@
 										<StepperInput label="Weight" step={2.5} bind:value={pendingDraft[s.id].weight} placeholder="kg" />
 										<StepperInput label="Reps" step={1} inputmode="numeric" bind:value={pendingDraft[s.id].reps} placeholder="reps" />
 									</div>
-									<button class="mt-2 w-full rounded-md bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => logPending(s)}>Log</button>
+									<button class="mt-2 w-full rounded-full bg-brand px-3 py-2.5 text-sm font-medium text-white hover:brightness-110" onclick={() => logPending(s)}>Log</button>
 									{#if pendingE1rm(s.id) !== null}
 										<p class="mt-1 text-xs text-neutral-500">Est. 1RM: {pendingE1rm(s.id)} kg</p>
 									{/if}
@@ -441,7 +441,7 @@
 		<!-- Primary action lives at the bottom so it's reachable right after the last set. -->
 		<div class="mt-6">
 			<button
-				class="w-full rounded-md bg-indigo-600 px-4 py-3 text-base font-medium text-white hover:bg-indigo-500"
+				class="w-full rounded-full bg-brand px-4 py-3 text-base font-medium text-white hover:brightness-110"
 				onclick={finish}
 			>
 				Finish workout
@@ -458,7 +458,7 @@
 	{/if}
 
 	<p class="mt-6 text-sm">
-		<a class="text-indigo-400 hover:text-indigo-300" href="/training/history">View history →</a>
+		<a class="arrow-link" href="/training/history">View history →</a>
 	</p>
 
 	<!-- Sticky floating rest countdown (above the mobile tab bar). -->

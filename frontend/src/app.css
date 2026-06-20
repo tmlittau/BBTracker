@@ -2,6 +2,10 @@
 
 :root {
 	color-scheme: dark;
+	/* Brand: orange → red gradient (mirrors tmlittau.com). */
+	--brand-from: #f97316;
+	--brand-to: #ef4444;
+	--brand-grad: linear-gradient(95deg, #fb923c 0%, #f97316 45%, #ef4444 100%);
 }
 
 html,
@@ -12,6 +16,46 @@ body {
 body {
 	background-color: #0a0a0a;
 	color: #f5f5f5;
+	/* Subtle brand glow anchored top-centre so the dark canvas isn't flat. */
+	background-image: radial-gradient(60rem 26rem at 50% -8%, rgba(249, 115, 22, 0.07), transparent 70%);
+	background-attachment: fixed;
+}
+
+/* --- Brand helpers (shared with tmlittau.com's look) --- */
+/* Gradient clip-text for headline accents. */
+.text-gradient {
+	background-image: var(--brand-grad);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+/* Gradient fill for primary actions / the brand mark. */
+.bg-brand {
+	background-image: var(--brand-grad);
+}
+
+/* Pill link that reads as a button — replaces the bare "text →" links. */
+.arrow-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	border-radius: 9999px;
+	border: 1px solid #404040;
+	padding: 0.3rem 0.85rem;
+	font-size: 0.8125rem;
+	line-height: 1.1rem;
+	font-weight: 500;
+	color: #d4d4d4;
+	transition:
+		color 0.15s,
+		border-color 0.15s,
+		background-color 0.15s;
+}
+.arrow-link:hover {
+	border-color: var(--brand-from);
+	color: #fdba74;
+	background-color: rgba(249, 115, 22, 0.08);
 }
 
 /* --- Mobile ergonomics --- */

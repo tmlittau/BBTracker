@@ -253,7 +253,7 @@
 			{#if remindersSaved}<p class="text-sm text-green-400">Reminders saved.</p>{/if}
 			<div class="flex flex-wrap items-center gap-3">
 				<Button type="submit" disabled={savingReminders}>{savingReminders ? 'Saving…' : 'Save reminders'}</Button>
-				<button type="button" class="text-sm text-indigo-400 hover:text-indigo-300" onclick={sendTest}>
+				<button type="button" class="text-sm text-orange-400 hover:text-orange-300" onclick={sendTest}>
 					Send test notification
 				</button>
 			</div>

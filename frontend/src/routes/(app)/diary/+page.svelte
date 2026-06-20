@@ -62,7 +62,7 @@
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Progress diary</h1>
-	<a href="/diary/check-in" class="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500">New check-in</a>
+	<a href="/diary/check-in" class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110">New check-in</a>
 </div>
 
 {#if loading}
@@ -73,7 +73,7 @@
 	{#if !hasToday}
 		<div class="mt-6 rounded-lg border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">
 			No check-in for today yet.
-			<a class="text-indigo-400 hover:text-indigo-300" href="/diary/check-in">Add one →</a>
+			<a class="text-orange-400 hover:text-orange-300" href="/diary/check-in">Add one →</a>
 		</div>
 	{/if}
 
@@ -140,7 +140,7 @@
 		<h2 class="font-medium">Recent photos</h2>
 		{#if recentPhotos.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">
-				No photos yet. <a class="text-indigo-400" href="/diary/photos">Upload your first →</a>
+				No photos yet. <a class="text-orange-400 hover:text-orange-300" href="/diary/photos">Upload your first →</a>
 			</p>
 		{:else}
 			<div class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">

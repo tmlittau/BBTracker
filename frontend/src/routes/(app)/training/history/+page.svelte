@@ -134,7 +134,7 @@
 				<label class="flex flex-col text-xs text-neutral-500">To
 					<input type="date" bind:value={to} min={from} class="mt-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100" />
 				</label>
-				<button class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={loadSessions}>Show</button>
+				<button class="rounded-full bg-brand px-3 py-2 text-sm font-medium text-white hover:brightness-110" onclick={loadSessions}>Show</button>
 			</div>
 		</div>
 		{#if sessions.length === 0}

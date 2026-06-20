@@ -74,7 +74,7 @@
 			<button
 				type="submit"
 				disabled={saving}
-				class="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+				class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
 				>{saving ? 'Saving…' : 'Add'}</button
 			>
 		</div>

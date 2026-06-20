@@ -192,7 +192,7 @@
 						<div class="mt-1 text-xs text-neutral-500">{p.start_date} → {p.end_date ?? 'ongoing'}</div>
 					</div>
 					<div class="flex items-center gap-3 text-sm">
-						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => edit(p)}>Edit</button>
+						<button class="text-orange-400 hover:text-orange-300" onclick={() => edit(p)}>Edit</button>
 						<button class="text-red-400 hover:text-red-300" onclick={() => remove(p.id)}>Delete</button>
 					</div>
 				</div>
@@ -201,7 +201,7 @@
 				<div class="mt-3 border-t border-neutral-800 pt-3">
 					<div class="flex items-center justify-between">
 						<span class="text-xs font-medium uppercase tracking-wide text-neutral-500">Adjustments</span>
-						<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => openAdj(p.id)}>
+						<button class="text-xs text-orange-400 hover:text-orange-300" onclick={() => openAdj(p.id)}>
 							{adjOpenFor === p.id ? 'Cancel' : '＋ Add adjustment'}
 						</button>
 					</div>
@@ -250,7 +250,7 @@
 								</label>
 							</div>
 							<input placeholder="Reason (e.g. weight stalled → −150 kcal)" bind:value={adjReason} class="w-full {selectClass}" />
-							<button class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50" disabled={adjSaving} onclick={() => addAdjustment(p.id)}>
+							<button class="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50" disabled={adjSaving} onclick={() => addAdjustment(p.id)}>
 								{adjSaving ? 'Saving…' : 'Add adjustment'}
 							</button>
 						</div>

@@ -133,7 +133,7 @@
 		<button class="rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:border-neutral-500" onclick={() => (showImport = true)}>
 			Import PDF
 		</button>
-		<button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => (showResults = true)}>
+		<button class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110" onclick={() => (showResults = true)}>
 			Add results
 		</button>
 	</div>
@@ -149,8 +149,8 @@
 		<div class="flex items-center justify-between">
 			<h2 class="font-medium">Marker trends</h2>
 			<div class="flex gap-1 text-sm">
-				<button class="rounded px-3 py-1 {view === 'table' ? 'bg-indigo-600 text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => (view = 'table')}>Table</button>
-				<button class="rounded px-3 py-1 {view === 'chart' ? 'bg-indigo-600 text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => (view = 'chart')}>Diagram</button>
+				<button class="rounded px-3 py-1 {view === 'table' ? 'bg-brand text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => (view = 'table')}>Table</button>
+				<button class="rounded px-3 py-1 {view === 'chart' ? 'bg-brand text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => (view = 'chart')}>Diagram</button>
 			</div>
 		</div>
 

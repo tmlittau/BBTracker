@@ -31,7 +31,14 @@
 	<header class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<!-- Desktop nav -->
 		<nav class="hidden items-center gap-5 md:flex">
-			<a href="/dashboard" class="font-bold text-indigo-400">BBTracker</a>
+			<a href="/dashboard" class="flex items-center gap-2 font-bold">
+				<span class="flex h-7 w-7 items-center justify-center rounded-lg bg-brand">
+					<svg class="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+						<rect x="4" y="11" width="3.5" height="9" rx="1" /><rect x="10.25" y="6" width="3.5" height="14" rx="1" /><rect x="16.5" y="8.5" width="3.5" height="11.5" rx="1" />
+					</svg>
+				</span>
+				<span class="text-gradient">BBTracker</span>
+			</a>
 			{#each links as link (link.href)}
 				<a
 					href={link.href}
@@ -44,7 +51,14 @@
 			{/each}
 		</nav>
 		<!-- Mobile brand -->
-		<a href="/dashboard" class="font-bold text-indigo-400 md:hidden">BBTracker</a>
+		<a href="/dashboard" class="flex items-center gap-2 font-bold md:hidden">
+			<span class="flex h-7 w-7 items-center justify-center rounded-lg bg-brand">
+				<svg class="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<rect x="4" y="11" width="3.5" height="9" rx="1" /><rect x="10.25" y="6" width="3.5" height="14" rx="1" /><rect x="16.5" y="8.5" width="3.5" height="11.5" rx="1" />
+				</svg>
+			</span>
+			<span class="text-gradient">BBTracker</span>
+		</a>
 
 		<div class="flex items-center gap-3 text-sm">
 			<a

@@ -66,7 +66,7 @@
 		<input type="date" bind:value={to} min={from} class="mt-1 {inputClass}" />
 	</label>
 	<button
-		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+		class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 		onclick={load}
 	>
 		Show

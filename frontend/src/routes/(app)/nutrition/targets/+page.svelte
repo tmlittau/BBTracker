@@ -149,7 +149,7 @@
 						{#if !t.is_active}
 							<button class="text-neutral-400 hover:text-white" onclick={() => activate(t.id)}>Set active</button>
 						{/if}
-						<button class="text-indigo-400 hover:text-indigo-300" onclick={() => edit(t)}>Edit</button>
+						<button class="text-orange-400 hover:text-orange-300" onclick={() => edit(t)}>Edit</button>
 					</div>
 				</div>
 			</Card>

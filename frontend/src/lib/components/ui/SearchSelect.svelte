@@ -124,7 +124,7 @@
 					<button
 						type="button"
 						class="rounded-full px-2 py-0.5 text-xs {activeGroup == null
-							? 'bg-indigo-600 text-white'
+							? 'bg-brand text-white'
 							: 'border border-neutral-700 text-neutral-300'}"
 						onclick={() => (activeGroup = null)}>All</button
 					>
@@ -132,7 +132,7 @@
 						<button
 							type="button"
 							class="rounded-full px-2 py-0.5 text-xs {activeGroup === g.key
-								? 'bg-indigo-600 text-white'
+								? 'bg-brand text-white'
 								: 'border border-neutral-700 text-neutral-300'}"
 							onclick={() => (activeGroup = g.key)}>{g.label}</button
 						>

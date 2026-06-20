@@ -68,7 +68,7 @@
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Compound library</h1>
 	<button
-		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+		class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 		onclick={() => { editing = null; showModal = true; }}
 	>
 		New compound
@@ -76,7 +76,7 @@
 </div>
 <p class="mt-1 text-xs text-neutral-500">
 	Reference half-lives and ester active fractions are factual constants. To see release curves over
-	time, open a protocol under <a class="text-indigo-400 hover:text-indigo-300" href="/protocols/manage">Manage</a> — the
+	time, open a protocol under <a class="text-orange-400 hover:text-orange-300" href="/protocols/manage">Manage</a> — the
 	curve combines a compound's logged and scheduled doses.
 </p>
 
@@ -90,7 +90,7 @@
 		<button
 			type="button"
 			class="rounded-full px-3 py-1 text-xs {activeClass == null
-				? 'bg-indigo-600 text-white'
+				? 'bg-brand text-white'
 				: 'border border-neutral-700 text-neutral-300'}"
 			onclick={() => (activeClass = null)}>All</button
 		>
@@ -98,7 +98,7 @@
 			<button
 				type="button"
 				class="rounded-full px-3 py-1 text-xs {activeClass === g.key
-					? 'bg-indigo-600 text-white'
+					? 'bg-brand text-white'
 					: 'border border-neutral-700 text-neutral-300'}"
 				onclick={() => (activeClass = g.key)}>{g.label}</button
 			>
@@ -127,7 +127,7 @@
 				</div>
 				</div>
 				<div class="flex shrink-0 items-center gap-3 text-xs">
-					<button class="text-indigo-400 hover:text-indigo-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
+					<button class="text-orange-400 hover:text-orange-300" onclick={() => { editing = c; showModal = true; }}>Edit</button>
 					<button class="text-red-400 hover:text-red-300" onclick={() => remove(c)}>Delete</button>
 				</div>
 			</li>

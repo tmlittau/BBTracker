@@ -239,7 +239,7 @@
 						<button type="button" class="shrink-0 px-1 text-neutral-600 hover:text-red-400" aria-label="Remove serving" onclick={() => removeServing(i)}>✕</button>
 					</div>
 				{/each}
-				<button type="button" class="text-xs text-indigo-400 hover:text-indigo-300" onclick={addServing}>
+				<button type="button" class="text-xs text-orange-400 hover:text-orange-300" onclick={addServing}>
 					+ Add serving size
 				</button>
 			</div>
