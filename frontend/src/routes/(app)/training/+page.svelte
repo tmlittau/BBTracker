@@ -83,11 +83,11 @@
 					{active.name}
 					<span class="ml-1 rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Active</span>
 				</h2>
-				<a class="arrow-link" href={`/training/programs/${active.id}`}>Edit →</a>
+				<a class="arrow-link" href={`/training/programs/${active.id}`}>Edit</a>
 			</div>
 			{#if active.days.length === 0}
 				<p class="mt-2 text-sm text-neutral-500">
-					No training days yet. <a class="text-orange-400 hover:text-orange-300" href={`/training/programs/${active.id}`}>Add some →</a>
+					No training days yet. <a class="text-orange-400 hover:text-orange-300" href={`/training/programs/${active.id}`}>Add some</a>
 				</p>
 			{:else}
 				<div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -110,7 +110,7 @@
 		{:else}
 			<p class="text-sm text-neutral-500">
 				No active program.
-				<a class="text-orange-400 hover:text-orange-300" href="/training/programs">Pick or create one →</a> to start workouts from a plan.
+				<a class="text-orange-400 hover:text-orange-300" href="/training/programs">Pick or create one</a> to start workouts from a plan.
 			</p>
 		{/if}
 	</section>

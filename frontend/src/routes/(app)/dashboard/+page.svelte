@@ -22,7 +22,7 @@
 			Signed in as {data.me?.email ?? 'unknown'}{#if today?.date} · {today.date}{/if}
 		</p>
 	</div>
-	<a class="arrow-link" href="/check-in">Weekly check-in →</a>
+	<a class="arrow-link" href="/check-in">Weekly check-in</a>
 </div>
 
 {#if today}
@@ -46,11 +46,11 @@
 						</p>
 					{/if}
 				</div>
-				<a class="arrow-link" href="/phases">Manage →</a>
+				<a class="arrow-link" href="/phases">Manage</a>
 			</div>
 		{:else}
 			<p class="text-sm text-neutral-400">
-				No active phase. <a class="text-orange-400 hover:text-orange-300" href="/phases">Start one →</a> to tie your
+				No active phase. <a class="text-orange-400 hover:text-orange-300" href="/phases">Start one</a> to tie your
 				nutrition target, program, and protocol to a timeline.
 			</p>
 		{/if}

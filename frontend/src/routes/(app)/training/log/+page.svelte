@@ -318,7 +318,7 @@
 		</section>
 	{:else}
 		<p class="mt-6 text-sm text-neutral-500">
-			No active program. <a class="text-orange-400 hover:text-orange-300" href="/training/programs">Build one →</a> to start workouts from a plan.
+			No active program. <a class="text-orange-400 hover:text-orange-300" href="/training/programs">Build one</a> to start workouts from a plan.
 		</p>
 	{/if}
 {:else}
@@ -458,7 +458,7 @@
 	{/if}
 
 	<p class="mt-6 text-sm">
-		<a class="arrow-link" href="/training/history">View history →</a>
+		<a class="arrow-link" href="/training/history">View history</a>
 	</p>
 
 	<!-- Sticky floating rest countdown (above the mobile tab bar). -->

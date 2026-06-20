@@ -306,7 +306,7 @@
 {:else if !active}
 	<p class="mt-6 text-sm text-neutral-500">
 		No active protocol.
-		<a class="text-orange-400 hover:text-orange-300" href="/protocols/manage">Activate or create one →</a>
+		<a class="text-orange-400 hover:text-orange-300" href="/protocols/manage">Activate or create one</a>
 	</p>
 {:else}
 	<div class="mt-6 flex items-center justify-between">
@@ -314,7 +314,7 @@
 			{active.name}
 			<span class="ml-1 rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Active</span>
 		</h2>
-		<a class="arrow-link" href={`/protocols/manage/${active.id}`}>Edit →</a>
+		<a class="arrow-link" href={`/protocols/manage/${active.id}`}>Edit</a>
 	</div>
 
 	{#if missedYesterday.length > 0}
@@ -343,7 +343,7 @@
 	<section class="mt-4">
 		{#if active.items.length === 0}
 			<p class="text-sm text-neutral-500">
-				No items yet. <a class="text-orange-400 hover:text-orange-300" href={`/protocols/manage/${active.id}`}>Add some →</a>
+				No items yet. <a class="text-orange-400 hover:text-orange-300" href={`/protocols/manage/${active.id}`}>Add some</a>
 			</p>
 		{:else if nothingDue}
 			<p class="rounded border border-green-900/60 bg-green-950/30 px-3 py-2 text-sm text-green-300">
@@ -443,7 +443,7 @@
 	<section class="mt-8">
 		<div class="flex items-center justify-between gap-2">
 			<h2 class="font-medium">Today's doses</h2>
-			<a class="arrow-link" href="/protocols/history">History →</a>
+			<a class="arrow-link" href="/protocols/history">History</a>
 		</div>
 		{#if todayDoses.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">Nothing logged today yet.</p>

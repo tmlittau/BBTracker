@@ -73,7 +73,7 @@
 	{#if !hasToday}
 		<div class="mt-6 rounded-lg border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">
 			No check-in for today yet.
-			<a class="text-orange-400 hover:text-orange-300" href="/diary/check-in">Add one →</a>
+			<a class="text-orange-400 hover:text-orange-300" href="/diary/check-in">Add one</a>
 		</div>
 	{/if}
 
@@ -140,7 +140,7 @@
 		<h2 class="font-medium">Recent photos</h2>
 		{#if recentPhotos.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">
-				No photos yet. <a class="text-orange-400 hover:text-orange-300" href="/diary/photos">Upload your first →</a>
+				No photos yet. <a class="text-orange-400 hover:text-orange-300" href="/diary/photos">Upload your first</a>
 			</p>
 		{:else}
 			<div class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
