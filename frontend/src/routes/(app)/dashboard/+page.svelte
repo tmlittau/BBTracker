@@ -247,7 +247,10 @@
 	<!-- <p class="mb-2 w-1/2 text-sm text-neutral-400 float-right">
 			
 	</p> -->
-	<div class="mt-4 flex w-1/2 gap-8 xs:w-full">
+	<div class="mt-4 flex w-1/2 gap-3 xs:w-full">
+		<a href="/week-prep" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
+			Week prep
+		</a>
 		<a href="/phases" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
 			Phases
 		</a>
