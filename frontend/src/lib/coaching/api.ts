@@ -60,7 +60,7 @@ export interface DashboardToday {
 		prs: number;
 		name: string;
 	} | null;
-	doses: { item: string | null; amount: string; unit: string; site: string | null }[];
+	doses: { item: string | null; amount: string; unit: string; site: string | null; compound_class: string | null; }[];
 }
 
 export interface WeeklyCheckIn {

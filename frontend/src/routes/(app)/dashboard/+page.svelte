@@ -38,14 +38,23 @@
 
 		return `${weeksLeft} week${weeksLeft === 1 ? '' : 's'} out`;
 	}
+	// calculate total anabolic mg within the taken doses
+	function calculateTotalAnabolicMg() {
+		if (!today || !today.doses) return 0;
+
+		return today.doses.reduce((total, dose) => {
+			if (dose.compound_class === 'anabolic') {
+				return total + (dose.amount ? parseFloat(dose.amount) || 0 : 0);
+			}
+			return total;
+		}, 0);
+	}
 </script>
 
 <div class="flex items-center justify-between">
 	<div>
 		<h1 class="text-xl font-semibold">Today</h1>
-		<p class="mt-1 text-sm text-neutral-400">
-			Signed in as {data.me?.email ?? 'unknown'}{#if today?.date} · {today.date}{/if}
-		</p>
+		
 	</div>
 	<a class="arrow-link" href="/phases">Manage Phases</a>
 	<a class="arrow-link" href="/check-in">Check-in Overview</a>
@@ -77,7 +86,7 @@
 					<p
 						class="mt-1 bg-gradient-to-r from-orange-400 via-orange-500 to-rose-500 bg-clip-text text-sm font-semibold text-transparent"
 					>
-						{phaseTypeLabel(today.phase.phase_type)} · {phaseTimeLeft(today.phase.end_date)}{#if today.phase.notes} · {today.phase.notes}{/if}
+						{phaseTimeLeft(today.phase.end_date)} {#if today.phase.notes} · {today.phase.notes}{/if} · {phaseTypeLabel(today.phase.phase_type)}
 					</p>
 
 					{#if today.phase.nutrition_target_name || today.phase.program_name || today.phase.protocol_name}
@@ -204,10 +213,10 @@
 					<h2 class="bg-gradient-to-r from-orange-300 via-orange-400 to-rose-400 bg-clip-text text-sm font-semibold text-transparent">
 						Doses
 					</h2>
-					<p class="mt-1 text-2xl font-bold">{today.doses.length}</p>
+					<p class="mt-1 text-2xl font-bold">{today.doses.length} taken</p>
 					{#if today.doses.length > 0}
 						<p class="truncate text-xs text-neutral-500">
-							{today.doses.map((d) => `${d.item} ${d.amount}${d.unit}`).join(', ')}
+							{calculateTotalAnabolicMg()} mg total anabolics
 						</p>
 					{:else}
 						<p class="text-xs text-neutral-500">Nothing logged today</p>
@@ -222,7 +231,32 @@
 				</span>
 			</div>
 		</a>
+	</div>
+
+	<hr class="my-4 mt-16 border-t border-white/10" />
+
+	<div class="mb-2 flex items-center justify-between gap-4">
+		<p class="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
+			Quick actions
+		</p>
+
+		<p class="text-xs text-neutral-500">
+			Signed in as {data.me?.email ?? 'unknown'}{#if today?.date} · {today.date}{/if}
+		</p>
+	</div>
+	<!-- <p class="mb-2 w-1/2 text-sm text-neutral-400 float-right">
 			
+	</p> -->
+	<div class="mt-4 flex w-1/2 gap-8 xs:w-full">
+		<a href="/phases" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
+			Phases
+		</a>
+		<a href="/check-in" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
+			Check-ins
+		</a>
+		<a href="/analysis" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
+			Analysis
+		</a>
 	</div>
 {:else}
 	<p class="mt-6 text-neutral-400">Couldn't load today's summary.</p>

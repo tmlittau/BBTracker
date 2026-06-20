@@ -101,6 +101,7 @@ def dashboard_today(owner, on_date):
             "amount": str(d.amount),
             "unit": d.unit,
             "site": d.injection_site.name if d.injection_site else None,
+            "compound_class": d.compound.compound_class if d.compound else None,
         }
         for d in DoseLog.objects.filter(owner=owner, taken_at__date=on_date)
         .select_related("compound", "supplement", "injection_site")
