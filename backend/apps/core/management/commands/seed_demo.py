@@ -42,11 +42,6 @@ MAINT_START = MAINT_END - timedelta(weeks=12)
 BULK_END = MAINT_START - timedelta(days=1)
 BULK_START = BULK_END - timedelta(weeks=20)
 
-# The two most-recent (June) photo folders are remapped to the final bulk sessions.
-PHOTO_DATE_REMAP = {
-    date(2026, 6, 8): BULK_END - timedelta(weeks=1),
-    date(2026, 6, 15): BULK_END,
-}
 # Pose-file prefix → seeded Pose slug (the user shoots the four relaxed poses).
 POSE_FILES = {
     "front": "front-relaxed",
@@ -86,22 +81,36 @@ class Command(BaseCommand):
         parser.add_argument("--keep-users", nargs="*", default=["info@tmlittau.com"],
                             help="Emails (besides the demo account) to NOT delete.")
         parser.add_argument("--no-wipe", action="store_true",
-                            help="Skip the database wipe (only build demo data).")
+                            help="Skip all clearing; just build (additive — may duplicate).")
+        parser.add_argument("--demo-only", action="store_true",
+                            help="Reset ONLY the demo account's data, leaving every other "
+                                 "user untouched. Safe + idempotent — use this on prod.")
 
     def handle(self, *args, **opts):
         random.seed(42)
         self.opts = opts
         self.email = opts["email"]
         self.photos_dir = Path(opts["photos_dir"])
+        demo_only = opts["demo_only"]
+        full_wipe = not opts["no_wipe"] and not demo_only
+
+        user = self._ensure_user()
+        # Photo blobs live in object storage (non-transactional); clear the demo
+        # account's blobs up front so a re-run never orphans them.
+        if full_wipe or demo_only:
+            self._wipe_demo_photos(user)
 
         with transaction.atomic():
-            if not opts["no_wipe"]:
+            if full_wipe:
                 self._wipe(keep={self.email, *opts["keep_users"]})
-            user = self._ensure_user()
+            elif demo_only:
+                self._wipe_demo(user)
             refs = self._load_refs()
+            self._ensure_extra_compounds(user, refs)
+            supplements = self._build_supplements(user, refs)
             targets = self._build_nutrition_targets(user)
             program = self._build_program(user, refs)
-            protocols = self._build_protocols(user, refs)
+            protocols = self._build_protocols(user, refs, supplements)
             self._build_phases(user, targets, program, protocols)
             self._build_checkins(user)
             self._build_workouts(user, program, refs)
@@ -110,13 +119,11 @@ class Command(BaseCommand):
             self._build_measurements(user)
             self._build_bloodwork(user)
 
-        # Photos touch object storage (non-transactional) — do after the commit.
-        if not opts["no_wipe"]:
-            self._wipe_demo_photos(user)
         n_photos = self._build_photos(user)
 
+        mode = "full wipe" if full_wipe else ("demo-only reset" if demo_only else "additive")
         self.stdout.write(self.style.SUCCESS(
-            f"Demo ready for {self.email} (password: {opts['password']}). "
+            f"Demo ready for {self.email} (password: {opts['password']}) [{mode}]. "
             f"Bulk {BULK_START}→{BULK_END}, Maintenance {MAINT_START}→{MAINT_END}, "
             f"{n_photos} progress photos."
         ))
@@ -194,6 +201,47 @@ class Command(BaseCommand):
                         pass
         ProgressPhoto.objects.filter(owner=user).delete()
 
+    def _wipe_demo(self, user):
+        """Delete only the demo account's data — every other user is untouched.
+
+        Safe to run on prod alongside real accounts, and idempotent (re-running
+        rebuilds the demo cleanly). Deletion order respects PROTECT FKs.
+        """
+        from apps.analysis.models import BodyMeasurement
+        from apps.core.models import Phase
+        from apps.diary.models import CheckIn, ProgressPhoto
+        from apps.nutrition.models import DiaryEntry, Food, Meal, NutritionTarget, Recipe
+        from apps.protocols.models import (
+            BloodPressureLog,
+            BloodResult,
+            Compound,
+            DoseLog,
+            Protocol,
+            Supplement,
+        )
+        from apps.training.models import Exercise, Program, WorkoutSession
+
+        DoseLog.objects.filter(owner=user).delete()
+        Protocol.objects.filter(owner=user).delete()  # cascades ProtocolItem
+        WorkoutSession.objects.filter(owner=user).delete()
+        Program.objects.filter(owner=user).delete()
+        DiaryEntry.objects.filter(owner=user).delete()
+        Recipe.objects.filter(owner=user).delete()
+        Meal.objects.filter(owner=user).delete()
+        NutritionTarget.objects.filter(owner=user).delete()
+        BodyMeasurement.objects.filter(owner=user).delete()
+        BloodResult.objects.filter(owner=user).delete()
+        BloodPressureLog.objects.filter(owner=user).delete()
+        CheckIn.objects.filter(owner=user).delete()
+        ProgressPhoto.objects.filter(owner=user).delete()
+        Phase.objects.filter(owner=user).delete()
+        # The demo account's own custom reference rows (globals are owner=None).
+        Food.objects.filter(owner=user).delete()
+        Exercise.objects.filter(owner=user).delete()
+        Compound.objects.filter(owner=user).delete()
+        Supplement.objects.filter(owner=user).delete()
+        self.stdout.write(f"Reset demo account {user.email} (other users untouched).")
+
     # ---- user --------------------------------------------------------------
     def _ensure_user(self):
         from apps.accounts.models import Profile
@@ -241,6 +289,74 @@ class Command(BaseCommand):
                 region__in=["ventroglute", "glute", "quad", "delt", "pec"]).order_by("id")),
             "subq_sites": list(InjectionSite.objects.filter(region="abdomen").order_by("id")),
         }
+
+    # ---- extra compounds (not in the global seed library) ------------------
+    def _ensure_extra_compounds(self, user, refs):
+        """Create demo-owned compounds missing from the global library; merge into refs."""
+        from apps.protocols.enums import CompoundClass, DoseUnit, Route
+        from apps.protocols.models import Compound
+        # name, class, unit, route, half-life (h), notes
+        extra = [
+            ("Cardarine (GW-501516)", CompoundClass.OTHER, DoseUnit.MG, Route.ORAL, 24,
+             "PPARδ agonist — endurance + fat-oxidation / lipid support."),
+            ("MK-677 (Ibutamoren)", CompoundClass.OTHER, DoseUnit.MG, Route.ORAL, 24,
+             "Oral GH secretagogue — appetite, sleep, recovery."),
+            ("Proviron (Mesterolone)", CompoundClass.ANABOLIC, DoseUnit.MG, Route.ORAL, 12,
+             "Lowers SHBG, raises free testosterone, libido."),
+            ("GHK-Cu", CompoundClass.PEPTIDE, DoseUnit.MCG, Route.SUBQ, 1,
+             "Copper peptide — skin, collagen, wound healing."),
+            ("KPV", CompoundClass.PEPTIDE, DoseUnit.MCG, Route.SUBQ, 2,
+             "Anti-inflammatory tripeptide — gut + systemic recovery."),
+            ("TB-500 (Thymosin β4)", CompoundClass.PEPTIDE, DoseUnit.MG, Route.SUBQ, 60,
+             "Recovery peptide — commonly paired with BPC-157."),
+        ]
+        for name, cls, unit, route, hl, notes in extra:
+            if name in refs["compounds"]:
+                continue
+            refs["compounds"][name] = Compound.objects.create(
+                owner=user, name=name, compound_class=cls, default_unit=unit,
+                default_route=route, half_life_hours=Decimal(str(hl)), notes=notes,
+            )
+
+    # ---- supplements -------------------------------------------------------
+    def _build_supplements(self, user, refs):
+        """Create the demo athlete's supplement stack (with micronutrient content)."""
+        from apps.nutrition.models import Nutrient
+        from apps.protocols.models import Supplement, SupplementNutrient
+        nut = {n.slug: n for n in Nutrient.objects.all()}
+        # name, serving_label, benefit, {nutrient_slug: amount_per_serving}
+        specs = [
+            ("Vitamin D3 + K2", "1 softgel", "Bone / immune / hormonal",
+             {"vitamin_d": 125, "vitamin_k": 100}),
+            ("Omega-3 fish oil", "2 softgels", "Heart, joints, lipid profile", {}),
+            ("Magnesium glycinate", "2 capsules", "Sleep, cramps, blood pressure",
+             {"magnesium": 400}),
+            ("Zinc picolinate", "1 capsule", "Immune + testosterone support", {"zinc": 25}),
+            ("Vitamin C", "1 tablet", "Antioxidant", {"vitamin_c": 1000}),
+            ("Creatine monohydrate", "1 scoop (5 g)", "Strength + cell volume", {}),
+            ("NAC", "1 capsule", "Liver + glutathione antioxidant", {}),
+            ("CoQ10", "1 softgel", "Heart / blood-pressure support", {}),
+            ("Berberine", "1 capsule", "Glucose + lipid management", {}),
+            ("Citrus bergamot", "1 capsule", "Cholesterol support on-cycle", {}),
+            ("Psyllium husk fiber", "1 scoop", "Digestion, cholesterol, satiety", {"fiber": 5}),
+            ("Ashwagandha (KSM-66)", "1 capsule", "Stress / cortisol", {}),
+            ("Taurine", "1 scoop", "Cramps, pumps, blood pressure", {}),
+            ("Multivitamin", "1 serving", "Daily micronutrient base",
+             {"vitamin_c": 300, "zinc": 15, "magnesium": 100, "vitamin_b12": 50, "vitamin_d": 25}),
+            ("L-Citrulline", "1 scoop", "Pumps / blood flow", {}),
+        ]
+        out = {}
+        for name, serving, benefit, micros in specs:
+            s = Supplement.objects.create(
+                owner=user, name=name, serving_label=serving, target_benefit=benefit,
+            )
+            for slug, amt in micros.items():
+                if slug in nut:
+                    SupplementNutrient.objects.create(
+                        supplement=s, nutrient=nut[slug], amount_per_serving=Decimal(str(amt)),
+                    )
+            out[name] = s
+        return out
 
     # ---- nutrition targets -------------------------------------------------
     def _build_nutrition_targets(self, user):
@@ -298,7 +414,7 @@ class Command(BaseCommand):
         return program
 
     # ---- protocols ---------------------------------------------------------
-    def _build_protocols(self, user, refs):
+    def _build_protocols(self, user, refs, supplements):
         from apps.protocols.enums import DoseUnit, Frequency, Route, TimeOfDay
         from apps.protocols.models import Protocol, ProtocolItem
         C = refs["compounds"]
@@ -312,6 +428,39 @@ class Command(BaseCommand):
                 route=route, frequency=freq, days_of_week=days or [], times_of_day=times or [],
                 target_benefit=benefit, order=order,
             )
+
+        def supp_item(proto, sname, dose, unit, freq, times=None, order=0):
+            s = supplements.get(sname)
+            if not s:
+                return
+            ProtocolItem.objects.create(
+                protocol=proto, supplement=s, dose_amount=Decimal(str(dose)), dose_unit=unit,
+                route="", frequency=freq, times_of_day=times or [],
+                target_benefit=s.target_benefit, order=order,
+            )
+
+        # Year-round supplement stack (same in both blocks).
+        supp_stack = [
+            ("Vitamin D3 + K2", 1, DoseUnit.CAPSULE, [TimeOfDay.AM]),
+            ("Omega-3 fish oil", 2, DoseUnit.CAPSULE, [TimeOfDay.AM]),
+            ("Magnesium glycinate", 2, DoseUnit.CAPSULE, [TimeOfDay.NIGHT]),
+            ("Zinc picolinate", 1, DoseUnit.CAPSULE, [TimeOfDay.NIGHT]),
+            ("Vitamin C", 1, DoseUnit.TABLET, [TimeOfDay.AM]),
+            ("Creatine monohydrate", 1, DoseUnit.SERVING, [TimeOfDay.AM]),
+            ("NAC", 1, DoseUnit.CAPSULE, [TimeOfDay.AM]),
+            ("CoQ10", 1, DoseUnit.CAPSULE, [TimeOfDay.AM]),
+            ("Berberine", 1, DoseUnit.CAPSULE, [TimeOfDay.NOON]),
+            ("Citrus bergamot", 1, DoseUnit.CAPSULE, [TimeOfDay.AM]),
+            ("Psyllium husk fiber", 1, DoseUnit.SERVING, [TimeOfDay.NIGHT]),
+            ("Ashwagandha (KSM-66)", 1, DoseUnit.CAPSULE, [TimeOfDay.NIGHT]),
+            ("Taurine", 1, DoseUnit.SERVING, [TimeOfDay.AM]),
+            ("Multivitamin", 1, DoseUnit.SERVING, [TimeOfDay.AM]),
+            ("L-Citrulline", 1, DoseUnit.SERVING, [TimeOfDay.AM]),
+        ]
+
+        def add_supps(proto):
+            for i, (sname, dose, unit, times) in enumerate(supp_stack):
+                supp_item(proto, sname, dose, unit, Frequency.DAILY, times=times, order=30 + i)
 
         blast = Protocol.objects.create(
             owner=user, name="Off-season blast", is_active=False,
@@ -333,6 +482,22 @@ class Command(BaseCommand):
              times=[TimeOfDay.PM], order=5, benefit="Blood pressure / pumps")
         item(blast, "BPC-157", 250, DoseUnit.MCG, Route.SUBQ, Frequency.DAILY,
              times=[TimeOfDay.AM], order=6, benefit="Joint / tendon recovery")
+        item(blast, "Proviron (Mesterolone)", 50, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=7, benefit="Free-test / libido")
+        item(blast, "MK-677 (Ibutamoren)", 25, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
+             times=[TimeOfDay.NIGHT], order=8, benefit="GH / appetite / sleep")
+        item(blast, "Cardarine (GW-501516)", 20, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=9, benefit="Endurance / lipids")
+        item(blast, "CJC-1295 (no DAC)", 100, DoseUnit.MCG, Route.SUBQ, Frequency.DAILY,
+             times=[TimeOfDay.NIGHT], order=10, benefit="GH pulse")
+        item(blast, "Ipamorelin", 200, DoseUnit.MCG, Route.SUBQ, Frequency.DAILY,
+             times=[TimeOfDay.NIGHT], order=11, benefit="GH pulse")
+        item(blast, "GHK-Cu", 2000, DoseUnit.MCG, Route.SUBQ, Frequency.EOD,
+             times=[TimeOfDay.PM], order=12, benefit="Skin / collagen")
+        item(blast, "TB-500 (Thymosin β4)", 2.5, DoseUnit.MG, Route.SUBQ, Frequency.WEEKLY,
+             times=[TimeOfDay.AM], order=13, benefit="Recovery")
+        item(blast, "Telmisartan", 40, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=14, benefit="Blood pressure")
 
         cruise = Protocol.objects.create(
             owner=user, name="Maintenance cruise", is_active=True,
@@ -347,6 +512,19 @@ class Command(BaseCommand):
              times=[TimeOfDay.AM], order=2, benefit="Estrogen control")
         item(cruise, "Cialis (Tadalafil)", 5, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
              times=[TimeOfDay.PM], order=3, benefit="Blood pressure")
+        item(cruise, "BPC-157", 250, DoseUnit.MCG, Route.SUBQ, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=4, benefit="Healing")
+        item(cruise, "TB-500 (Thymosin β4)", 2.5, DoseUnit.MG, Route.SUBQ, Frequency.WEEKLY,
+             times=[TimeOfDay.AM], order=5, benefit="Recovery")
+        item(cruise, "KPV", 500, DoseUnit.MCG, Route.SUBQ, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=6, benefit="Gut / anti-inflammatory")
+        item(cruise, "GHK-Cu", 2000, DoseUnit.MCG, Route.SUBQ, Frequency.EOD,
+             times=[TimeOfDay.PM], order=7, benefit="Skin / collagen")
+        item(cruise, "Cardarine (GW-501516)", 10, DoseUnit.MG, Route.ORAL, Frequency.DAILY,
+             times=[TimeOfDay.AM], order=8, benefit="Lipid support")
+
+        add_supps(blast)
+        add_supps(cruise)
         return {"blast": blast, "cruise": cruise}
 
     # ---- phases ------------------------------------------------------------
@@ -600,14 +778,13 @@ class Command(BaseCommand):
             start = proto.started_on
             end = proto.ended_on
             for item in proto.items.all():
-                comp = item.compound
                 for d in self._daterange(start, end):
                     if not self._due(item, d, start):
                         continue
                     gap = in_gap(d)
-                    skipped = bool(gap and "cold" in gap and item.route in ("im", "subq")
-                                   and random.random() < 0.5)
                     route = item.route
+                    injectable = route in ("im", "subq")
+                    skipped = bool(gap and "cold" in gap and injectable and random.random() < 0.5)
                     site = None
                     if route == "im" and im_sites:
                         site = im_sites[im_i % len(im_sites)]
@@ -618,9 +795,10 @@ class Command(BaseCommand):
                     hour = {"waking": 7, "am": 8, "noon": 13, "pm": 20, "night": 22}.get(
                         (item.times_of_day or ["am"])[0], 9)
                     rows.append(DoseLog(
-                        owner=user, protocol_item=item, compound=comp,
+                        owner=user, protocol_item=item,
+                        compound=item.compound, supplement=item.supplement,
                         taken_at=self._dt(d, hour, random.choice([0, 10, 20])),
-                        amount=item.dose_amount, unit=item.dose_unit, route=route,
+                        amount=item.dose_amount or Decimal("1"), unit=item.dose_unit, route=route,
                         injection_site=site,
                         status="skipped" if skipped else "taken",
                         notes="Missed — unwell" if skipped else "",
@@ -675,56 +853,115 @@ class Command(BaseCommand):
         self.stdout.write(f"Measurements: {len(rows)}")
 
     # ---- bloodwork ---------------------------------------------------------
+    # Comprehensive panel: (marker slug, off-cycle "normal", on-blast "peak").
+    # Each panel interpolates between them by a per-panel cycle intensity, so the
+    # whole picture trends realistically — androgens up, gonadotropins/HDL down,
+    # hematocrit/IGF-1/CK up, liver mildly up, recovering on the cruise.
+    BLOOD_MARKERS = [
+        # Sex hormones
+        ("testosterone", 22, 48), ("free-testosterone", 0.45, 1.05),
+        ("estradiol-e2", 110, 150), ("shbg", 32, 16), ("lh", 4.5, 0.2),
+        ("fsh", 4.0, 0.3), ("prolactin", 180, 300), ("progesteron", 1.4, 2.6),
+        ("dhea-s", 8.0, 7.0), ("igf-1", 22, 52), ("psa", 0.8, 1.2),
+        # Thyroid / adrenal
+        ("tsh-basal", 1.8, 1.5), ("free-t3", 5.0, 4.7), ("free-t4", 16, 15),
+        ("cortisol", 360, 300),
+        # Lipids
+        ("total-cholesterol", 4.3, 5.6), ("hdl", 1.3, 0.62), ("ldl", 2.6, 4.0),
+        ("non-hdl-cholesterol", 3.0, 4.9), ("triglycerides", 1.1, 1.9),
+        ("apolipoprotein-a-i", 1.5, 1.1), ("apolipoprotein-b", 0.85, 1.25),
+        # Liver
+        ("asat", 28, 55), ("alat", 30, 62), ("ggt", 24, 48),
+        ("bilirubin", 9, 13), ("bilirubin-direct", 2.0, 2.8),
+        # Kidney
+        ("creatinine", 88, 109), ("gfr", 100, 86),
+        # Hematology (full count + iron studies)
+        ("leucocytes", 6.0, 6.6), ("erythrocytes", 5.1, 5.9), ("hemoglobin", 9.6, 11.4),
+        ("hematocrit", 0.45, 0.53), ("mcv", 89, 90), ("mch", 1.85, 1.9),
+        ("mchc", 21.0, 21.4), ("rdw", 13.0, 13.6), ("thrombocytes", 250, 235),
+        ("neutrophils", 55, 58), ("lymphocytes", 32, 29), ("monocytes", 7, 7),
+        ("eosinophils", 2.5, 2.0), ("basophils", 0.5, 0.5), ("ferritin", 150, 85),
+        ("iron", 18, 15), ("transferrin", 2.6, 2.8), ("transferrin-saturation", 30, 23),
+        # Metabolic + minerals
+        ("blood-glucose-fasted", 5.0, 5.4), ("hba1c", 5.1, 5.5), ("hba1c-ifcc", 32, 37),
+        ("ck", 180, 430), ("magnesium", 0.88, 0.84), ("sodium", 140, 141),
+        ("potassium", 4.4, 4.5), ("albumin", 45, 46),
+        # Vitamins + inflammation
+        ("25-hydroxy-vitamin-d", 80, 118), ("vitamin-b12", 350, 480), ("crp", 1.2, 2.6),
+    ]
+
     def _build_bloodwork(self, user):
         from apps.protocols.models import BloodMarker, BloodResult
 
         markers = {m.slug: m for m in BloodMarker.objects.all()}
-        # (exact slug, baseline value, late-blast value) — in each marker's own unit;
-        # supraphysiological androgens, suppressed HDL etc. as expected on a blast.
-        panel = [
-            ("testosterone", 42, 51),            # nmol/L (ref ~8–29)
-            ("free-testosterone", 0.9, 1.1),     # nmol/L
-            ("estradiol-e2", 130, 155),          # pmol/L
-            ("hematocrit", 0.49, 0.52),          # L/L (ref ~0.40–0.50)
-            ("hemoglobin", 10.6, 11.3),          # mmol/L
-            ("hdl", 0.85, 0.68),                 # mmol/L (suppressed)
-            ("ldl", 3.2, 3.9),                   # mmol/L
-            ("total-cholesterol", 4.9, 5.6),     # mmol/L
-            ("alt", 33, 46),                     # U/L (mildly elevated)
-            ("blood-glucose-fasted", 5.1, 5.4),  # mmol/L
+        # Comprehensive panels every ~6–7 weeks across the 32 weeks.
+        panels = [
+            (BULK_START + timedelta(weeks=1), 0.80, "Baseline / early blast"),
+            (BULK_START + timedelta(weeks=8), 1.00, "Mid-blast panel"),
+            (BULK_START + timedelta(weeks=15), 1.00, "Blast week 15"),
+            (BULK_END - timedelta(days=4), 0.95, "End-of-blast panel"),
+            (MAINT_START + timedelta(weeks=6), 0.45, "Mid-cruise recovery"),
+            (MAINT_END - timedelta(days=4), 0.20, "End-of-cruise panel"),
         ]
-        dates = [date(2025, 10, 13), date(2026, 1, 12)]
+
+        def rnd(v):
+            a = abs(v)
+            if a >= 50:
+                return round(v)
+            if a >= 1:
+                return round(v, 1)
+            return round(v, 3)
+
         rows = []
-        for slug, v0, v1 in panel:
-            m = markers.get(slug)
-            if not m:
-                continue
-            for d, v in zip(dates, (v0, v1), strict=False):
+        for d, intensity, note in panels:
+            for slug, normal, peak in self.BLOOD_MARKERS:
+                m = markers.get(slug)
+                if not m:
+                    continue
+                val = normal + (peak - normal) * intensity
+                val += random.gauss(0, max(abs(normal), 0.1) * 0.02)
                 rows.append(BloodResult(
-                    owner=user, marker=m, value=Decimal(str(v)),
-                    measured_on=d, source="manual",
-                    notes="Baseline labs" if d == dates[0] else "Mid-blast labs",
+                    owner=user, marker=m, value=Decimal(str(rnd(val))),
+                    measured_on=d, source="manual", notes=note,
                 ))
-        BloodResult.objects.bulk_create(rows)
-        self.stdout.write(f"Bloodwork: {len(rows)} results across {len(dates)} panels")
+        BloodResult.objects.bulk_create(rows, batch_size=1000)
+        self.stdout.write(f"Bloodwork: {len(rows)} results across {len(panels)} panels")
 
     # ---- progress photos ---------------------------------------------------
     def _photo_source_dates(self):
-        """Map each on-disk folder date → the demo date it represents (bulk only)."""
+        """Map on-disk folder dates onto the bulk window, preserving relative spacing.
+
+        Folders carry their real shoot dates, which won't line up with a timeline
+        anchored to *today*, so the real sequence is scaled onto
+        [BULK_START, BULK_END]. Any large trailing gap before the most-recent
+        shots is collapsed to a week, so those read as the final weeks of the bulk.
+        """
         if not self.photos_dir.exists():
             return {}
-        out = {}
+        folders = []
         for sub in self.photos_dir.iterdir():
             if not sub.is_dir():
                 continue
             try:
-                folder = datetime.strptime(sub.name, "%Y-%m-%d").date()
+                folders.append((datetime.strptime(sub.name, "%Y-%m-%d").date(), sub))
             except ValueError:
                 continue
-            demo_date = PHOTO_DATE_REMAP.get(folder, folder)
-            if BULK_START <= demo_date <= BULK_END:
-                out[sub] = demo_date
-        return out
+        if not folders:
+            return {}
+        folders.sort(key=lambda t: t[0])
+        # Source timeline: real dates, collapsing any gap > 5 weeks to one week.
+        source = []
+        for real, sub in folders:
+            src_date = source[-1][0] + timedelta(weeks=1) \
+                if source and (real - source[-1][1]).days > 35 else real
+            source.append((src_date, real, sub))
+        lo, hi = source[0][0], source[-1][0]
+        span = max((hi - lo).days, 1)
+        win = max((BULK_END - BULK_START).days, 1)
+        return {
+            sub: BULK_START + timedelta(days=round((src - lo).days / span * win))
+            for src, _real, sub in source
+        }
 
     def _photo_dates(self):
         return set(self._photo_source_dates().values())
