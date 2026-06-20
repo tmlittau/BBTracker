@@ -22,7 +22,7 @@
 			Signed in as {data.me?.email ?? 'unknown'}{#if today?.date} · {today.date}{/if}
 		</p>
 	</div>
-	<a class="text-sm text-indigo-400 hover:text-indigo-300" href="/check-in">Weekly check-in →</a>
+	<a class="arrow-link" href="/check-in">Weekly check-in →</a>
 </div>
 
 {#if today}
@@ -46,11 +46,11 @@
 						</p>
 					{/if}
 				</div>
-				<a class="text-sm text-indigo-400 hover:text-indigo-300" href="/phases">Manage →</a>
+				<a class="arrow-link" href="/phases">Manage →</a>
 			</div>
 		{:else}
 			<p class="text-sm text-neutral-400">
-				No active phase. <a class="text-indigo-400" href="/phases">Start one →</a> to tie your
+				No active phase. <a class="text-orange-400 hover:text-orange-300" href="/phases">Start one →</a> to tie your
 				nutrition target, program, and protocol to a timeline.
 			</p>
 		{/if}
@@ -102,11 +102,22 @@
 		</a>
 	</div>
 
-	<div class="mt-6 flex flex-wrap gap-3 text-sm">
-		<a class="text-emerald-400 hover:text-emerald-300" href="/nutrition">Log food →</a>
-		<a class="text-indigo-400 hover:text-indigo-300" href="/training/log">Start workout →</a>
-		<a class="text-violet-400 hover:text-violet-300" href="/protocols/log">Log dose →</a>
-		<a class="text-sky-400 hover:text-sky-300" href="/diary/check-in">Daily check-in →</a>
+	<div class="mt-6">
+		<p class="mb-2 text-xs uppercase tracking-wide text-neutral-500">Quick actions</p>
+		<div class="flex flex-wrap gap-2">
+			<a href="/nutrition" class="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-500 hover:bg-neutral-900 hover:text-white">
+				<span class="h-2 w-2 rounded-full bg-emerald-500"></span>Log food
+			</a>
+			<a href="/training/log" class="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-500 hover:bg-neutral-900 hover:text-white">
+				<span class="h-2 w-2 rounded-full bg-indigo-500"></span>Start workout
+			</a>
+			<a href="/protocols/log" class="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-500 hover:bg-neutral-900 hover:text-white">
+				<span class="h-2 w-2 rounded-full bg-violet-500"></span>Log dose
+			</a>
+			<a href="/diary/check-in" class="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-500 hover:bg-neutral-900 hover:text-white">
+				<span class="h-2 w-2 rounded-full bg-sky-500"></span>Daily check-in
+			</a>
+		</div>
 	</div>
 {:else}
 	<p class="mt-6 text-neutral-400">Couldn't load today's summary.</p>

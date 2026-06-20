@@ -224,7 +224,7 @@
 			class="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-neutral-100"
 		/>
 		{#if date !== todayISO()}
-			<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { date = todayISO(); load(); }}>Today</button>
+			<button class="text-xs text-orange-400 hover:text-orange-300" onclick={() => { date = todayISO(); load(); }}>Today</button>
 		{/if}
 	</div>
 	<button class="px-2 text-neutral-400 hover:text-white" onclick={() => shiftDate(1)}>Next ›</button>
@@ -386,11 +386,11 @@
 			onkeydown={(e) => { if (e.key === 'Enter') addMeal(newMealName); }}
 			class="w-40 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100"
 		/>
-		<button class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500" onclick={() => addMeal(newMealName)}>+ Add meal</button>
+		<button class="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:brightness-110" onclick={() => addMeal(newMealName)}>+ Add meal</button>
 		{#each MEAL_SUGGESTIONS as s (s)}
 			<button class="rounded-full border border-neutral-700 px-2.5 py-0.5 text-xs text-neutral-400 hover:border-neutral-500" onclick={() => addMeal(s)}>{s}</button>
 		{/each}
-		<button class="ml-auto text-xs text-indigo-400 hover:text-indigo-300" onclick={copyYesterday}>Copy yesterday's meals</button>
+		<button class="ml-auto text-xs text-orange-400 hover:text-orange-300" onclick={copyYesterday}>Copy yesterday's meals</button>
 	</div>
 {/if}
 

@@ -168,7 +168,7 @@
 					</div>
 				</div>
 				<div class="flex shrink-0 items-center gap-3 text-xs">
-					<button class="text-indigo-400 hover:text-indigo-300" onclick={() => startEdit(ex)}>Edit</button>
+					<button class="text-orange-400 hover:text-orange-300" onclick={() => startEdit(ex)}>Edit</button>
 					<button class="text-red-400 hover:text-red-300" onclick={() => remove(ex)}>Delete</button>
 				</div>
 			</li>

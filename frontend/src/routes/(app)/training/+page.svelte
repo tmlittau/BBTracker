@@ -39,7 +39,7 @@
 	<h1 class="text-xl font-semibold">Training</h1>
 	<button
 		onclick={startEmpty}
-		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+		class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 	>
 		Empty workout
 	</button>
@@ -64,7 +64,7 @@
 							</p>
 						</div>
 						<button
-							class="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500"
+							class="shrink-0 rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
 							onclick={() => resume(s.id)}
 						>
 							Resume
@@ -83,11 +83,11 @@
 					{active.name}
 					<span class="ml-1 rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Active</span>
 				</h2>
-				<a class="text-sm text-indigo-400 hover:text-indigo-300" href={`/training/programs/${active.id}`}>Edit →</a>
+				<a class="arrow-link" href={`/training/programs/${active.id}`}>Edit →</a>
 			</div>
 			{#if active.days.length === 0}
 				<p class="mt-2 text-sm text-neutral-500">
-					No training days yet. <a class="text-indigo-400" href={`/training/programs/${active.id}`}>Add some →</a>
+					No training days yet. <a class="text-orange-400 hover:text-orange-300" href={`/training/programs/${active.id}`}>Add some →</a>
 				</p>
 			{:else}
 				<div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -98,7 +98,7 @@
 								<p class="text-xs text-neutral-500">{day.slots.length} exercise(s)</p>
 							</div>
 							<button
-								class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+								class="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
 								onclick={() => startDay(day.id)}
 							>
 								Start
@@ -110,7 +110,7 @@
 		{:else}
 			<p class="text-sm text-neutral-500">
 				No active program.
-				<a class="text-indigo-400" href="/training/programs">Pick or create one →</a> to start workouts from a plan.
+				<a class="text-orange-400 hover:text-orange-300" href="/training/programs">Pick or create one →</a> to start workouts from a plan.
 			</p>
 		{/if}
 	</section>

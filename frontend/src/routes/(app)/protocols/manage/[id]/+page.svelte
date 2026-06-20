@@ -149,8 +149,8 @@
 	<form class="mt-4 space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={addItem}>
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="flex gap-2 text-sm">
-				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; unit = 'mg'; }}>Compound</button>
-				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'supplement'; refId = null; unit = 'serving'; }}>Supplement</button>
+				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-brand text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; unit = 'mg'; }}>Compound</button>
+				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-brand text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'supplement'; refId = null; unit = 'serving'; }}>Supplement</button>
 			</div>
 			<div class="min-w-56 flex-1">
 				{#key kind}
@@ -189,7 +189,7 @@
 			<div class="flex flex-wrap items-center gap-1">
 				<span class="mr-1 text-xs text-neutral-500">Days:</span>
 				{#each WEEKDAYS as d (d.key)}
-					<button type="button" class="rounded px-2 py-1 text-xs {daysOfWeek.includes(d.key) ? 'bg-indigo-600 text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => toggleDay(d.key)}>{d.label}</button>
+					<button type="button" class="rounded px-2 py-1 text-xs {daysOfWeek.includes(d.key) ? 'bg-brand text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => toggleDay(d.key)}>{d.label}</button>
 				{/each}
 			</div>
 		{/if}
@@ -197,7 +197,7 @@
 		<div class="flex flex-wrap items-center gap-1">
 			<span class="mr-1 text-xs text-neutral-500">Times:</span>
 			{#each TIMES_OF_DAY as t (t.key)}
-				<button type="button" class="rounded-full px-2.5 py-0.5 text-xs {timesOfDay.includes(t.key) ? 'bg-indigo-600 text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => toggleTime(t.key)}>{t.label}</button>
+				<button type="button" class="rounded-full px-2.5 py-0.5 text-xs {timesOfDay.includes(t.key) ? 'bg-brand text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => toggleTime(t.key)}>{t.label}</button>
 			{/each}
 		</div>
 

@@ -127,7 +127,7 @@
 				</button>
 			</div>
 		{/each}
-		<button type="button" class="text-xs text-indigo-400 hover:text-indigo-300" onclick={addRow}>
+		<button type="button" class="text-xs text-orange-400 hover:text-orange-300" onclick={addRow}>
 			+ Add another nutrient
 		</button>
 		{#if error}<p class="text-sm text-red-400">{error}</p>{/if}

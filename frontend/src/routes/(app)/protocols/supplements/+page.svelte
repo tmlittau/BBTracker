@@ -57,7 +57,7 @@
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Supplements</h1>
 	<button
-		class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+		class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 		onclick={() => { editing = null; showModal = true; }}
 	>
 		New supplement
@@ -91,7 +91,7 @@
 					</div>
 				</div>
 				<div class="flex shrink-0 items-center gap-3">
-					<button class="text-xs text-indigo-400 hover:text-indigo-300" onclick={() => { editing = s; showModal = true; }}>Edit</button>
+					<button class="text-xs text-orange-400 hover:text-orange-300" onclick={() => { editing = s; showModal = true; }}>Edit</button>
 					<button class="text-xs text-red-400 hover:text-red-300" onclick={() => remove(s.id)}>Delete</button>
 				</div>
 			</li>

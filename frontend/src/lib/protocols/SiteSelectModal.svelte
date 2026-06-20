@@ -61,7 +61,7 @@
 	{#if suggestable}
 		<button
 			type="button"
-			class="mt-2 text-xs text-indigo-400 hover:text-indigo-300"
+			class="mt-2 text-xs text-orange-400 hover:text-orange-300"
 			onclick={() => (selected = suggestion?.id ?? null)}
 		>
 			Use suggested: {suggestion?.name}

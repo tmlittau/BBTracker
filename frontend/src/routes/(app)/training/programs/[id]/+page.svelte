@@ -258,7 +258,7 @@
 											{/each}
 										</tbody>
 									</table></div>
-									<button class="mt-2 text-xs text-indigo-400 hover:text-indigo-300" onclick={() => addSet(slot)}>
+									<button class="mt-2 text-xs text-orange-400 hover:text-orange-300" onclick={() => addSet(slot)}>
 										+ Add set
 									</button>
 								</div>

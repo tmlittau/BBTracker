@@ -149,14 +149,14 @@
 			<div class="flex gap-2 text-sm">
 				<button
 					type="button"
-					class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}"
+					class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-brand text-white' : 'border border-neutral-700'}"
 					onclick={() => (kind = 'compound')}
 				>
 					Medication / PED
 				</button>
 				<button
 					type="button"
-					class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-indigo-600 text-white' : 'border border-neutral-700'}"
+					class="rounded-md px-3 py-1.5 {kind === 'supplement' ? 'bg-brand text-white' : 'border border-neutral-700'}"
 					onclick={() => (kind = 'supplement')}
 				>
 					Supplement
@@ -252,7 +252,7 @@
 					<div class="flex items-center justify-between">
 						<span class="text-xs text-neutral-500">Injection site</span>
 						{#if suggestion?.name}
-							<button type="button" class="text-xs text-indigo-400 hover:text-indigo-300" onclick={pickSuggested}>
+							<button type="button" class="text-xs text-orange-400 hover:text-orange-300" onclick={pickSuggested}>
 								Use suggested: {suggestion.name}
 							</button>
 						{/if}
