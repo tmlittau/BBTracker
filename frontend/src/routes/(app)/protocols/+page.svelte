@@ -277,10 +277,16 @@
 
 <div class="flex items-center justify-between">
 	<h1 class="text-xl font-semibold">Protocols</h1>
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2">
+		<a
+			href="/protocols/manage"
+			class="rounded-full border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500"
+		>
+			Manage
+		</a>
 		<a
 			href="/protocols/schedule"
-			class="rounded-md border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500"
+			class="rounded-full border border-neutral-700 px-4 py-2 text-sm hover:border-neutral-500"
 		>
 			Dose table
 		</a>
@@ -437,10 +443,7 @@
 	<section class="mt-8">
 		<div class="flex items-center justify-between gap-2">
 			<h2 class="font-medium">Today's doses</h2>
-			<div class="flex items-center gap-4 text-sm">
-				<a class="arrow-link" href="/protocols/history">History →</a>
-				<a class="arrow-link" href="/protocols/manage">Manage →</a>
-			</div>
+			<a class="arrow-link" href="/protocols/history">History →</a>
 		</div>
 		{#if todayDoses.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">Nothing logged today yet.</p>

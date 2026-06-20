@@ -10,6 +10,7 @@
 		type AdherenceRow,
 		type Compound,
 		type Protocol,
+		type ProtocolItem,
 		type Supplement
 	} from '$lib/protocols/api';
 	import { num } from '$lib/protocols/calc';
@@ -38,6 +39,8 @@
 	let timesOfDay = $state<string[]>([]);
 	let showCompoundModal = $state(false);
 	let showSupplementModal = $state(false);
+	// When set, the add-item form is editing this existing item instead of adding.
+	let editingId = $state<number | null>(null);
 
 	const selectClass = 'rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100';
 
@@ -81,24 +84,46 @@
 		timesOfDay = timesOfDay.includes(t) ? timesOfDay.filter((x) => x !== t) : [...timesOfDay, t];
 	}
 
+	function resetForm() {
+		editingId = null;
+		refId = null;
+		dose = '';
+		daysOfWeek = [];
+		timesOfDay = [];
+	}
+	// Load an existing item into the form to fix a mistyped dose / schedule (or swap
+	// the compound) without deleting and re-adding it.
+	function startEdit(item: ProtocolItem) {
+		editingId = item.id;
+		kind = item.compound != null ? 'compound' : 'supplement';
+		refId = item.compound ?? item.supplement;
+		dose = item.dose_amount ?? '';
+		unit = item.dose_unit || (kind === 'supplement' ? 'serving' : 'mg');
+		frequency = item.frequency;
+		daysOfWeek = [...(item.days_of_week ?? [])];
+		timesOfDay = [...(item.times_of_day ?? [])];
+		if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
 	async function addItem(e: SubmitEvent) {
 		e.preventDefault();
 		if (refId == null) return;
+		const payload = {
+			compound: kind === 'compound' ? refId : null,
+			supplement: kind === 'supplement' ? refId : null,
+			dose_amount: dose === '' ? null : String(num(dose)),
+			dose_unit: unit,
+			frequency,
+			days_of_week: frequency === 'specific_days' ? [...daysOfWeek].sort() : [],
+			times_of_day: timesOfDay
+		};
 		try {
-			await protocolsApi.createItem({
-				protocol: protocolId,
-				compound: kind === 'compound' ? refId : null,
-				supplement: kind === 'supplement' ? refId : null,
-				dose_amount: dose === '' ? null : String(num(dose)),
-				dose_unit: unit,
-				frequency,
-				days_of_week: frequency === 'specific_days' ? [...daysOfWeek].sort() : [],
-				times_of_day: timesOfDay
-			});
-			dose = '';
-			refId = null;
-			daysOfWeek = [];
-			timesOfDay = [];
+			if (editingId != null) {
+				await protocolsApi.updateItem(editingId, payload);
+			} else {
+				await protocolsApi.createItem({ protocol: protocolId, ...payload });
+			}
+			resetForm();
 			await load();
 		} catch (err) {
 			error = (err as Error).message;
@@ -147,6 +172,9 @@
 
 	<!-- Add item with schedule -->
 	<form class="mt-4 space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={addItem}>
+		{#if editingId != null}
+			<p class="text-sm font-medium text-orange-300">Editing item — adjust the compound, dose or schedule, then save.</p>
+		{/if}
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="flex gap-2 text-sm">
 				<button type="button" class="rounded-md px-3 py-1.5 {kind === 'compound' ? 'bg-brand text-white' : 'border border-neutral-700'}" onclick={() => { kind = 'compound'; refId = null; unit = 'mg'; }}>Compound</button>
@@ -201,7 +229,12 @@
 			{/each}
 		</div>
 
-		<div class="w-40"><Button type="submit">Add item</Button></div>
+		<div class="flex items-center gap-3">
+			<div class="w-40"><Button type="submit">{editingId != null ? 'Save changes' : 'Add item'}</Button></div>
+			{#if editingId != null}
+				<button type="button" class="text-sm text-neutral-400 hover:text-white" onclick={resetForm}>Cancel</button>
+			{/if}
+		</div>
 	</form>
 
 	{#if protocol.items.length === 0}
@@ -229,6 +262,7 @@
 									{adh.adherence}% <span class="text-neutral-600">({adh.actual}/{adh.expected})</span>
 								</span>
 							{/if}
+							<button class="text-xs text-orange-400 hover:text-orange-300" onclick={() => startEdit(item)}>Edit</button>
 							<button class="text-xs text-red-400 hover:text-red-300" onclick={() => removeItem(item.id)}>Remove</button>
 						</div>
 					</div>
