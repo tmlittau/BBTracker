@@ -81,18 +81,30 @@ class Command(BaseCommand):
         parser.add_argument("--keep-users", nargs="*", default=["info@tmlittau.com"],
                             help="Emails (besides the demo account) to NOT delete.")
         parser.add_argument("--no-wipe", action="store_true",
-                            help="Skip the database wipe (only build demo data).")
+                            help="Skip all clearing; just build (additive — may duplicate).")
+        parser.add_argument("--demo-only", action="store_true",
+                            help="Reset ONLY the demo account's data, leaving every other "
+                                 "user untouched. Safe + idempotent — use this on prod.")
 
     def handle(self, *args, **opts):
         random.seed(42)
         self.opts = opts
         self.email = opts["email"]
         self.photos_dir = Path(opts["photos_dir"])
+        demo_only = opts["demo_only"]
+        full_wipe = not opts["no_wipe"] and not demo_only
+
+        user = self._ensure_user()
+        # Photo blobs live in object storage (non-transactional); clear the demo
+        # account's blobs up front so a re-run never orphans them.
+        if full_wipe or demo_only:
+            self._wipe_demo_photos(user)
 
         with transaction.atomic():
-            if not opts["no_wipe"]:
+            if full_wipe:
                 self._wipe(keep={self.email, *opts["keep_users"]})
-            user = self._ensure_user()
+            elif demo_only:
+                self._wipe_demo(user)
             refs = self._load_refs()
             self._ensure_extra_compounds(user, refs)
             supplements = self._build_supplements(user, refs)
@@ -107,13 +119,11 @@ class Command(BaseCommand):
             self._build_measurements(user)
             self._build_bloodwork(user)
 
-        # Photos touch object storage (non-transactional) — do after the commit.
-        if not opts["no_wipe"]:
-            self._wipe_demo_photos(user)
         n_photos = self._build_photos(user)
 
+        mode = "full wipe" if full_wipe else ("demo-only reset" if demo_only else "additive")
         self.stdout.write(self.style.SUCCESS(
-            f"Demo ready for {self.email} (password: {opts['password']}). "
+            f"Demo ready for {self.email} (password: {opts['password']}) [{mode}]. "
             f"Bulk {BULK_START}→{BULK_END}, Maintenance {MAINT_START}→{MAINT_END}, "
             f"{n_photos} progress photos."
         ))
@@ -190,6 +200,47 @@ class Command(BaseCommand):
                     except Exception:
                         pass
         ProgressPhoto.objects.filter(owner=user).delete()
+
+    def _wipe_demo(self, user):
+        """Delete only the demo account's data — every other user is untouched.
+
+        Safe to run on prod alongside real accounts, and idempotent (re-running
+        rebuilds the demo cleanly). Deletion order respects PROTECT FKs.
+        """
+        from apps.analysis.models import BodyMeasurement
+        from apps.core.models import Phase
+        from apps.diary.models import CheckIn, ProgressPhoto
+        from apps.nutrition.models import DiaryEntry, Food, Meal, NutritionTarget, Recipe
+        from apps.protocols.models import (
+            BloodPressureLog,
+            BloodResult,
+            Compound,
+            DoseLog,
+            Protocol,
+            Supplement,
+        )
+        from apps.training.models import Exercise, Program, WorkoutSession
+
+        DoseLog.objects.filter(owner=user).delete()
+        Protocol.objects.filter(owner=user).delete()  # cascades ProtocolItem
+        WorkoutSession.objects.filter(owner=user).delete()
+        Program.objects.filter(owner=user).delete()
+        DiaryEntry.objects.filter(owner=user).delete()
+        Recipe.objects.filter(owner=user).delete()
+        Meal.objects.filter(owner=user).delete()
+        NutritionTarget.objects.filter(owner=user).delete()
+        BodyMeasurement.objects.filter(owner=user).delete()
+        BloodResult.objects.filter(owner=user).delete()
+        BloodPressureLog.objects.filter(owner=user).delete()
+        CheckIn.objects.filter(owner=user).delete()
+        ProgressPhoto.objects.filter(owner=user).delete()
+        Phase.objects.filter(owner=user).delete()
+        # The demo account's own custom reference rows (globals are owner=None).
+        Food.objects.filter(owner=user).delete()
+        Exercise.objects.filter(owner=user).delete()
+        Compound.objects.filter(owner=user).delete()
+        Supplement.objects.filter(owner=user).delete()
+        self.stdout.write(f"Reset demo account {user.email} (other users untouched).")
 
     # ---- user --------------------------------------------------------------
     def _ensure_user(self):
