@@ -6,13 +6,37 @@
 
 	// `today` is the real aggregated payload from /api/v1/dashboard/today/ (SSR load).
 	const today = $derived(data.today as DashboardToday | null);
-	console.log(today.doses);
+
+	const DAY_MS = 1000 * 60 * 60 * 24;
 
 	function num(v: string | null | undefined): number {
 		return v == null ? 0 : parseFloat(v) || 0;
 	}
 	function phaseTypeLabel(key: string | undefined): string {
 		return PHASE_TYPES.find((p) => p.key === key)?.label ?? key ?? '';
+	}
+	function parseLocalDate(date: string) {
+		const [year, month, day] = date.split('-').map(Number);
+		return new Date(year, month - 1, day);
+	}
+	function phaseTimeLeft(endDate?: string | null) {
+		if (!endDate) return '(ongoing)';
+
+		const today = new Date();
+		const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+		const end = parseLocalDate(endDate);
+
+		const daysLeft = Math.ceil((end.getTime() - startOfToday.getTime()) / DAY_MS);
+
+		if (daysLeft <= 0) return 'ends today';
+
+		if (daysLeft < 14) {
+			return `${daysLeft} day${daysLeft === 1 ? '' : 's'} out`;
+		}
+
+		const weeksLeft = Math.ceil(daysLeft / 7);
+
+		return `${weeksLeft} week${weeksLeft === 1 ? '' : 's'} out`;
 	}
 </script>
 
@@ -53,8 +77,7 @@
 					<p
 						class="mt-1 bg-gradient-to-r from-orange-400 via-orange-500 to-rose-500 bg-clip-text text-sm font-semibold text-transparent"
 					>
-						{phaseTypeLabel(today.phase.phase_type)} · since {today.phase.start_date}
-						{#if today.phase.end_date}→ {today.phase.end_date}{:else}(ongoing){/if}
+						{phaseTypeLabel(today.phase.phase_type)} · {phaseTimeLeft(today.phase.end_date)}{#if today.phase.notes} · {today.phase.notes}{/if}
 					</p>
 
 					{#if today.phase.nutrition_target_name || today.phase.program_name || today.phase.protocol_name}
@@ -62,6 +85,8 @@
 							{#if today.phase.program_name}
 								<span> · Split: {today.phase.program_name}</span>
 							{/if}
+							<span> · Started: {today.phase.start_date}</span>
+							<span> · Ends: {today.phase.end_date}</span>
 						</p>
 					{/if}
 				</div>
@@ -176,7 +201,9 @@
 
 			<div class="flex items-start justify-between gap-4">
 				<div>
-					<h2 class="text-sm font-medium text-violet-300">Doses</h2>
+					<h2 class="bg-gradient-to-r from-orange-300 via-orange-400 to-rose-400 bg-clip-text text-sm font-semibold text-transparent">
+						Doses
+					</h2>
 					<p class="mt-1 text-2xl font-bold">{today.doses.length}</p>
 					{#if today.doses.length > 0}
 						<p class="truncate text-xs text-neutral-500">

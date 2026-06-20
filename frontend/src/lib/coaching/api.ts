@@ -37,6 +37,7 @@ export interface PhaseBrief {
 	phase_type: string;
 	start_date: string;
 	end_date: string | null;
+	notes: string | null;
 	nutrition_target_name?: string | null;
 	program_name?: string | null;
 	protocol_name?: string | null;

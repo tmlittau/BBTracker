@@ -125,6 +125,7 @@ def _phase_brief(phase, adjustment=None):
         "phase_type": phase.phase_type,
         "start_date": phase.start_date.isoformat(),
         "end_date": phase.end_date.isoformat() if phase.end_date else None,
+        "notes": phase.notes if phase.notes else None,
         "nutrition_target_name": None,
         "program_name": None,
         "protocol_name": None,
