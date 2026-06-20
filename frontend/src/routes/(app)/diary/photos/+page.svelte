@@ -26,12 +26,14 @@
 	// Ghost overlay: latest photo for the chosen pose, shown faint behind the picker.
 	let ghost = $state<ProgressPhoto | null>(null);
 
-	// Comparison
+	// Comparison: pick a pose, then two dates (left/right) where it was shot.
+	let comparePose = $state<number | null>(null);
 	let compareA = $state<number | null>(null);
 	let compareB = $state<number | null>(null);
 
 	async function loadPhotos() {
-		photos = await diaryApi.photos(filterPose ? { pose: filterPose } : {});
+		// Load everything once; the gallery filter + comparison work client-side.
+		photos = await diaryApi.photos({});
 	}
 
 	onMount(async () => {
@@ -92,8 +94,45 @@
 		await loadPhotos();
 	}
 
-	const photoA = $derived(photos.find((p) => p.id === compareA));
-	const photoB = $derived(photos.find((p) => p.id === compareB));
+	// Photos grouped by pose for comparison — only poses with ≥2 shots are comparable.
+	type CompareGroup = { key: number; label: string; photos: ProgressPhoto[] };
+	const byDate = (a: ProgressPhoto, b: ProgressPhoto) => a.taken_on.localeCompare(b.taken_on);
+	const compareGroups = $derived.by<CompareGroup[]>(() => {
+		const groups: CompareGroup[] = [];
+		for (const pose of poses) {
+			const ps = photos.filter((p) => p.pose === pose.id).sort(byDate);
+			if (ps.length >= 2) groups.push({ key: pose.id, label: pose.name, photos: ps });
+		}
+		const free = photos.filter((p) => p.pose == null).sort(byDate);
+		if (free.length >= 2) groups.push({ key: -1, label: 'Freeform', photos: free });
+		return groups;
+	});
+	const comparePhotos = $derived(compareGroups.find((g) => g.key === comparePose)?.photos ?? []);
+
+	// Default the pose to the first comparable group, and the two dates to
+	// earliest vs latest — the most useful first-vs-last progress comparison.
+	$effect(() => {
+		if (compareGroups.length && !compareGroups.some((g) => g.key === comparePose)) {
+			comparePose = compareGroups[0].key;
+		}
+	});
+	$effect(() => {
+		const list = comparePhotos;
+		if (!list.length) return;
+		if (!list.some((p) => p.id === compareA)) compareA = list[0].id;
+		if (!list.some((p) => p.id === compareB)) compareB = list[list.length - 1].id;
+	});
+
+	const photoA = $derived(comparePhotos.find((p) => p.id === compareA));
+	const photoB = $derived(comparePhotos.find((p) => p.id === compareB));
+	const daysApart = $derived(
+		photoA && photoB
+			? Math.abs(Math.round((Date.parse(photoB.taken_on) - Date.parse(photoA.taken_on)) / 86400000))
+			: null
+	);
+
+	// Gallery is client-filtered from the single photo list.
+	const galleryPhotos = $derived(filterPose ? photos.filter((p) => p.pose === filterPose) : photos);
 </script>
 
 <a class="text-sm text-neutral-400 hover:text-white" href="/diary">← Diary</a>
@@ -166,22 +205,45 @@
 		</div>
 	</section>
 
-	<!-- Comparison -->
-	{#if photos.length >= 2}
+	<!-- Comparison: pick a pose, then two dates -->
+	{#if compareGroups.length}
 		<section class="mt-6 rounded-lg border border-neutral-800 p-4">
 			<h2 class="font-medium">Compare</h2>
-			<div class="mt-2 grid grid-cols-2 gap-3">
-				{#each [{ get: () => compareA, set: (v: number | null) => (compareA = v) }, { get: () => compareB, set: (v: number | null) => (compareB = v) }] as sel, i (i)}
+			<p class="mt-0.5 text-xs text-neutral-500">Pick a pose, then two dates to compare side by side.</p>
+			<div class="mt-3 grid gap-3 sm:grid-cols-3">
+				<label class="block text-xs text-neutral-500">
+					Pose
 					<select
-						onchange={(e) => sel.set(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-						class="w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+						bind:value={comparePose}
+						class="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
 					>
-						<option value="">Choose a photo…</option>
-						{#each photos as p (p.id)}
-							<option value={p.id}>{p.pose_name || 'Freeform'} · {p.taken_on}</option>
+						{#each compareGroups as g (g.key)}
+							<option value={g.key}>{g.label} ({g.photos.length})</option>
 						{/each}
 					</select>
-				{/each}
+				</label>
+				<label class="block text-xs text-neutral-500">
+					Left date
+					<select
+						bind:value={compareA}
+						class="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+					>
+						{#each comparePhotos as p (p.id)}
+							<option value={p.id}>{p.taken_on}</option>
+						{/each}
+					</select>
+				</label>
+				<label class="block text-xs text-neutral-500">
+					Right date
+					<select
+						bind:value={compareB}
+						class="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+					>
+						{#each comparePhotos as p (p.id)}
+							<option value={p.id}>{p.taken_on}</option>
+						{/each}
+					</select>
+				</label>
 			</div>
 			{#if photoA || photoB}
 				<div class="mt-3 grid grid-cols-2 gap-3">
@@ -194,6 +256,11 @@
 							<p class="mt-1 text-center text-xs text-neutral-500">{photoB.taken_on}</p>{/if}
 					</div>
 				</div>
+				{#if daysApart != null && daysApart > 0}
+					<p class="mt-2 text-center text-xs text-neutral-500">
+						{daysApart} days apart{#if daysApart >= 14} (~{Math.round(daysApart / 7)} weeks){/if}
+					</p>
+				{/if}
 			{/if}
 		</section>
 	{/if}
@@ -204,7 +271,6 @@
 			<h2 class="font-medium">Gallery</h2>
 			<select
 				bind:value={filterPose}
-				onchange={loadPhotos}
 				class="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
 			>
 				<option value={null}>All poses</option>
@@ -213,11 +279,11 @@
 				{/each}
 			</select>
 		</div>
-		{#if photos.length === 0}
+		{#if galleryPhotos.length === 0}
 			<p class="mt-3 text-sm text-neutral-500">No photos{filterPose ? ' for this pose' : ''} yet.</p>
 		{:else}
 			<div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-				{#each photos as photo (photo.id)}
+				{#each galleryPhotos as photo (photo.id)}
 					<div class="group relative">
 						<img
 							src={photo.thumb_url}
