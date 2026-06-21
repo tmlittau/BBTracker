@@ -14,7 +14,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_analysis_body_retrieve"];
         put?: never;
@@ -35,14 +37,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_analysis_measurements_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_analysis_measurements_create"];
         delete?: never;
@@ -61,20 +67,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_analysis_measurements_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_analysis_measurements_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_analysis_measurements_destroy"];
         options?: never;
@@ -82,7 +94,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_analysis_measurements_partial_update"];
         trace?: never;
@@ -229,6 +243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/coaching/links/{id}/permission/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The client toggles whether a coach may edit their prescriptions (vs read-only). */
+        post: operations["v1_coaching_links_permission_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/coaching/links/{id}/revoke/": {
         parameters: {
             query?: never;
@@ -273,14 +304,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_diary_check_ins_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_diary_check_ins_create"];
         delete?: never;
@@ -299,20 +334,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_diary_check_ins_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_diary_check_ins_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_diary_check_ins_destroy"];
         options?: never;
@@ -320,7 +361,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_diary_check_ins_partial_update"];
         trace?: never;
@@ -335,14 +378,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_diary_photos_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_diary_photos_create"];
         delete?: never;
@@ -361,20 +408,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_diary_photos_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_diary_photos_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_diary_photos_destroy"];
         options?: never;
@@ -382,7 +435,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_diary_photos_partial_update"];
         trace?: never;
@@ -567,14 +622,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_diary_entries_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_nutrition_diary_entries_create"];
         delete?: never;
@@ -593,20 +652,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_diary_entries_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_nutrition_diary_entries_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_nutrition_diary_entries_destroy"];
         options?: never;
@@ -614,7 +679,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_nutrition_diary_entries_partial_update"];
         trace?: never;
@@ -713,14 +780,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_meal_templates_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_nutrition_meal_templates_create"];
         delete?: never;
@@ -739,20 +810,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_meal_templates_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_nutrition_meal_templates_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_nutrition_meal_templates_destroy"];
         options?: never;
@@ -760,7 +837,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_nutrition_meal_templates_partial_update"];
         trace?: never;
@@ -1121,14 +1200,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_recipes_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_nutrition_recipes_create"];
         delete?: never;
@@ -1147,20 +1230,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_recipes_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_nutrition_recipes_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_nutrition_recipes_destroy"];
         options?: never;
@@ -1168,7 +1257,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_nutrition_recipes_partial_update"];
         trace?: never;
@@ -1183,7 +1274,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_summary_retrieve"];
         put?: never;
@@ -1204,14 +1297,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_targets_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_nutrition_targets_create"];
         delete?: never;
@@ -1230,20 +1327,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_nutrition_targets_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_nutrition_targets_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_nutrition_targets_destroy"];
         options?: never;
@@ -1251,7 +1354,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_nutrition_targets_partial_update"];
         trace?: never;
@@ -1268,7 +1373,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_nutrition_targets_activate_create"];
         delete?: never;
@@ -1431,14 +1538,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_blood_results_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_blood_results_create"];
         delete?: never;
@@ -1457,20 +1568,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_blood_results_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_protocols_blood_results_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_protocols_blood_results_destroy"];
         options?: never;
@@ -1478,7 +1595,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_protocols_blood_results_partial_update"];
         trace?: never;
@@ -1556,7 +1675,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_blood_results_trend_list"];
         put?: never;
@@ -1577,14 +1698,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_bp_logs_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_bp_logs_create"];
         delete?: never;
@@ -1603,20 +1728,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_bp_logs_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_protocols_bp_logs_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_protocols_bp_logs_destroy"];
         options?: never;
@@ -1624,7 +1755,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_protocols_bp_logs_partial_update"];
         trace?: never;
@@ -1701,14 +1834,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_dose_logs_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_dose_logs_create"];
         delete?: never;
@@ -1727,20 +1864,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_dose_logs_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_protocols_dose_logs_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_protocols_dose_logs_destroy"];
         options?: never;
@@ -1748,7 +1891,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_protocols_dose_logs_partial_update"];
         trace?: never;
@@ -1763,7 +1908,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_injection_sites_list"];
         put?: never;
@@ -1784,7 +1931,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_injection_sites_retrieve"];
         put?: never;
@@ -1805,7 +1954,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_injection_sites_recency_list"];
         put?: never;
@@ -1826,7 +1977,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_injection_sites_suggest_retrieve"];
         put?: never;
@@ -1991,14 +2144,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_protocols_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_protocols_create"];
         delete?: never;
@@ -2017,20 +2174,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_protocols_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_protocols_protocols_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_protocols_protocols_destroy"];
         options?: never;
@@ -2038,7 +2201,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_protocols_protocols_partial_update"];
         trace?: never;
@@ -2055,7 +2220,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_protocols_activate_create"];
         delete?: never;
@@ -2074,7 +2241,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_protocols_adherence_list"];
         put?: never;
@@ -2196,14 +2365,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_vials_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_protocols_vials_create"];
         delete?: never;
@@ -2222,20 +2395,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_protocols_vials_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_protocols_vials_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_protocols_vials_destroy"];
         options?: never;
@@ -2243,7 +2422,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_protocols_vials_partial_update"];
         trace?: never;
@@ -2801,14 +2982,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_training_programs_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_training_programs_create"];
         delete?: never;
@@ -2827,20 +3012,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_training_programs_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_training_programs_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_training_programs_destroy"];
         options?: never;
@@ -2848,7 +3039,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_training_programs_partial_update"];
         trace?: never;
@@ -2862,7 +3055,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Make this the active program (deactivates the user's others). */
+        /** @description Make this the active program (deactivates the owner's others). */
         post: operations["v1_training_programs_activate_create"];
         delete?: never;
         options?: never;
@@ -2984,7 +3177,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_training_volume_list"];
         put?: never;
@@ -3005,14 +3200,18 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_training_workout_sessions_list"];
         put?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_training_workout_sessions_create"];
         delete?: never;
@@ -3031,20 +3230,26 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         get: operations["v1_training_workout_sessions_retrieve"];
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         put: operations["v1_training_workout_sessions_update"];
         post?: never;
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         delete: operations["v1_training_workout_sessions_destroy"];
         options?: never;
@@ -3052,7 +3257,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         patch: operations["v1_training_workout_sessions_partial_update"];
         trace?: never;
@@ -3069,7 +3276,9 @@ export interface paths {
         /**
          * @description Owner-scoped views read their scope from `self.effective_owner` instead of
          *     `self.request.user`, so a coach acting on a client (safe methods) sees the
-         *     client's data. Writes continue to use `request.user`.
+         *     client's data. Writes resolve to `request.user` unless the view sets
+         *     `prescription_write = True` (a prescription endpoint), in which case a coach
+         *     with edit access writes to the client.
          */
         post: operations["v1_training_workout_sessions_finish_create"];
         delete?: never;
@@ -3320,6 +3529,7 @@ export interface components {
             email: string;
             name: string;
             status: string;
+            can_edit_prescriptions: boolean;
             phase: string | null;
             /** Format: date */
             last_check_in: string | null;
@@ -3735,10 +3945,14 @@ export interface components {
             readonly coach_name: string;
             readonly client_name: string;
             readonly status: components["schemas"]["LinkStatusEnum"];
+            readonly can_edit_prescriptions: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly responded_at: string | null;
+        };
+        LinkPermissionRequest: {
+            can_edit_prescriptions: boolean;
         };
         /**
          * @description * `pending` - Pending
@@ -5713,6 +5927,33 @@ export interface operations {
                 "application/json": components["schemas"]["InviteRespondRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["InviteRespondRequest"];
                 "multipart/form-data": components["schemas"]["InviteRespondRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Link"];
+                };
+            };
+        };
+    };
+    v1_coaching_links_permission_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkPermissionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LinkPermissionRequest"];
+                "multipart/form-data": components["schemas"]["LinkPermissionRequest"];
             };
         };
         responses: {

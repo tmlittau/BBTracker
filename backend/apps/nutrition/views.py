@@ -236,6 +236,7 @@ class MealViewSet(ReorderMixin, OwnerScopedViewSet):
 @extend_schema(tags=["nutrition"])
 class NutritionTargetViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = NutritionTargetSerializer
+    prescription_write = True  # a coach may set a client's calorie/macro targets
 
     def get_queryset(self):
         return NutritionTarget.objects.filter(owner=self.effective_owner).prefetch_related(
@@ -243,12 +244,12 @@ class NutritionTargetViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
         target = self.get_object()
-        NutritionTarget.objects.filter(owner=request.user).update(is_active=False)
+        NutritionTarget.objects.filter(owner=self.effective_owner).update(is_active=False)
         target.is_active = True
         target.save(update_fields=["is_active"])
         return Response(self.get_serializer(target).data)
@@ -260,6 +261,7 @@ class NutrientTargetViewSet(OwnerScopedViewSet):
     serializer_class = NutrientTargetSerializer
     owner_path = "target__owner"
     parent_checks = [("target", NutritionTarget, "owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["nutrition"])

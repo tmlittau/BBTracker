@@ -24,6 +24,10 @@ class CoachClientLink(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="coach_links"
     )
     status = models.CharField(max_length=10, choices=LinkStatus.choices, default=LinkStatus.PENDING)
+    # When True, the coach may edit this client's *prescriptions* (phases, nutrition
+    # targets, training programs, protocols) — never their logged data. The client
+    # controls this and can switch the coach to read-only without revoking the link.
+    can_edit_prescriptions = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     responded_at = models.DateTimeField(null=True, blank=True)
 
@@ -45,3 +49,10 @@ class CoachClientLink(models.Model):
         return cls.objects.filter(
             coach=coach, client_id=client_id, status=LinkStatus.ACTIVE
         ).exists()
+
+    @classmethod
+    def active_link(cls, coach, client_id):
+        """The active link from `coach` to `client_id`, or None."""
+        return cls.objects.filter(
+            coach=coach, client_id=client_id, status=LinkStatus.ACTIVE
+        ).first()

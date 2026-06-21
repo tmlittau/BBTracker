@@ -55,6 +55,7 @@ class PhaseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     dated PhaseAdjustment timeline (see PhaseAdjustmentViewSet)."""
 
     serializer_class = PhaseSerializer
+    prescription_write = True  # a coach may edit a client's phases
 
     def get_queryset(self):
         return Phase.objects.filter(owner=self.effective_owner).prefetch_related(
@@ -62,7 +63,7 @@ class PhaseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
 
 @extend_schema(tags=["core"])
@@ -74,6 +75,7 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
     serializer_class = PhaseAdjustmentSerializer
     owner_path = "phase__owner"
     parent_checks = [("phase", Phase, "owner")]
+    prescription_write = True  # a coach may edit a client's prescription timeline
 
     def get_queryset(self):
         return super().get_queryset().select_related(
@@ -81,9 +83,10 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
         )
 
     def _check_links(self, serializer):
+        owner_id = self.effective_owner.id
         for field in ("nutrition_target", "program", "protocol"):
             obj = serializer.validated_data.get(field)
-            if obj is not None and obj.owner_id != self.request.user.id:
+            if obj is not None and obj.owner_id != owner_id:
                 raise PermissionDenied(f"That {field} does not belong to you.")
 
     def perform_create(self, serializer):

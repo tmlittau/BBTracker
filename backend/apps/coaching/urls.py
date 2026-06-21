@@ -5,6 +5,7 @@ from .views import (
     CoachClientListView,
     InviteListCreateView,
     InviteRespondView,
+    LinkPermissionView,
     LinkRevokeView,
 )
 
@@ -18,4 +19,9 @@ urlpatterns = [
     path("invites/", InviteListCreateView.as_view(), name="coaching-invites"),
     path("invites/<int:pk>/respond/", InviteRespondView.as_view(), name="coaching-invite-respond"),
     path("links/<int:pk>/revoke/", LinkRevokeView.as_view(), name="coaching-link-revoke"),
+    path(
+        "links/<int:pk>/permission/",
+        LinkPermissionView.as_view(),
+        name="coaching-link-permission",
+    ),
 ]

@@ -107,6 +107,7 @@ class ExerciseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
 @extend_schema(tags=["training"])
 class ProgramViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = ProgramSerializer
+    prescription_write = True  # a coach may build/edit a client's program
 
     def get_queryset(self):
         return (
@@ -115,13 +116,13 @@ class ProgramViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
-        """Make this the active program (deactivates the user's others)."""
+        """Make this the active program (deactivates the owner's others)."""
         program = self.get_object()
-        Program.objects.filter(owner=request.user).update(is_active=False)
+        Program.objects.filter(owner=self.effective_owner).update(is_active=False)
         program.is_active = True
         program.save(update_fields=["is_active"])
         return Response(self.get_serializer(program).data)
@@ -133,6 +134,7 @@ class TrainingDayViewSet(OwnerScopedViewSet):
     serializer_class = TrainingDaySerializer
     owner_path = "program__owner"
     parent_checks = [("program", Program, "owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])
@@ -141,6 +143,7 @@ class ExerciseSlotViewSet(ReorderMixin, OwnerScopedViewSet):
     serializer_class = ExerciseSlotSerializer
     owner_path = "day__program__owner"
     parent_checks = [("day", TrainingDay, "program__owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])
@@ -149,6 +152,7 @@ class PlannedSetViewSet(ReorderMixin, OwnerScopedViewSet):
     serializer_class = PlannedSetSerializer
     owner_path = "slot__day__program__owner"
     parent_checks = [("slot", ExerciseSlot, "day__program__owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])

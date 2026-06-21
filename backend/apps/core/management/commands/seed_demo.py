@@ -301,7 +301,11 @@ class Command(BaseCommand):
             pass
         CoachClientLink.objects.update_or_create(
             coach=coach, client=client,
-            defaults={"status": LinkStatus.ACTIVE, "responded_at": timezone.now()},
+            defaults={
+                "status": LinkStatus.ACTIVE,
+                "responded_at": timezone.now(),
+                "can_edit_prescriptions": True,
+            },
         )
         self.stdout.write(f"Coach ready: {self.coach_email} → coaches {client.email}")
 

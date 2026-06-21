@@ -1,8 +1,10 @@
 """Access-control matrix for the coaching layer — the security-critical surface.
 
-The contract: a coach can READ a client's data only via an *active* link, only
-on safe methods (the X-Acting-Client header), and never write it. A header that
-isn't authorised is a hard 403, never a silent fall back to the coach's own data.
+The contract: a coach can READ a client's data only via an *active* link (the
+X-Acting-Client header). For WRITES the coach may only touch the client's
+*prescriptions* (phases, nutrition targets, programs, protocols) and only when
+the link grants `can_edit_prescriptions`; logged data is never writable. A header
+that isn't authorised is a hard 403, never a silent fall back to the coach's own data.
 """
 from datetime import date
 
@@ -93,18 +95,87 @@ def test_header_absent_is_self_scoped(coach, client_user):
     assert res.status_code == 200 and rows(res) == []
 
 
-def test_write_ignores_header(coach, client_user):
-    """A POST with the header writes to the coach, never the client (read-only stage)."""
+def test_write_to_logged_data_ignores_header(coach, client_user):
+    """A POST to LOGGED data with the header writes to the coach, never the client —
+    coaches may only write prescriptions (see the prescription tests below)."""
     link(coach, client_user)
     res = api(coach).post(
-        "/api/v1/phases/",
-        {"name": "Sneaky", "start_date": "2026-03-01"},
+        "/api/v1/diary/check-ins/",
+        {"date": "2026-05-01", "bodyweight": 70},
         format="json",
         HTTP_X_ACTING_CLIENT=str(client_user.id),
     )
     assert res.status_code == 201
-    assert not Phase.objects.filter(owner=client_user, name="Sneaky").exists()
-    assert Phase.objects.filter(owner=coach, name="Sneaky").exists()
+    assert not CheckIn.objects.filter(owner=client_user, date=date(2026, 5, 1)).exists()
+    assert CheckIn.objects.filter(owner=coach, date=date(2026, 5, 1)).exists()
+
+
+# --- Stage 2: a coach writes a client's PRESCRIPTIONS -------------------------
+
+def test_coach_edits_client_phase(coach, client_user):
+    link(coach, client_user)  # can_edit_prescriptions defaults to True
+    res = api(coach).post(
+        "/api/v1/phases/",
+        {"name": "Coach Block", "start_date": "2026-02-01"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201
+    assert Phase.objects.filter(owner=client_user, name="Coach Block").exists()
+    assert not Phase.objects.filter(owner=coach, name="Coach Block").exists()
+
+
+def test_coach_sets_client_nutrition_target(coach, client_user):
+    from apps.nutrition.models import NutritionTarget
+
+    link(coach, client_user)
+    res = api(coach).post(
+        "/api/v1/nutrition/targets/",
+        {"name": "Cut", "calories": "2500"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201, res.content
+    assert NutritionTarget.objects.filter(owner=client_user, name="Cut").exists()
+
+
+def test_read_only_coach_can_read_not_write(coach, client_user):
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    c = api(coach)
+    assert c.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id)).status_code == 200
+    res = c.post(
+        "/api/v1/phases/", {"name": "Nope", "start_date": "2026-02-01"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+    assert not Phase.objects.filter(name="Nope").exists()
+
+
+def test_client_toggles_write_permission(coach, client_user):
+    cl = link(coach, client_user)
+    resp = api(client_user).post(
+        f"/api/v1/coaching/links/{cl.id}/permission/",
+        {"can_edit_prescriptions": False}, format="json",
+    )
+    assert resp.status_code == 200 and resp.json()["can_edit_prescriptions"] is False
+    res = api(coach).post(
+        "/api/v1/phases/", {"name": "X", "start_date": "2026-02-01"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+
+
+def test_only_client_toggles_permission(coach, client_user):
+    cl = link(coach, client_user)
+    # the coach cannot change their own edit permission (not the link's client)
+    res = api(coach).post(
+        f"/api/v1/coaching/links/{cl.id}/permission/",
+        {"can_edit_prescriptions": False}, format="json",
+    )
+    assert res.status_code == 404
 
 
 # --- invite / accept / revoke lifecycle --------------------------------------

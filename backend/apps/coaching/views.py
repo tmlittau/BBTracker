@@ -24,6 +24,7 @@ from .serializers import (
     ClientBriefSerializer,
     InviteCreateSerializer,
     InviteRespondSerializer,
+    LinkPermissionSerializer,
     LinkSerializer,
 )
 
@@ -55,6 +56,7 @@ def _client_brief(link):
         "email": client.email,
         "name": _name(client),
         "status": link.status,
+        "can_edit_prescriptions": link.can_edit_prescriptions,
         "phase": phase.name if phase else None,
         "last_check_in": last.date if last else None,
         "bodyweight": float(bw) if bw is not None else None,
@@ -186,4 +188,19 @@ class LinkRevokeView(APIView):
         link.status = LinkStatus.REVOKED
         link.responded_at = timezone.now()
         link.save(update_fields=["status", "responded_at"])
+        return Response(LinkSerializer(link).data)
+
+
+class LinkPermissionView(APIView):
+    """The client toggles whether a coach may edit their prescriptions (vs read-only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["coaching"], request=LinkPermissionSerializer, responses=LinkSerializer)
+    def post(self, request, pk):
+        link = get_object_or_404(CoachClientLink, pk=pk, client=request.user)
+        ser = LinkPermissionSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        link.can_edit_prescriptions = ser.validated_data["can_edit_prescriptions"]
+        link.save(update_fields=["can_edit_prescriptions"])
         return Response(LinkSerializer(link).data)

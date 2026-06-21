@@ -15,6 +15,7 @@ class ClientBriefSerializer(serializers.Serializer):
     email = serializers.EmailField()
     name = serializers.CharField()
     status = serializers.CharField()
+    can_edit_prescriptions = serializers.BooleanField()
     phase = serializers.CharField(allow_null=True)
     last_check_in = serializers.DateField(allow_null=True)
     bodyweight = serializers.FloatField(allow_null=True)
@@ -32,7 +33,8 @@ class LinkSerializer(serializers.ModelSerializer):
         model = CoachClientLink
         fields = [
             "id", "coach", "client", "coach_email", "client_email",
-            "coach_name", "client_name", "status", "created_at", "responded_at",
+            "coach_name", "client_name", "status", "can_edit_prescriptions",
+            "created_at", "responded_at",
         ]
         read_only_fields = fields
 
@@ -49,3 +51,7 @@ class InviteCreateSerializer(serializers.Serializer):
 
 class InviteRespondSerializer(serializers.Serializer):
     accept = serializers.BooleanField()
+
+
+class LinkPermissionSerializer(serializers.Serializer):
+    can_edit_prescriptions = serializers.BooleanField()

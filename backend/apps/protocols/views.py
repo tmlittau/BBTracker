@@ -208,6 +208,7 @@ class BloodMarkerViewSet(viewsets.ReadOnlyModelViewSet):
 @extend_schema(tags=["protocols"])
 class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = ProtocolSerializer
+    prescription_write = True  # a coach may build/edit a client's protocol
 
     def get_queryset(self):
         return Protocol.objects.filter(owner=self.effective_owner).prefetch_related(
@@ -215,12 +216,12 @@ class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
         protocol = self.get_object()
-        Protocol.objects.filter(owner=request.user).update(is_active=False)
+        Protocol.objects.filter(owner=self.effective_owner).update(is_active=False)
         protocol.is_active = True
         protocol.save(update_fields=["is_active"])
         return Response(self.get_serializer(protocol).data)
@@ -288,11 +289,13 @@ class ProtocolItemViewSet(OwnerScopedViewSet):
     serializer_class = ProtocolItemSerializer
     owner_path = "protocol__owner"
     parent_checks = [("protocol", Protocol, "owner")]
+    prescription_write = True
 
     def _check_refs(self, serializer):
+        owner_id = self.effective_owner.id
         for field in ("compound", "supplement"):
             obj = serializer.validated_data.get(field)
-            if obj is not None and obj.owner_id not in (None, self.request.user.id):
+            if obj is not None and obj.owner_id not in (None, owner_id):
                 raise PermissionDenied(f"That {field} does not belong to you.")
 
     def perform_create(self, serializer):
