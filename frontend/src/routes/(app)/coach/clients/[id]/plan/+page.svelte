@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { isoDate } from '$lib/date';
 	import type { Phase } from '$lib/coaching/api';
@@ -106,6 +107,37 @@
 			adjMsg = cleanErr(err);
 		} finally {
 			savingAdj = false;
+		}
+	}
+
+	// --- build new program / protocol (then open the builder) ---
+	let newProgramName = $state('');
+	let newProtocolName = $state('');
+	let creatingProgram = $state(false);
+	let creatingProtocol = $state(false);
+
+	async function createProgram(e: SubmitEvent) {
+		e.preventDefault();
+		if (!newProgramName.trim()) return;
+		creatingProgram = true;
+		try {
+			const p = await clientPlan.createProgram(clientId, newProgramName.trim());
+			await goto(`/coach/clients/${clientId}/programs/${p.id}`);
+		} catch (err) {
+			adjMsg = cleanErr(err);
+			creatingProgram = false;
+		}
+	}
+	async function createProtocol(e: SubmitEvent) {
+		e.preventDefault();
+		if (!newProtocolName.trim()) return;
+		creatingProtocol = true;
+		try {
+			const p = await clientPlan.createProtocol(clientId, newProtocolName.trim());
+			await goto(`/coach/clients/${clientId}/protocols/${p.id}`);
+		} catch (err) {
+			adjMsg = cleanErr(err);
+			creatingProtocol = false;
 		}
 	}
 
@@ -240,6 +272,72 @@
 					</ul>
 				{/if}
 			{/if}
+		</section>
+
+		<!-- Training programs -->
+		<section class="mt-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+			<h2 class="font-medium">Training programs</h2>
+			{#if programs.length > 0}
+				<ul class="mt-2 divide-y divide-neutral-800/60">
+					{#each programs as p (p.id)}
+						<li class="flex items-center justify-between py-2 text-sm">
+							<span class="text-neutral-200">
+								{p.name}{#if p.is_active}<span class="ml-2 rounded bg-green-900 px-1.5 py-0.5 text-[10px] text-green-300">active</span>{/if}
+							</span>
+							<a class="text-xs text-orange-400 hover:text-orange-300" href={`/coach/clients/${clientId}/programs/${p.id}`}>Edit →</a>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="mt-2 text-sm text-neutral-500">No programs yet.</p>
+			{/if}
+			<form class="mt-3 flex flex-wrap items-center gap-2" onsubmit={createProgram}>
+				<input
+					class="min-w-[12rem] flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+					bind:value={newProgramName}
+					placeholder="New program name (e.g. Upper/Lower)"
+				/>
+				<button
+					type="submit"
+					disabled={creatingProgram}
+					class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
+				>
+					{creatingProgram ? 'Creating…' : 'Build new program'}
+				</button>
+			</form>
+		</section>
+
+		<!-- Protocols -->
+		<section class="mt-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+			<h2 class="font-medium">Protocols</h2>
+			{#if protocols.length > 0}
+				<ul class="mt-2 divide-y divide-neutral-800/60">
+					{#each protocols as p (p.id)}
+						<li class="flex items-center justify-between py-2 text-sm">
+							<span class="text-neutral-200">
+								{p.name}{#if p.is_active}<span class="ml-2 rounded bg-green-900 px-1.5 py-0.5 text-[10px] text-green-300">active</span>{/if}
+							</span>
+							<a class="text-xs text-orange-400 hover:text-orange-300" href={`/coach/clients/${clientId}/protocols/${p.id}`}>Edit →</a>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="mt-2 text-sm text-neutral-500">No protocols yet.</p>
+			{/if}
+			<form class="mt-3 flex flex-wrap items-center gap-2" onsubmit={createProtocol}>
+				<input
+					class="min-w-[12rem] flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100"
+					bind:value={newProtocolName}
+					placeholder="New protocol name (e.g. Off-season)"
+				/>
+				<button
+					type="submit"
+					disabled={creatingProtocol}
+					class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
+				>
+					{creatingProtocol ? 'Creating…' : 'Build new protocol'}
+				</button>
+			</form>
 		</section>
 	{/if}
 {/if}

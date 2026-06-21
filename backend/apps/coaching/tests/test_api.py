@@ -178,6 +178,78 @@ def test_only_client_toggles_permission(coach, client_user):
     assert res.status_code == 404
 
 
+# --- coach builds a program / protocol from scratch (full nested chain) -------
+
+def test_coach_builds_program_chain(coach, client_user):
+    from apps.training.models import Exercise, Program, TrainingDay
+
+    link(coach, client_user)
+    ex = Exercise.objects.create(name="Bench")  # global exercise (owner=None)
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    prog = c.post("/api/v1/training/programs/", {"name": "Coach Prog"}, format="json", **h)
+    assert prog.status_code == 201, prog.content
+    pid = prog.json()["id"]
+    assert Program.objects.get(id=pid).owner_id == client_user.id
+
+    day = c.post(
+        "/api/v1/training/training-days/",
+        {"program": pid, "name": "Push", "order": 0}, format="json", **h,
+    )
+    assert day.status_code == 201, day.content
+    did = day.json()["id"]
+    assert TrainingDay.objects.get(id=did).program.owner_id == client_user.id
+
+    slot = c.post(
+        "/api/v1/training/exercise-slots/",
+        {"day": did, "exercise": ex.id, "order": 0}, format="json", **h,
+    )
+    assert slot.status_code == 201, slot.content
+    sid = slot.json()["id"]
+
+    ps = c.post(
+        "/api/v1/training/planned-sets/",
+        {"slot": sid, "order": 0, "set_type": "working"}, format="json", **h,
+    )
+    assert ps.status_code == 201, ps.content
+
+
+def test_coach_builds_protocol_chain(coach, client_user):
+    from apps.protocols.models import Compound, Protocol, ProtocolItem
+
+    link(coach, client_user)
+    cmp = Compound.objects.create(name="Test E", default_unit="mg", half_life_hours="168")
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    proto = c.post("/api/v1/protocols/protocols/", {"name": "Off-season"}, format="json", **h)
+    assert proto.status_code == 201, proto.content
+    pid = proto.json()["id"]
+    assert Protocol.objects.get(id=pid).owner_id == client_user.id
+
+    item = c.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": pid, "compound": cmp.id, "dose_amount": "250",
+         "dose_unit": "mg", "frequency": "daily"},
+        format="json", **h,
+    )
+    assert item.status_code == 201, item.content
+    assert ProtocolItem.objects.get(id=item.json()["id"]).protocol.owner_id == client_user.id
+
+
+def test_read_only_coach_cannot_build(coach, client_user):
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    res = api(coach).post(
+        "/api/v1/training/programs/", {"name": "X"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+
+
 # --- invite / accept / revoke lifecycle --------------------------------------
 
 def test_invite_lifecycle(coach, client_user):

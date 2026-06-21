@@ -175,6 +175,10 @@ export const clientPlan = {
 	targets: (cid: number) => actingReq<{ results?: ClientTarget[] } | ClientTarget[]>(
 		'GET', '/nutrition/targets/', cid
 	).then(rows),
+	createProgram: (cid: number, name: string) =>
+		actingReq<PlanOption>('POST', '/training/programs/', cid, { name }),
+	createProtocol: (cid: number, name: string) =>
+		actingReq<PlanOption>('POST', '/protocols/protocols/', cid, { name }),
 	createTarget: (cid: number, data: NutritionTargetInput) =>
 		actingReq<ClientTarget>('POST', '/nutrition/targets/', cid, data),
 	activateTarget: (cid: number, id: number) =>
