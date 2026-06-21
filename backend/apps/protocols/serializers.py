@@ -271,3 +271,33 @@ class MarkerTrendPointSerializer(serializers.Serializer):
     value = serializers.DecimalField(max_digits=10, decimal_places=3)
     unit = serializers.CharField()
     flag = serializers.CharField()
+
+
+# --- Week prep plan (read-only response shapes) ---
+class WeekPrepEntrySerializer(serializers.Serializer):
+    amount = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+
+
+class WeekPrepSlotSerializer(serializers.Serializer):
+    slot = serializers.CharField()
+    slot_label = serializers.CharField()
+    entries = WeekPrepEntrySerializer(many=True)
+
+
+class WeekPrepDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    weekday = serializers.IntegerField()
+    label = serializers.CharField()
+    protocol = serializers.CharField(allow_null=True)
+    added = WeekPrepSlotSerializer(many=True)
+    removed = WeekPrepSlotSerializer(many=True)
+
+
+class WeekPrepPlanSerializer(serializers.Serializer):
+    start = serializers.DateField()
+    end = serializers.DateField()
+    protocols = serializers.ListField(child=serializers.CharField())
+    everyday = WeekPrepSlotSerializer(many=True)
+    days = WeekPrepDaySerializer(many=True)

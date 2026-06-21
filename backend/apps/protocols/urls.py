@@ -13,6 +13,7 @@ from .views import (
     ProtocolViewSet,
     SupplementViewSet,
     VialViewSet,
+    WeekPrepView,
 )
 
 router = DefaultRouter()
@@ -29,5 +30,6 @@ router.register("bp-logs", BloodPressureLogViewSet, basename="bploh")
 
 urlpatterns = [
     path("plot/", CompoundPlotView.as_view(), name="compound-plot"),
+    path("week-prep/", WeekPrepView.as_view(), name="week-prep"),
     *router.urls,
 ]

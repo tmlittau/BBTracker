@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from django.db.models import ProtectedError, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -40,6 +42,7 @@ from .serializers import (
     SiteRecencySerializer,
     SupplementSerializer,
     VialSerializer,
+    WeekPrepPlanSerializer,
 )
 from .services import (
     bloodwork_matrix,
@@ -50,6 +53,7 @@ from .services import (
     protocol_adherence,
     protocol_release_curves,
     suggest_next_site,
+    week_prep_plan,
 )
 
 
@@ -111,6 +115,30 @@ class CompoundPlotView(APIView):
             ser.validated_data.get("horizon_days", 84),
         )
         return Response(data)
+
+
+@extend_schema(
+    tags=["protocols"],
+    parameters=[OpenApiParameter("start", str, description="Monday of the week (YYYY-MM-DD).")],
+    responses=WeekPrepPlanSerializer,
+)
+class WeekPrepView(APIView):
+    """Weekly pill-box plan: an every-day baseline plus per-day deviations for the
+    owner's oral compounds + supplements, resolving the protocol in force each day."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        raw = request.query_params.get("start")
+        if raw:
+            try:
+                start = date.fromisoformat(raw)
+            except ValueError:
+                raise ValidationError({"start": "Use YYYY-MM-DD."}) from None
+        else:
+            today = timezone.localdate()
+            start = today - timedelta(days=today.weekday())
+        return Response(week_prep_plan(request.user, start))
 
 
 @extend_schema(tags=["protocols"])
