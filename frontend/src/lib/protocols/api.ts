@@ -497,7 +497,8 @@ export const ROUTES = [
 // backend cadence in services.scheduled_dose_dates so the quick-log list can show
 // only what's due today. PRN/daily are always shown; specific_days matches the
 // weekday (Mon=0…Sun=6); interval cadences (eod / every-3 / weekly) are phased to
-// the protocol's start date (shown every day if that's unknown).
+// the protocol's start date, or a fixed epoch when unknown (so the 1-in-N cadence
+// still holds and drifts week to week instead of collapsing to "every day").
 export function isScheduledToday(
 	item: Pick<ProtocolItem, 'frequency' | 'days_of_week'>,
 	startedOn: string | null,
@@ -508,8 +509,9 @@ export function isScheduledToday(
 	const weekday = (on.getDay() + 6) % 7; // JS Sun=0 → our Mon=0…Sun=6
 	if (f === 'specific_days') return (item.days_of_week ?? []).includes(weekday);
 	if (f === 'eod' || f === 'every_3_days' || f === 'weekly') {
-		if (!startedOn) return true; // no anchor → don't hide it
-		const anchor = new Date(startedOn + 'T00:00:00');
+		// Phase to the protocol's start, or a fixed epoch when unknown, so the cadence
+		// stays a true 1-in-N pattern (mirrors services.dose_anchor / CADENCE_EPOCH).
+		const anchor = new Date((startedOn ?? '2000-01-03') + 'T00:00:00');
 		const today0 = new Date(on.getFullYear(), on.getMonth(), on.getDate());
 		const delta = Math.round((today0.getTime() - anchor.getTime()) / 86_400_000);
 		if (delta < 0) return false;

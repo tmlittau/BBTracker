@@ -72,6 +72,23 @@ def test_baseline_additions_and_removals(user):
     assert plan["protocols"] == ["Stack"]
 
 
+def test_interval_cadence_without_start_date(user):
+    """Regression: an 'every 3 days' item on a protocol with no start date must keep
+    its 1-in-N cadence (phased to a fixed epoch), not collapse to 'every day'."""
+    p = Protocol.objects.create(owner=user, name="No-start", is_active=True)  # started_on=None
+    _item(p, compound=_oral(user, "Cardarine"), dose="10", freq="every_3_days", times=["am"])
+
+    plan = week_prep_plan(user, MON)
+
+    assert "Cardarine" not in _names(plan["everyday"], "am")  # not an everyday baseline
+    week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    days = {d["label"]: d for d in plan["days"]}
+    hits = [wd for wd in week if "Cardarine" in _names(days[wd]["added"], "am")]
+    assert 2 <= len(hits) <= 3  # 1-in-3 over 7 days → never all 7
+    idx = [week.index(w) for w in hits]
+    assert all(idx[i + 1] - idx[i] == 3 for i in range(len(idx) - 1))  # exactly every 3rd day
+
+
 def test_injectables_and_prn_excluded(user):
     p = Protocol.objects.create(owner=user, name="Inj", is_active=True, started_on=MON)
     ProtocolItem.objects.create(
