@@ -1,5 +1,7 @@
 from datetime import date as date_cls
 
+from django.http import HttpResponse
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -9,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.core.viewsets import OwnerScopedViewSet
 
+from .export import build_export
 from .models import Phase, PhaseAdjustment
 from .serializers import (
     DashboardTodaySerializer,
@@ -119,3 +122,21 @@ class WeeklyCheckInView(APIView):
 
     def get(self, request):
         return Response(weekly_checkin(request.user, _parse_date(request, "end")))
+
+
+class DataExportView(APIView):
+    """Download a zip of all your data (data.json + CSVs + progress photos)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["core"],
+        parameters=[OpenApiParameter("photos", int, description="0 to omit photo files.")],
+        responses={(200, "application/zip"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        include_photos = request.query_params.get("photos", "1") != "0"
+        filename, buf = build_export(request.user, include_photos)
+        resp = HttpResponse(buf.getvalue(), content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp

@@ -22,6 +22,31 @@
 	let savingReminders = $state(false);
 	let remindersSaved = $state(false);
 	let testMsg = $state<string | null>(null);
+
+	// Full data export (zip download).
+	let exporting = $state(false);
+	let exportError = $state<string | null>(null);
+	async function downloadExport() {
+		exporting = true;
+		exportError = null;
+		try {
+			const res = await fetch('/api/v1/export/', { credentials: 'include' });
+			if (!res.ok) throw new Error(`Export failed (${res.status})`);
+			const blob = await res.blob();
+			const cd = res.headers.get('Content-Disposition') ?? '';
+			const m = cd.match(/filename="?([^"]+)"?/);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = m ? m[1] : 'bbtracker-export.zip';
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			exportError = (e as Error).message;
+		} finally {
+			exporting = false;
+		}
+	}
 	const TIME_SLOTS = [
 		['waking', 'Waking'],
 		['am', 'AM'],
@@ -279,4 +304,19 @@
 			{#if testMsg}<p class="text-xs text-neutral-400">{testMsg}</p>{/if}
 		</form>
 	{/if}
+
+	<section class="mt-8 border-t border-neutral-800 pt-6">
+		<h2 class="font-medium">Your data</h2>
+		<p class="mt-1 max-w-md text-sm text-neutral-400">
+			Download everything you've logged — a zip with a complete <code class="text-neutral-300"
+				>data.json</code
+			>, spreadsheet-friendly CSVs, and your progress photos.
+		</p>
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<Button full={false} disabled={exporting} onclick={downloadExport}>
+				{exporting ? 'Preparing…' : 'Download my data'}
+			</Button>
+			{#if exportError}<p class="text-sm text-red-400">{exportError}</p>{/if}
+		</div>
+	</section>
 {/if}

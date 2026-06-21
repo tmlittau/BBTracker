@@ -266,6 +266,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Download a zip of all your data (data.json + CSVs + progress photos). */
+        get: operations["v1_export_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/healthz/": {
         parameters: {
             query?: never;
@@ -5328,6 +5345,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Pose"];
+                };
+            };
+        };
+    };
+    v1_export_retrieve: {
+        parameters: {
+            query?: {
+                /** @description 0 to omit photo files. */
+                photos?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
                 };
             };
         };
