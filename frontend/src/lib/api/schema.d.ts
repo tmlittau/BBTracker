@@ -1766,6 +1766,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/report/checkin/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Generate a shareable check-in report PDF for a date window (e.g. a phase). */
+        get: operations["v1_report_checkin_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/training/exercise-slots/": {
         parameters: {
             query?: never;
@@ -8712,6 +8729,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WeekPrepPlan"];
+                };
+            };
+        };
+    };
+    v1_report_checkin_retrieve: {
+        parameters: {
+            query?: {
+                end?: string;
+                /** @description CSV of sections: training,nutrition,photos,protocols,bloodwork */
+                include?: string;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
         };

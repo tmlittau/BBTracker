@@ -1,4 +1,5 @@
 from datetime import date as date_cls
+from datetime import timedelta
 
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
@@ -13,6 +14,7 @@ from apps.core.viewsets import OwnerScopedViewSet
 
 from .export import build_export
 from .models import Phase, PhaseAdjustment
+from .report import ALL_SECTIONS, build_checkin_report_pdf
 from .serializers import (
     DashboardTodaySerializer,
     PhaseAdjustmentSerializer,
@@ -138,5 +140,32 @@ class DataExportView(APIView):
         include_photos = request.query_params.get("photos", "1") != "0"
         filename, buf = build_export(request.user, include_photos)
         resp = HttpResponse(buf.getvalue(), content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+
+class CheckinReportView(APIView):
+    """Generate a shareable check-in report PDF for a date window (e.g. a phase)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["core"],
+        parameters=[
+            OpenApiParameter("start", str), OpenApiParameter("end", str),
+            OpenApiParameter(
+                "include", str,
+                description="CSV of sections: training,nutrition,photos,protocols,bloodwork",
+            ),
+        ],
+        responses={(200, "application/pdf"): OpenApiTypes.BINARY},
+    )
+    def get(self, request):
+        end = _parse_date(request, "end") or date_cls.today()
+        start = _parse_date(request, "start") or (end - timedelta(days=84))
+        inc = request.query_params.get("include")
+        include = {s for s in inc.split(",") if s} if inc is not None else ALL_SECTIONS
+        filename, pdf = build_checkin_report_pdf(request.user, start, end, include)
+        resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

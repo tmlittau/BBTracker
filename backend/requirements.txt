@@ -14,6 +14,9 @@ boto3>=1.34,<2
 Pillow>=10.3,<13
 # Bloodwork PDF import — text extraction from born-digital lab reports (pure-python).
 pdfplumber>=0.11,<0.12
+# Shareable check-in report → PDF (HTML/CSS rendering; needs the pango/cairo libs
+# installed in the Dockerfile).
+weasyprint>=62,<66
 
 # dev / test
 pytest>=8,<9

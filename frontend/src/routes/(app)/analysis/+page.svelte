@@ -23,6 +23,58 @@
 	let trendType = $state('waist');
 	let showAdd = $state(false);
 
+	// Shareable check-in report (PDF) for the selected window.
+	const REPORT_SECTIONS = [
+		{ key: 'training', label: 'Training summary' },
+		{ key: 'nutrition', label: 'Nutrition adherence' },
+		{ key: 'photos', label: 'Progress photos' },
+		{ key: 'protocols', label: 'Protocol (compounds)' },
+		{ key: 'bloodwork', label: 'Bloodwork' }
+	] as const;
+	let showReport = $state(false);
+	let reportBusy = $state(false);
+	let reportErr = $state<string | null>(null);
+	const reportSections = $state<Record<string, boolean>>({
+		training: true,
+		nutrition: true,
+		photos: true,
+		protocols: true,
+		bloodwork: true
+	});
+
+	async function downloadReport() {
+		reportBusy = true;
+		reportErr = null;
+		try {
+			const qs = new URLSearchParams();
+			if (win.start) qs.set('start', win.start);
+			if (win.asOf) qs.set('end', win.asOf);
+			qs.set(
+				'include',
+				Object.entries(reportSections)
+					.filter(([, v]) => v)
+					.map(([k]) => k)
+					.join(',')
+			);
+			const res = await fetch(`/api/v1/report/checkin/?${qs}`, { credentials: 'include' });
+			if (!res.ok) throw new Error(`Report failed (${res.status})`);
+			const blob = await res.blob();
+			const cd = res.headers.get('Content-Disposition') ?? '';
+			const m = cd.match(/filename="?([^"]+)"?/);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = m ? m[1] : 'bbtracker-checkin.pdf';
+			a.click();
+			URL.revokeObjectURL(url);
+			showReport = false;
+		} catch (e) {
+			reportErr = (e as Error).message;
+		} finally {
+			reportBusy = false;
+		}
+	}
+
 	const today = isoDate();
 	const selectedPhase = $derived(phases.find((p) => p.id === selectedPhaseId) ?? null);
 	// The window the page is scoped to: a phase's [start, end] (end = today while the
@@ -154,12 +206,49 @@
 			</span>
 		{/if}
 	</div>
-	<button
-		class="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-		onclick={() => (showAdd = true)}
-	>
-		New measurement
-	</button>
+	<div class="flex shrink-0 items-center gap-2">
+		<div class="relative">
+			<button
+				class="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800"
+				onclick={() => (showReport = !showReport)}
+			>
+				Report
+			</button>
+			{#if showReport}
+				<div
+					class="absolute right-0 z-10 mt-2 w-64 rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+				>
+					<p class="mb-2 text-xs text-neutral-400">
+						Shareable PDF for
+						<b class="text-neutral-200">{selectedPhase?.name ?? 'the last 12 weeks'}</b>. Snapshot
+						stats, weight trend and measurements are always included.
+					</p>
+					<div class="space-y-1.5">
+						{#each REPORT_SECTIONS as s (s.key)}
+							<label class="flex items-center gap-2 text-sm text-neutral-300">
+								<input type="checkbox" bind:checked={reportSections[s.key]} />
+								{s.label}
+							</label>
+						{/each}
+					</div>
+					{#if reportErr}<p class="mt-2 text-xs text-red-400">{reportErr}</p>{/if}
+					<button
+						class="mt-3 w-full rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110 disabled:opacity-50"
+						disabled={reportBusy}
+						onclick={downloadReport}
+					>
+						{reportBusy ? 'Generating…' : 'Download PDF'}
+					</button>
+				</div>
+			{/if}
+		</div>
+		<button
+			class="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+			onclick={() => (showAdd = true)}
+		>
+			New measurement
+		</button>
+	</div>
 </div>
 {#if loading}
 	<p class="mt-6 text-neutral-400">Loading…</p>
