@@ -1388,6 +1388,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/phase-levels/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Per-compound serum-level curves over a phase window [start, end], built from
+         *     the owner's actual logged doses — observability of how levels moved over a phase.
+         */
+        get: operations["v1_protocols_phase_levels_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols/plot/": {
         parameters: {
             query?: never;
@@ -7917,6 +7937,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SiteRecency"];
+                };
+            };
+        };
+    };
+    v1_protocols_phase_levels_retrieve: {
+        parameters: {
+            query?: {
+                end?: string;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtocolRelease"];
                 };
             };
         };
