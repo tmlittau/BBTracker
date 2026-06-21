@@ -48,6 +48,7 @@ from .services import (
     bloodwork_matrix,
     injection_site_recency,
     marker_trend,
+    phase_compound_levels,
     phase_dose_matrix,
     plot_compounds,
     protocol_adherence,
@@ -139,6 +140,29 @@ class WeekPrepView(APIView):
             today = timezone.localdate()
             start = today - timedelta(days=today.weekday())
         return Response(week_prep_plan(request.user, start))
+
+
+@extend_schema(
+    tags=["protocols"],
+    parameters=[OpenApiParameter("start", str), OpenApiParameter("end", str)],
+    responses=ProtocolReleaseSerializer,
+)
+class PhaseLevelsView(APIView):
+    """Per-compound serum-level curves over a phase window [start, end], built from
+    the owner's actual logged doses — observability of how levels moved over a phase."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        s = request.query_params.get("start")
+        e = request.query_params.get("end")
+        if not s or not e:
+            raise ValidationError({"detail": "start and end are required (YYYY-MM-DD)."})
+        try:
+            start, end = date.fromisoformat(s), date.fromisoformat(e)
+        except ValueError:
+            raise ValidationError({"detail": "Use YYYY-MM-DD dates."}) from None
+        return Response(phase_compound_levels(request.user, start, end))
 
 
 @extend_schema(tags=["protocols"])

@@ -390,6 +390,8 @@ export const protocolsApi = {
 
 	releaseCurves: (id: number, horizonDays = 84) =>
 		req<ProtocolRelease>('GET', `/protocols/${id}/release/?horizon_days=${horizonDays}`),
+	phaseLevels: (start: string, end: string) =>
+		req<ProtocolRelease>('GET', `/phase-levels/?start=${start}&end=${end}`),
 	plot: (payload: { horizon_days: number; items: PlotItemInput[] }) =>
 		req<CompoundPlot>('POST', '/plot/', payload),
 	weekPrep: (start: string) => req<WeekPrepPlan>('GET', `/week-prep/?start=${start}`),

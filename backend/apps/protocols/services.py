@@ -390,6 +390,96 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
     }
 
 
+def phase_compound_levels(owner, start_date, end_date, step_days=1):
+    """Per-compound serum-level (Bateman) curves over [start_date, end_date] built
+    from the owner's *actual* logged doses — how concentrations really moved across
+    a phase, capturing any mid-phase protocol/adjustment changes. `end_date` is
+    clamped to today, so a current phase shows levels up to today. Same payload shape
+    as `protocol_release_curves` (so the chart is shared); everything is observed
+    (no projection)."""
+    from .models import Compound, DoseLog
+
+    today = timezone.localdate()
+    end_date = min(end_date, today)
+    empty = {"now": today.isoformat(), "today_day": 0, "start": None, "end": None,
+             "unit": "relative", "compounds": [], "excluded": []}
+    if end_date < start_date:
+        return empty
+
+    tz = timezone.get_current_timezone()
+    start_dt = datetime.combine(start_date, time.min, tzinfo=tz)
+    end_dt = datetime.combine(end_date, time.max, tzinfo=tz)
+    total_days = (end_date - start_date).days
+
+    # set() dedups regardless of the model's default ordering (which would otherwise
+    # leak the taken_at column into the SELECT and defeat .distinct()).
+    cids = sorted(set(
+        DoseLog.objects.filter(
+            owner=owner, compound__isnull=False, status="taken",
+            taken_at__gte=start_dt, taken_at__lte=end_dt,
+        ).values_list("compound_id", flat=True)
+    ))
+    if not cids:
+        return empty
+    compounds = {c.id: c for c in Compound.objects.filter(id__in=cids)}
+
+    # Look back a few half-lives so residual from pre-phase dosing sets the left edge.
+    max_hl_days = max(
+        (float(c.half_life_hours) / 24.0 for c in compounds.values() if c.half_life_hours),
+        default=1.0,
+    )
+    lookback_dt = start_dt - timedelta(days=min(180, int(math.ceil(5 * max_hl_days))))
+
+    doses_by_compound: dict[int, list] = {}
+    for cid, ta, amt in DoseLog.objects.filter(
+        owner=owner, compound_id__in=cids, status="taken",
+        taken_at__gte=lookback_dt, taken_at__lte=end_dt,
+    ).values_list("compound_id", "taken_at", "amount"):
+        if amt is not None:
+            doses_by_compound.setdefault(cid, []).append((ta, amt))
+
+    out, excluded = [], []
+    for cid in cids:
+        c = compounds[cid]
+        factor = _MG_PER_UNIT.get(c.default_unit)
+        if not c.half_life_hours or float(c.half_life_hours) <= 0 or factor is None:
+            if c.name not in excluded:
+                excluded.append(c.name)
+            continue
+        doses = [
+            ((ta - start_dt).total_seconds() / 86400.0, float(amt) * factor)
+            for ta, amt in doses_by_compound.get(cid, [])
+        ]
+        if not doses:
+            continue
+        series = concentration_series(
+            doses, c.half_life_hours, c.tmax_hours, c.bioavailability,
+            c.active_fraction, 0, total_days, step_days,
+        )
+        out.append({
+            "compound_id": c.id,
+            "name": c.name,
+            "unit": "relative",
+            "half_life_hours": float(c.half_life_hours),
+            "active_fraction": float(c.active_fraction),
+            "points": [
+                {"day": int(day), "date": (start_date + timedelta(days=int(day))).isoformat(),
+                 "rate": rate, "projected": False}
+                for day, rate in series
+            ],
+        })
+    out.sort(key=lambda x: x["name"])
+    return {
+        "now": today.isoformat(),
+        "today_day": total_days,  # all observed → solid line, no projection
+        "start": start_date.isoformat(),
+        "end": end_date.isoformat(),
+        "unit": "relative",
+        "compounds": out,
+        "excluded": excluded,
+    }
+
+
 def plot_compounds(user, items, horizon_days=84, step_days=1):
     """Stateless cycle-planner curves: overlay per-compound concentration for a set
     of hypothetical items over `horizon_days` from day 0. No DB writes.

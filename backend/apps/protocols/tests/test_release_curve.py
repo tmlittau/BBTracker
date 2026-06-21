@@ -40,3 +40,41 @@ def test_release_rate_accumulates_with_steady_dosing(db):
     # it at day 20). The point: more doses → higher, not lower.
     assert logged[1] < logged[len(logged) // 2] < logged[-1]
     assert logged[-1] > 2 * logged[2]
+
+
+def test_phase_compound_levels_from_actual_doses(db):
+    """Phase levels are built from logged doses within [start, end]; doses outside
+    the window don't add new compounds, and the curve spans the phase."""
+
+    from apps.protocols.services import phase_compound_levels
+
+    u = User.objects.create_user(email="ph@example.com", password="x")
+    test_e = Compound.objects.create(
+        name="Test E", compound_class="anabolic", default_unit="mg", default_route="im",
+        half_life_hours="168", active_fraction="0.700",
+    )
+    deca = Compound.objects.create(
+        name="Deca", compound_class="anabolic", default_unit="mg", default_route="im",
+        half_life_hours="144", active_fraction="0.640",
+    )
+    start = timezone.now().date() - timedelta(days=40)
+    end = timezone.now().date() - timedelta(days=5)
+    # Test E dosed weekly across the window; Deca only once, before the window.
+    for d in range(40, 4, -7):
+        DoseLog.objects.create(
+            owner=u, compound=test_e, taken_at=timezone.now() - timedelta(days=d),
+            amount=250, unit="mg", route="im",
+        )
+    DoseLog.objects.create(
+        owner=u, compound=deca, taken_at=timezone.now() - timedelta(days=60),
+        amount=200, unit="mg", route="im",
+    )
+
+    data = phase_compound_levels(u, start, end)
+    assert len(data["compounds"]) == 1  # one row per compound (no duplicates)
+    names = {c["name"] for c in data["compounds"]}
+    assert names == {"Test E"}  # Deca's only dose is outside the window → not shown
+    pts = data["compounds"][0]["points"]
+    assert pts[0]["date"] == start.isoformat()
+    assert all(p["projected"] is False for p in pts)  # observed, not projected
+    assert max(p["rate"] for p in pts) > 0
