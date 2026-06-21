@@ -14,6 +14,12 @@ export interface ReminderSettings {
 	noon: string;
 	pm: string;
 	night: string;
+	// Optional custom display names per slot (blank → the default label).
+	waking_label: string;
+	am_label: string;
+	noon_label: string;
+	pm_label: string;
+	night_label: string;
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {

@@ -144,14 +144,16 @@ def slot_pending_items(user, slot, on_date) -> list[str]:
 def send_slot_reminder(user, slot, on_date) -> bool:
     """Send (if anything is pending) and record the slot reminder. Records a
     dispatch row either way, so each slot fires at most once per day."""
-    from .models import ReminderDispatch
+    from .models import ReminderDispatch, ReminderSettings
 
     pending = slot_pending_items(user, slot, on_date)
     sent = False
     if pending:
+        rs = ReminderSettings.objects.filter(owner=user).first()
+        label = rs.label(slot) if rs else SLOT_LABELS.get(slot, slot)
         sent = ha_notify(
             "Dose reminder",
-            f"{SLOT_LABELS.get(slot, slot)}: don't forget {', '.join(pending)}.",
+            f"{label}: don't forget {', '.join(pending)}.",
         )
     ReminderDispatch.objects.get_or_create(
         owner=user, slot=slot, sent_on=on_date, defaults={"items": ", ".join(pending)[:255]}

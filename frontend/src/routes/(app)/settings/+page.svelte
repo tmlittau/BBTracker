@@ -8,6 +8,7 @@
 		type Me
 	} from '$lib/api/profile';
 	import { notificationsApi, type ReminderSettings } from '$lib/notifications/api';
+	import { setSlotLabels } from '$lib/notifications/slots';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let me = $state<Me | null>(null);
@@ -67,7 +68,10 @@
 			loading = false;
 		}
 		const r = await notificationsApi.settings().catch(() => null);
-		if (r) reminders = normalizeTimes(r);
+		if (r) {
+			reminders = normalizeTimes(r);
+			setSlotLabels(reminders);
+		}
 	});
 
 	async function save(e: SubmitEvent) {
@@ -102,6 +106,7 @@
 		remindersSaved = false;
 		try {
 			reminders = normalizeTimes(await notificationsApi.updateSettings(reminders));
+			setSlotLabels(reminders); // refresh the app-wide slot labels
 			remindersSaved = true;
 		} catch (err) {
 			error = (err as Error).message;
@@ -238,17 +243,31 @@
 			<label class="flex items-center gap-2 text-sm text-neutral-300">
 				<input type="checkbox" bind:checked={reminders.rest_enabled} /> Rest-timer “Rest over” alert
 			</label>
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+			<div class="space-y-2">
+				<div class="flex items-center gap-2 text-xs uppercase tracking-wide text-neutral-500">
+					<span class="flex-1">Slot name</span>
+					<span class="w-28">Reminder time</span>
+				</div>
 				{#each TIME_SLOTS as [key, label] (key)}
-					<label class="flex flex-col text-xs text-neutral-500">
-						{label}
+					<div class="flex items-center gap-2">
+						<input
+							type="text"
+							placeholder={label}
+							maxlength="24"
+							bind:value={reminders[`${key}_label`]}
+							class="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+						/>
 						<input
 							type="time"
 							bind:value={reminders[key]}
-							class="mt-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
+							class="w-28 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-2 text-sm text-neutral-100"
 						/>
-					</label>
+					</div>
 				{/each}
+				<p class="text-xs text-neutral-600">
+					Rename the five daily slots to match your routine. Leave blank to keep the default
+					({TIME_SLOTS.map(([, l]) => l).join(', ')}).
+				</p>
 			</div>
 			{#if remindersSaved}<p class="text-sm text-green-400">Reminders saved.</p>{/if}
 			<div class="flex flex-wrap items-center gap-3">

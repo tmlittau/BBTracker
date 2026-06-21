@@ -6,13 +6,13 @@
 		COMPOUND_CLASSES,
 		FREQUENCIES,
 		WEEKDAYS,
-		TIMES_OF_DAY,
 		type AdherenceRow,
 		type Compound,
 		type Protocol,
 		type ProtocolItem,
 		type Supplement
 	} from '$lib/protocols/api';
+	import { slotLabels, timesOfDay as timeSlots, ensureSlotLabels } from '$lib/notifications/slots';
 	import { num } from '$lib/protocols/calc';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -64,6 +64,7 @@
 	}
 
 	onMount(async () => {
+		ensureSlotLabels();
 		try {
 			[, compounds, supplements] = await Promise.all([
 				load(),
@@ -149,7 +150,7 @@
 	const adherenceFor = (itemId: number) => adherence.find((a) => a.item_id === itemId);
 	const freqLabel = (k: string) => FREQUENCIES.find((f) => f.key === k)?.label ?? k;
 	const dayLabel = (n: number) => WEEKDAYS.find((w) => w.key === n)?.label ?? String(n);
-	const timeLabel = (t: string) => TIMES_OF_DAY.find((x) => x.key === t)?.label ?? t;
+	const timeLabel = (t: string) => $slotLabels[t] ?? t;
 </script>
 
 <CompoundCreateModal bind:open={showCompoundModal} oncreated={onCompoundCreated} />
@@ -224,7 +225,7 @@
 
 		<div class="flex flex-wrap items-center gap-1">
 			<span class="mr-1 text-xs text-neutral-500">Times:</span>
-			{#each TIMES_OF_DAY as t (t.key)}
+			{#each $timeSlots as t (t.key)}
 				<button type="button" class="rounded-full px-2.5 py-0.5 text-xs {timesOfDay.includes(t.key) ? 'bg-brand text-white' : 'border border-neutral-700 text-neutral-300'}" onclick={() => toggleTime(t.key)}>{t.label}</button>
 			{/each}
 		</div>

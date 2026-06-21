@@ -3984,6 +3984,11 @@ export interface components {
             pm?: string;
             /** Format: time */
             night?: string;
+            waking_label?: string;
+            am_label?: string;
+            noon_label?: string;
+            pm_label?: string;
+            night_label?: string;
         };
         PatchedSupplementRequest: {
             name?: string;
@@ -4347,6 +4352,11 @@ export interface components {
             pm?: string;
             /** Format: time */
             night?: string;
+            waking_label?: string;
+            am_label?: string;
+            noon_label?: string;
+            pm_label?: string;
+            night_label?: string;
         };
         ReminderSettingsRequest: {
             /** @description Master switch for dose reminders. */
@@ -4363,6 +4373,11 @@ export interface components {
             pm?: string;
             /** Format: time */
             night?: string;
+            waking_label?: string;
+            am_label?: string;
+            noon_label?: string;
+            pm_label?: string;
+            night_label?: string;
         };
         RestScheduleRequest: {
             seconds: number;
