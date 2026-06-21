@@ -267,7 +267,7 @@ interface Paginated<T> {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-	const headers: Record<string, string> = { ...actingHeaders() };
+	const headers: Record<string, string> = { ...actingHeaders(method) };
 	let bodyStr: string | undefined;
 	if (body !== undefined) {
 		headers['Content-Type'] = 'application/json';

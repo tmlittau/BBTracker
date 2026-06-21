@@ -2,6 +2,7 @@
 // Photo binaries are uploaded as multipart and streamed back through the API
 // (never public URLs), so they stay private.
 
+import { actingHeaders } from '$lib/api/acting';
 import { ensureCsrf } from '$lib/api/auth';
 
 const BASE = '/api/v1/diary';
@@ -53,16 +54,16 @@ interface Paginated<T> {
 const list = <T>(p: Paginated<T> | T[]): T[] => (Array.isArray(p) ? p : p.results);
 
 async function jsonReq<T>(method: string, path: string, body?: unknown): Promise<T> {
-	const opts: RequestInit = { method, credentials: 'include', headers: {} };
+	const headers: Record<string, string> = { ...actingHeaders(method) };
+	let bodyStr: string | undefined;
 	if (body !== undefined) {
-		const csrf = await ensureCsrf();
-		opts.headers = { 'Content-Type': 'application/json', 'X-CSRFToken': csrf };
-		opts.body = JSON.stringify(body);
+		headers['Content-Type'] = 'application/json';
+		headers['X-CSRFToken'] = await ensureCsrf();
+		bodyStr = JSON.stringify(body);
 	} else if (method !== 'GET') {
-		const csrf = await ensureCsrf();
-		opts.headers = { 'X-CSRFToken': csrf };
+		headers['X-CSRFToken'] = await ensureCsrf();
 	}
-	const res = await fetch(`${BASE}${path}`, opts);
+	const res = await fetch(`${BASE}${path}`, { method, credentials: 'include', headers, body: bodyStr });
 	if (!res.ok) {
 		const detail = await res.text().catch(() => '');
 		throw new Error(`${method} ${path} → ${res.status} ${detail}`);
@@ -122,7 +123,8 @@ export const diaryApi = {
 		const res = await fetch(`${BASE}/photos/`, {
 			method: 'POST',
 			credentials: 'include',
-			headers: { 'X-CSRFToken': csrf }, // no Content-Type: browser sets the multipart boundary
+			// no Content-Type: browser sets the multipart boundary
+			headers: { ...actingHeaders('POST'), 'X-CSRFToken': csrf },
 			body: form
 		});
 		if (!res.ok) {

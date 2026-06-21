@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api/auth';
 	import { getMe } from '$lib/api/profile';
+	import { viewingClient, exitViewAsClient } from '$lib/api/acting';
 	import BottomNav from '$lib/components/ui/BottomNav.svelte';
 
 	let { children, data } = $props();
@@ -35,12 +36,32 @@
 		await goto('/login');
 	}
 
+	// "View as client" read mode — leave it and return to the client's coach page.
+	async function exitView() {
+		const id = $viewingClient?.id;
+		exitViewAsClient();
+		await goto(id ? `/coach/clients/${id}` : '/coach');
+	}
+
 	function isActive(href: string): boolean {
 		return $page.url.pathname === href || $page.url.pathname.startsWith(href + '/');
 	}
 </script>
 
 <div class="min-h-screen">
+	{#if $viewingClient}
+		<div
+			class="sticky top-0 z-50 flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
+		>
+			<span>👁 Viewing <b>{$viewingClient.name}</b>'s data — read-only</span>
+			<button
+				class="shrink-0 rounded-full bg-black/20 px-3 py-1 text-xs font-semibold hover:bg-black/30"
+				onclick={exitView}
+			>
+				Exit
+			</button>
+		</div>
+	{/if}
 	<header class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<!-- Desktop nav -->
 		<nav class="hidden items-center gap-5 md:flex">

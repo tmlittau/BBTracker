@@ -250,6 +250,23 @@ def test_read_only_coach_cannot_build(coach, client_user):
     assert res.status_code == 403
 
 
+def test_coach_views_client_analysis_and_training(coach, client_user):
+    """The 'view as client' drill-ins read the client's Analysis + Training data."""
+    from django.utils import timezone
+
+    from apps.training.models import WorkoutSession
+
+    link(coach, client_user)
+    WorkoutSession.objects.create(owner=client_user, name="Push", started_at=timezone.now())
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    assert c.get("/api/v1/analysis/body/", **h).status_code == 200
+    sessions = c.get("/api/v1/training/workout-sessions/", **h)
+    assert sessions.status_code == 200
+    assert any(s["name"] == "Push" for s in rows(sessions))
+
+
 # --- invite / accept / revoke lifecycle --------------------------------------
 
 def test_invite_lifecycle(coach, client_user):

@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { viewAsClient } from '$lib/api/acting';
 	import { SUBJECTIVE_LABELS } from '$lib/coaching/api';
 	import { coachApi, downloadClientReport, type ClientOverview } from '$lib/coaching/clients';
 
 	const clientId = $derived(Number($page.params.id));
+
+	// Enter read-only "view as client" mode, then open one of their full tabs.
+	function viewTab(path: string) {
+		if (!data) return;
+		viewAsClient({ id: clientId, name: data.client.name });
+		goto(path);
+	}
 
 	let data = $state<ClientOverview | null>(null);
 	let loading = $state(true);
@@ -55,8 +64,20 @@
 				{data.dashboard.phase ? data.dashboard.phase.name : 'No active phase'}
 			</p>
 		</div>
-		<div class="flex items-center gap-3">
+		<div class="flex flex-wrap items-center gap-2">
 			{#if downloadErr}<span class="text-sm text-red-400">{downloadErr}</span>{/if}
+			<button
+				onclick={() => viewTab('/analysis')}
+				class="rounded-full border border-neutral-700 px-3 py-2 text-sm font-medium text-rose-300 hover:bg-neutral-800"
+			>
+				View Analysis
+			</button>
+			<button
+				onclick={() => viewTab('/training')}
+				class="rounded-full border border-neutral-700 px-3 py-2 text-sm font-medium text-indigo-300 hover:bg-neutral-800"
+			>
+				View Training
+			</button>
 			<a
 				href={`/coach/clients/${clientId}/plan`}
 				class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
@@ -66,9 +87,9 @@
 			<button
 				onclick={report}
 				disabled={downloading}
-				class="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+				class="rounded-full border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
 			>
-				{downloading ? 'Generating…' : 'Download check-in report'}
+				{downloading ? 'Generating…' : 'Report PDF'}
 			</button>
 		</div>
 	</div>
