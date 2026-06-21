@@ -10,6 +10,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.coaching.access import EffectiveOwnerMixin
 from apps.core.viewsets import OwnerScopedViewSet
 
 from .models import (
@@ -58,7 +59,7 @@ from .services import (
 )
 
 
-class GlobalOrOwnedViewSet(viewsets.ModelViewSet):
+class GlobalOrOwnedViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """Reference items visible if global (owner=None) or owned. Single-user app:
     seeded globals are editable + deletable too; deletion is blocked (with a clear
     message) only when the item is still referenced by logged history."""
@@ -66,7 +67,7 @@ class GlobalOrOwnedViewSet(viewsets.ModelViewSet):
     search_fields: list[str] = ["name"]
 
     def get_queryset(self):
-        qs = self.model.objects.filter(Q(owner=self.request.user) | Q(owner__isnull=True))
+        qs = self.model.objects.filter(Q(owner=self.effective_owner) | Q(owner__isnull=True))
         q = self.request.query_params.get("q")
         if q:
             cond = Q()
@@ -123,7 +124,7 @@ class CompoundPlotView(APIView):
     parameters=[OpenApiParameter("start", str, description="Monday of the week (YYYY-MM-DD).")],
     responses=WeekPrepPlanSerializer,
 )
-class WeekPrepView(APIView):
+class WeekPrepView(EffectiveOwnerMixin, APIView):
     """Weekly pill-box plan: an every-day baseline plus per-day deviations for the
     owner's oral compounds + supplements, resolving the protocol in force each day."""
 
@@ -139,7 +140,7 @@ class WeekPrepView(APIView):
         else:
             today = timezone.localdate()
             start = today - timedelta(days=today.weekday())
-        return Response(week_prep_plan(request.user, start))
+        return Response(week_prep_plan(self.effective_owner, start))
 
 
 @extend_schema(
@@ -147,7 +148,7 @@ class WeekPrepView(APIView):
     parameters=[OpenApiParameter("start", str), OpenApiParameter("end", str)],
     responses=ProtocolReleaseSerializer,
 )
-class PhaseLevelsView(APIView):
+class PhaseLevelsView(EffectiveOwnerMixin, APIView):
     """Per-compound serum-level curves over a phase window [start, end], built from
     the owner's actual logged doses — observability of how levels moved over a phase."""
 
@@ -162,7 +163,7 @@ class PhaseLevelsView(APIView):
             start, end = date.fromisoformat(s), date.fromisoformat(e)
         except ValueError:
             raise ValidationError({"detail": "Use YYYY-MM-DD dates."}) from None
-        return Response(phase_compound_levels(request.user, start, end))
+        return Response(phase_compound_levels(self.effective_owner, start, end))
 
 
 @extend_schema(tags=["protocols"])
@@ -177,7 +178,7 @@ class SupplementViewSet(GlobalOrOwnedViewSet):
 
 
 @extend_schema(tags=["protocols"])
-class InjectionSiteViewSet(viewsets.ReadOnlyModelViewSet):
+class InjectionSiteViewSet(EffectiveOwnerMixin, viewsets.ReadOnlyModelViewSet):
     queryset = InjectionSite.objects.all()
     serializer_class = InjectionSiteSerializer
     pagination_class = None
@@ -189,12 +190,12 @@ class InjectionSiteViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def recency(self, request):
         days = _int_param(request, "days", 30)
-        return Response(injection_site_recency(request.user, days=days))
+        return Response(injection_site_recency(self.effective_owner, days=days))
 
     @extend_schema(responses=SiteRecencySerializer)
     @action(detail=False, methods=["get"])
     def suggest(self, request):
-        return Response(suggest_next_site(request.user) or {})
+        return Response(suggest_next_site(self.effective_owner) or {})
 
 
 @extend_schema(tags=["protocols"])
@@ -205,11 +206,11 @@ class BloodMarkerViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema(tags=["protocols"])
-class ProtocolViewSet(viewsets.ModelViewSet):
+class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = ProtocolSerializer
 
     def get_queryset(self):
-        return Protocol.objects.filter(owner=self.request.user).prefetch_related(
+        return Protocol.objects.filter(owner=self.effective_owner).prefetch_related(
             "items__compound", "items__supplement"
         )
 
@@ -232,7 +233,7 @@ class ProtocolViewSet(viewsets.ModelViewSet):
     def adherence(self, request, pk=None):
         protocol = self.get_object()
         window = _int_param(request, "window_days", 28)
-        return Response(protocol_adherence(request.user, protocol, window_days=window))
+        return Response(protocol_adherence(self.effective_owner, protocol, window_days=window))
 
     @extend_schema(
         parameters=[OpenApiParameter("horizon_days", int)],
@@ -243,7 +244,9 @@ class ProtocolViewSet(viewsets.ModelViewSet):
         """Per-compound active-release (mg/day) curves: logged actuals + projected future."""
         protocol = self.get_object()
         horizon = _int_param(request, "horizon_days", 84)
-        return Response(protocol_release_curves(request.user, protocol, horizon_days=horizon))
+        return Response(
+            protocol_release_curves(self.effective_owner, protocol, horizon_days=horizon)
+        )
 
     @extend_schema(
         parameters=[OpenApiParameter("phase", int)],
@@ -260,7 +263,7 @@ class ProtocolViewSet(viewsets.ModelViewSet):
 
         protocol = self.get_object()
         phase_id = _int_param(request, "phase", 0)
-        phases = Phase.objects.filter(owner=request.user)
+        phases = Phase.objects.filter(owner=self.effective_owner)
         phase = phases.filter(id=phase_id).first() if phase_id else None
         if phase is None:
             today = timezone.now().date()
@@ -276,7 +279,7 @@ class ProtocolViewSet(viewsets.ModelViewSet):
                 {"detail": "No phase found — create a phase to see its dose table."},
                 status=400,
             )
-        return Response(phase_dose_matrix(request.user, phase, protocol))
+        return Response(phase_dose_matrix(self.effective_owner, phase, protocol))
 
 
 @extend_schema(tags=["protocols"])
@@ -308,11 +311,11 @@ def _ref_owned_ok(user, obj):
 
 
 @extend_schema(tags=["protocols"])
-class DoseLogViewSet(viewsets.ModelViewSet):
+class DoseLogViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = DoseLogSerializer
 
     def get_queryset(self):
-        qs = DoseLog.objects.filter(owner=self.request.user).select_related(
+        qs = DoseLog.objects.filter(owner=self.effective_owner).select_related(
             "compound", "supplement", "injection_site"
         )
         d = self.request.query_params.get("date")
@@ -348,11 +351,11 @@ class DoseLogViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["protocols"])
-class VialViewSet(viewsets.ModelViewSet):
+class VialViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = VialSerializer
 
     def get_queryset(self):
-        return Vial.objects.filter(owner=self.request.user).select_related("compound")
+        return Vial.objects.filter(owner=self.effective_owner).select_related("compound")
 
     def _check_refs(self, serializer):
         if not _ref_owned_ok(self.request.user, serializer.validated_data.get("compound")):
@@ -368,11 +371,11 @@ class VialViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["protocols"])
-class BloodResultViewSet(viewsets.ModelViewSet):
+class BloodResultViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = BloodResultSerializer
 
     def get_queryset(self):
-        qs = BloodResult.objects.filter(owner=self.request.user).select_related("marker")
+        qs = BloodResult.objects.filter(owner=self.effective_owner).select_related("marker")
         marker = self.request.query_params.get("marker")
         if marker:
             qs = qs.filter(marker_id=marker)
@@ -394,14 +397,16 @@ class BloodResultViewSet(viewsets.ModelViewSet):
             marker = BloodMarker.objects.get(pk=marker_id)
         except BloodMarker.DoesNotExist as exc:
             raise ValidationError({"marker": "unknown marker"}) from exc
-        sex = getattr(getattr(request.user, "profile", None), "sex", None)
-        return Response(marker_trend(request.user, marker, sex=sex))
+        owner = self.effective_owner
+        sex = getattr(getattr(owner, "profile", None), "sex", None)
+        return Response(marker_trend(owner, marker, sex=sex))
 
     @action(detail=False, methods=["get"])
     def matrix(self, request):
         """Markers × dates table with %-change + range flags (tabular trend view)."""
-        sex = getattr(getattr(request.user, "profile", None), "sex", None)
-        return Response(bloodwork_matrix(request.user, sex=sex))
+        owner = self.effective_owner
+        sex = getattr(getattr(owner, "profile", None), "sex", None)
+        return Response(bloodwork_matrix(owner, sex=sex))
 
     @action(detail=False, methods=["post"])
     def bulk(self, request):
@@ -478,11 +483,11 @@ class BloodResultViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["protocols"])
-class BloodPressureLogViewSet(viewsets.ModelViewSet):
+class BloodPressureLogViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = BloodPressureLogSerializer
 
     def get_queryset(self):
-        return BloodPressureLog.objects.filter(owner=self.request.user)
+        return BloodPressureLog.objects.filter(owner=self.effective_owner)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)

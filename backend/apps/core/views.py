@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.coaching.access import EffectiveOwnerMixin
 from apps.core.viewsets import OwnerScopedViewSet
 
 from .export import build_export
@@ -49,14 +50,14 @@ def _parse_date(request, param):
 
 
 @extend_schema(tags=["core"])
-class PhaseViewSet(viewsets.ModelViewSet):
+class PhaseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """The periodization timeline. Owner-scoped; a phase's prescription lives in a
     dated PhaseAdjustment timeline (see PhaseAdjustmentViewSet)."""
 
     serializer_class = PhaseSerializer
 
     def get_queryset(self):
-        return Phase.objects.filter(owner=self.request.user).prefetch_related(
+        return Phase.objects.filter(owner=self.effective_owner).prefetch_related(
             "adjustments__nutrition_target", "adjustments__program", "adjustments__protocol"
         )
 
@@ -101,13 +102,13 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
     parameters=[OpenApiParameter("date", str, description="ISO date (default today)")],
     responses=DashboardTodaySerializer,
 )
-class DashboardTodayView(APIView):
+class DashboardTodayView(EffectiveOwnerMixin, APIView):
     """Unified 'today' across all five domains + the current phase."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(dashboard_today(request.user, _parse_date(request, "date")))
+        return Response(dashboard_today(self.effective_owner, _parse_date(request, "date")))
 
 
 @extend_schema(
@@ -117,13 +118,13 @@ class DashboardTodayView(APIView):
     ],
     responses=WeeklyCheckInSerializer,
 )
-class WeeklyCheckInView(APIView):
+class WeeklyCheckInView(EffectiveOwnerMixin, APIView):
     """Auto-generated weekly check-in report — the self-coaching payload."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(weekly_checkin(request.user, _parse_date(request, "end")))
+        return Response(weekly_checkin(self.effective_owner, _parse_date(request, "end")))
 
 
 class DataExportView(APIView):
@@ -144,8 +145,11 @@ class DataExportView(APIView):
         return resp
 
 
-class CheckinReportView(APIView):
-    """Generate a shareable check-in report PDF for a date window (e.g. a phase)."""
+class CheckinReportView(EffectiveOwnerMixin, APIView):
+    """Generate a shareable check-in report PDF for a date window (e.g. a phase).
+
+    Honours the effective owner, so a coach can download a client's report.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -165,7 +169,7 @@ class CheckinReportView(APIView):
         start = _parse_date(request, "start") or (end - timedelta(days=84))
         inc = request.query_params.get("include")
         include = {s for s in inc.split(",") if s} if inc is not None else ALL_SECTIONS
-        filename, pdf = build_checkin_report_pdf(request.user, start, end, include)
+        filename, pdf = build_checkin_report_pdf(self.effective_owner, start, end, include)
         resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

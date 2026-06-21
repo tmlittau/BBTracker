@@ -5,17 +5,19 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.coaching.access import EffectiveOwnerMixin
+
 from .models import BodyMeasurement
 from .serializers import BodyAnalysisSerializer, BodyMeasurementSerializer
 from .services import body_analysis
 
 
 @extend_schema(tags=["analysis"])
-class BodyMeasurementViewSet(viewsets.ModelViewSet):
+class BodyMeasurementViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = BodyMeasurementSerializer
 
     def get_queryset(self):
-        qs = BodyMeasurement.objects.filter(owner=self.request.user)
+        qs = BodyMeasurement.objects.filter(owner=self.effective_owner)
         mtype = self.request.query_params.get("type")
         if mtype:
             qs = qs.filter(type=mtype)
@@ -26,7 +28,7 @@ class BodyMeasurementViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["analysis"])
-class BodyAnalysisView(APIView):
+class BodyAnalysisView(EffectiveOwnerMixin, APIView):
     @extend_schema(
         parameters=[OpenApiParameter("date", str), OpenApiParameter("start", str)],
         responses=BodyAnalysisSerializer,
@@ -36,4 +38,4 @@ class BodyAnalysisView(APIView):
         on_date = date_cls.fromisoformat(d) if d else date_cls.today()
         s = request.query_params.get("start")
         window_start = date_cls.fromisoformat(s) if s else None
-        return Response(body_analysis(request.user, on_date, window_start))
+        return Response(body_analysis(self.effective_owner, on_date, window_start))

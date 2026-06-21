@@ -5,8 +5,10 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+from apps.coaching.access import EffectiveOwnerMixin
 
-class OwnerScopedViewSet(viewsets.ModelViewSet):
+
+class OwnerScopedViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """Base for resources reachable from the user via `owner_path`.
 
     Subclasses set `owner_path` (ORM lookup from the model to the owning user)
@@ -23,7 +25,9 @@ class OwnerScopedViewSet(viewsets.ModelViewSet):
     parent_checks: list = []
 
     def get_queryset(self):
-        return self.queryset.filter(**{self.owner_path: self.request.user})
+        # Reads honour the effective owner (a coach acting on a client); writes
+        # resolve to request.user, so update/delete can't reach a client's rows.
+        return self.queryset.filter(**{self.owner_path: self.effective_owner})
 
     def _validate_parents(self, serializer):
         for field, model, path in self.parent_checks:

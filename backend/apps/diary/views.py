@@ -9,6 +9,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from apps.coaching.access import EffectiveOwnerMixin
+
 from .images import InvalidImageError, make_thumbnail, process_image
 from .models import CheckIn, Pose, ProgressPhoto
 from .serializers import (
@@ -29,11 +31,11 @@ class PoseViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema(tags=["diary"])
-class CheckInViewSet(viewsets.ModelViewSet):
+class CheckInViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = CheckInSerializer
 
     def get_queryset(self):
-        qs = CheckIn.objects.filter(owner=self.request.user)
+        qs = CheckIn.objects.filter(owner=self.effective_owner)
         date = self.request.query_params.get("date")
         if date:
             qs = qs.filter(date=date)
@@ -64,12 +66,12 @@ class CheckInViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["diary"])
-class ProgressPhotoViewSet(viewsets.ModelViewSet):
+class ProgressPhotoViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = ProgressPhotoSerializer
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        qs = ProgressPhoto.objects.filter(owner=self.request.user).select_related("pose")
+        qs = ProgressPhoto.objects.filter(owner=self.effective_owner).select_related("pose")
         pose = self.request.query_params.get("pose")
         if pose:
             qs = qs.filter(pose_id=pose)
@@ -150,7 +152,7 @@ class ProgressPhotoViewSet(viewsets.ModelViewSet):
         pose_id = request.query_params.get("pose")
         if not pose_id:
             raise ValidationError({"pose": "required"})
-        photo = latest_photo_for_pose(request.user, pose_id)
+        photo = latest_photo_for_pose(self.effective_owner, pose_id)
         if photo is None:
             return Response({})
         return Response(ProgressPhotoSerializer(photo, context=self.get_serializer_context()).data)
