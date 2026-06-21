@@ -228,7 +228,38 @@ def dispatch_slot_reminders(now=None) -> int:
     return sent
 
 
-def run_due(now=None) -> dict:
-    """One reminder pass: fire due rest + dose-slot notifications."""
+def dispatch_protocol_activation(now=None) -> int:
+    """Activate each owner's timeline-prescribed protocol, so a future-dated phase
+    adjustment takes effect automatically on its effective date (in the owner's own
+    timezone). Returns the number of owners whose active protocol changed."""
+    from django.contrib.auth import get_user_model
+
+    from apps.core.models import PhaseAdjustment
+    from apps.protocols.services import sync_active_protocol
+
     now = now or timezone.now()
-    return {"rest": dispatch_rest_reminders(now), "slots": dispatch_slot_reminders(now)}
+    user_model = get_user_model()
+    owner_ids = (
+        PhaseAdjustment.objects.filter(protocol__isnull=False)
+        .values_list("phase__owner_id", flat=True)
+        .distinct()
+    )
+    changed = 0
+    for user in user_model.objects.filter(id__in=owner_ids).select_related("profile"):
+        if sync_active_protocol(user, _user_local_now(user, now).date()):
+            changed += 1
+    return changed
+
+
+def run_due(now=None) -> dict:
+    """One worker pass: roll forward auto-activation, then fire due reminders.
+
+    Activation runs first so a phase adjustment that kicks in today drives this same
+    pass's dose-slot reminders.
+    """
+    now = now or timezone.now()
+    return {
+        "activated": dispatch_protocol_activation(now),
+        "rest": dispatch_rest_reminders(now),
+        "slots": dispatch_slot_reminders(now),
+    }

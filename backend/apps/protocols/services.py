@@ -977,6 +977,26 @@ def protocol_in_force(owner, on_date):
     return Protocol.objects.filter(owner=owner, is_active=True).first()
 
 
+def sync_active_protocol(owner, on_date):
+    """Make the protocol prescribed by the phase-adjustment timeline the active one.
+
+    Lets a future-dated phase adjustment take effect on its own — the reminder
+    worker calls this each pass, so when the effective date arrives the prescribed
+    protocol becomes active (and drives reminders + the quick-log grid) without a
+    manual "Activate". Idempotent: only writes when the in-force protocol differs
+    from the current active flag. Returns the protocol it activated, or None.
+    """
+    from .models import Protocol
+
+    in_force = protocol_in_force(owner, on_date)
+    if in_force is None or in_force.is_active:
+        return None
+    Protocol.objects.filter(owner=owner, is_active=True).update(is_active=False)
+    in_force.is_active = True
+    in_force.save(update_fields=["is_active"])
+    return in_force
+
+
 def _pillbox_items(protocol):
     """Oral compounds + supplements of a protocol (injectables / PRN excluded)."""
     out = []

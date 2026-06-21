@@ -185,5 +185,23 @@ def test_test_notification_endpoint(api):
     m.assert_called_once()
 
 
+def test_dispatch_protocol_activation_follows_timeline(user):
+    """The worker pass activates the protocol the phase timeline prescribes today."""
+    from apps.core.models import Phase, PhaseAdjustment
+
+    today = timezone.now().date()
+    a = Protocol.objects.create(owner=user, name="A", is_active=True, started_on=today)
+    b = Protocol.objects.create(owner=user, name="B", is_active=False)
+    phase = Phase.objects.create(
+        owner=user, name="Block", phase_type="bulk", start_date=today - timedelta(days=10)
+    )
+    PhaseAdjustment.objects.create(phase=phase, effective_date=today, protocol=b)
+
+    assert services.dispatch_protocol_activation(timezone.now()) == 1
+    a.refresh_from_db()
+    b.refresh_from_db()
+    assert b.is_active and not a.is_active
+
+
 def test_endpoints_require_auth():
     assert APIClient().get("/api/v1/notifications/reminder-settings/").status_code in (401, 403)
