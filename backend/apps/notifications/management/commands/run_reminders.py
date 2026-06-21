@@ -28,7 +28,9 @@ class Command(BaseCommand):
             )
         if opts["once"]:
             res = run_due(timezone.now())
-            self.stdout.write(f"Dispatched: rest={res['rest']} slots={res['slots']}")
+            self.stdout.write(
+                f"Dispatched: activated={res['activated']} rest={res['rest']} slots={res['slots']}"
+            )
             return
 
         interval = max(5, opts["interval"])
