@@ -119,10 +119,16 @@ class InviteListCreateView(APIView):
             .select_related("coach", "client")
             .order_by("-created_at")
         )
+        coaches = (
+            CoachClientLink.objects.filter(client=request.user, status=LinkStatus.ACTIVE)
+            .select_related("coach", "client")
+            .order_by("coach__email")
+        )
         return Response(
             {
                 "sent": LinkSerializer(sent, many=True).data,
                 "received": LinkSerializer(received, many=True).data,
+                "coaches": LinkSerializer(coaches, many=True).data,
             }
         )
 

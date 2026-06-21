@@ -5,7 +5,7 @@
 import type { BodyAnalysis } from '$lib/analysis/api';
 import { ensureCsrf } from '$lib/api/auth';
 
-import type { DashboardToday, WeeklyCheckIn } from './api';
+import type { DashboardToday, Phase, WeeklyCheckIn } from './api';
 
 const BASE = '/api/v1/coaching';
 
@@ -15,6 +15,7 @@ export interface ClientBrief {
 	email: string;
 	name: string;
 	status: string;
+	can_edit_prescriptions: boolean;
 	phase: string | null;
 	last_check_in: string | null;
 	bodyweight: number | null;
@@ -29,6 +30,7 @@ export interface CoachLink {
 	coach_name: string;
 	client_name: string;
 	status: string;
+	can_edit_prescriptions: boolean;
 	created_at: string;
 	responded_at: string | null;
 }
@@ -43,6 +45,7 @@ export interface ClientOverview {
 export interface InvitesPayload {
 	sent: CoachLink[];
 	received: CoachLink[];
+	coaches: CoachLink[];
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -71,7 +74,9 @@ export const coachApi = {
 	invite: (email: string) => req<CoachLink>('POST', '/invites/', { email }),
 	respond: (id: number, accept: boolean) =>
 		req<CoachLink>('POST', `/invites/${id}/respond/`, { accept }),
-	revoke: (id: number) => req<CoachLink>('POST', `/links/${id}/revoke/`)
+	revoke: (id: number) => req<CoachLink>('POST', `/links/${id}/revoke/`),
+	setPermission: (id: number, canEdit: boolean) =>
+		req<CoachLink>('POST', `/links/${id}/permission/`, { can_edit_prescriptions: canEdit })
 };
 
 /** Download a client's check-in report PDF (coach view) via the X-Acting-Client header. */
@@ -98,3 +103,91 @@ export async function downloadClientReport(
 	a.click();
 	URL.revokeObjectURL(url);
 }
+
+// --- Stage 2: header-aware reads/writes against the client's own endpoints ----
+// A coach edits the client's prescriptions by calling the normal domain endpoints
+// with the X-Acting-Client header; the backend allows the write only for an active
+// link with can_edit_prescriptions, and only on prescription endpoints.
+
+export interface PlanOption {
+	id: number;
+	name: string;
+	is_active?: boolean;
+}
+
+export interface ClientTarget {
+	id: number;
+	name: string;
+	calories: string | null;
+	protein_g: string | null;
+	carb_g: string | null;
+	fat_g: string | null;
+	is_active: boolean;
+}
+
+export interface NutritionTargetInput {
+	name: string;
+	calories: string;
+	protein_g: string;
+	carb_g: string;
+	fat_g: string;
+}
+
+async function actingReq<T>(
+	method: string,
+	path: string,
+	clientId: number,
+	body?: unknown
+): Promise<T> {
+	const headers: Record<string, string> = { 'X-Acting-Client': String(clientId) };
+	if (body !== undefined) {
+		headers['Content-Type'] = 'application/json';
+		headers['X-CSRFToken'] = await ensureCsrf();
+	} else if (method !== 'GET') {
+		headers['X-CSRFToken'] = await ensureCsrf();
+	}
+	const res = await fetch(`/api/v1${path}`, {
+		method,
+		credentials: 'include',
+		headers,
+		body: body !== undefined ? JSON.stringify(body) : undefined
+	});
+	if (!res.ok) {
+		const detail = await res.text().catch(() => '');
+		throw new Error(`${method} ${path} → ${res.status} ${detail}`);
+	}
+	if (res.status === 204) return undefined as T;
+	return res.json() as Promise<T>;
+}
+
+const rows = <T>(p: { results?: T[] } | T[]): T[] => (Array.isArray(p) ? p : (p.results ?? []));
+
+export const clientPlan = {
+	phases: (cid: number) => actingReq<{ results?: Phase[] } | Phase[]>(
+		'GET', '/phases/', cid
+	).then(rows),
+	programs: (cid: number) => actingReq<{ results?: PlanOption[] } | PlanOption[]>(
+		'GET', '/training/programs/', cid
+	).then(rows),
+	protocols: (cid: number) => actingReq<{ results?: PlanOption[] } | PlanOption[]>(
+		'GET', '/protocols/protocols/', cid
+	).then(rows),
+	targets: (cid: number) => actingReq<{ results?: ClientTarget[] } | ClientTarget[]>(
+		'GET', '/nutrition/targets/', cid
+	).then(rows),
+	createTarget: (cid: number, data: NutritionTargetInput) =>
+		actingReq<ClientTarget>('POST', '/nutrition/targets/', cid, data),
+	activateTarget: (cid: number, id: number) =>
+		actingReq<ClientTarget>('POST', `/nutrition/targets/${id}/activate/`, cid, {}),
+	createAdjustment: (
+		cid: number,
+		data: {
+			phase: number;
+			effective_date: string;
+			reason?: string;
+			nutrition_target?: number | null;
+			program?: number | null;
+			protocol?: number | null;
+		}
+	) => actingReq('POST', '/phase-adjustments/', cid, data)
+};

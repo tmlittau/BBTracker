@@ -57,6 +57,12 @@
 		</div>
 		<div class="flex items-center gap-3">
 			{#if downloadErr}<span class="text-sm text-red-400">{downloadErr}</span>{/if}
+			<a
+				href={`/coach/clients/${clientId}/plan`}
+				class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+			>
+				Adjust plan
+			</a>
 			<button
 				onclick={report}
 				disabled={downloading}
