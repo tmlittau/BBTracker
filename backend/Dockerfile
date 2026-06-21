@@ -6,6 +6,12 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Native libs for WeasyPrint (PDF check-in report rendering) + base fonts.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+        libcairo2 libgdk-pixbuf-2.0-0 libffi8 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # uv for fast, reproducible installs into the system environment.
 # --link-mode=copy copies wheels out of uv's cache instead of reflinking/cloning
 # them: the default clone uses the FICLONE/copy_file_range ioctl, which on

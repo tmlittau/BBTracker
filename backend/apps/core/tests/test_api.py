@@ -244,3 +244,17 @@ def test_data_export_zip(api, user, other):
     data = json.loads(zf.read("data.json"))
     assert len(data["check_ins"]) == 1
     assert len(data["dose_logs"]) == 1  # owner-scoped — `other`'s dose is excluded
+
+
+def test_checkin_report_pdf(api, user):
+    CheckIn.objects.create(owner=user, date=date(2026, 1, 1), bodyweight=90)
+    CheckIn.objects.create(owner=user, date=date(2026, 1, 20), bodyweight=89)
+    resp = api.get("/api/v1/report/checkin/?start=2026-01-01&end=2026-01-31")
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/pdf"
+    assert resp.content[:5] == b"%PDF-"
+    # a restricted include set still renders a valid PDF
+    resp2 = api.get(
+        "/api/v1/report/checkin/?start=2026-01-01&end=2026-01-31&include=training,nutrition"
+    )
+    assert resp2.status_code == 200 and resp2.content[:5] == b"%PDF-"

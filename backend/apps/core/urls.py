@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CheckinReportView,
     DashboardTodayView,
     DataExportView,
     HealthzView,
@@ -19,5 +20,6 @@ urlpatterns = [
     path("dashboard/today/", DashboardTodayView.as_view(), name="dashboard-today"),
     path("checkin/weekly/", WeeklyCheckInView.as_view(), name="checkin-weekly"),
     path("export/", DataExportView.as_view(), name="data-export"),
+    path("report/checkin/", CheckinReportView.as_view(), name="checkin-report"),
     *router.urls,
 ]
