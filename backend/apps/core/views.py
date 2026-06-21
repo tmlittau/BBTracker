@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.coaching.access import EffectiveOwnerMixin
 from apps.core.viewsets import OwnerScopedViewSet
 
 from .export import build_export
@@ -49,19 +50,20 @@ def _parse_date(request, param):
 
 
 @extend_schema(tags=["core"])
-class PhaseViewSet(viewsets.ModelViewSet):
+class PhaseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """The periodization timeline. Owner-scoped; a phase's prescription lives in a
     dated PhaseAdjustment timeline (see PhaseAdjustmentViewSet)."""
 
     serializer_class = PhaseSerializer
+    prescription_write = True  # a coach may edit a client's phases
 
     def get_queryset(self):
-        return Phase.objects.filter(owner=self.request.user).prefetch_related(
+        return Phase.objects.filter(owner=self.effective_owner).prefetch_related(
             "adjustments__nutrition_target", "adjustments__program", "adjustments__protocol"
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
 
 @extend_schema(tags=["core"])
@@ -73,6 +75,7 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
     serializer_class = PhaseAdjustmentSerializer
     owner_path = "phase__owner"
     parent_checks = [("phase", Phase, "owner")]
+    prescription_write = True  # a coach may edit a client's prescription timeline
 
     def get_queryset(self):
         return super().get_queryset().select_related(
@@ -80,9 +83,10 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
         )
 
     def _check_links(self, serializer):
+        owner_id = self.effective_owner.id
         for field in ("nutrition_target", "program", "protocol"):
             obj = serializer.validated_data.get(field)
-            if obj is not None and obj.owner_id != self.request.user.id:
+            if obj is not None and obj.owner_id != owner_id:
                 raise PermissionDenied(f"That {field} does not belong to you.")
 
     def perform_create(self, serializer):
@@ -101,13 +105,13 @@ class PhaseAdjustmentViewSet(OwnerScopedViewSet):
     parameters=[OpenApiParameter("date", str, description="ISO date (default today)")],
     responses=DashboardTodaySerializer,
 )
-class DashboardTodayView(APIView):
+class DashboardTodayView(EffectiveOwnerMixin, APIView):
     """Unified 'today' across all five domains + the current phase."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(dashboard_today(request.user, _parse_date(request, "date")))
+        return Response(dashboard_today(self.effective_owner, _parse_date(request, "date")))
 
 
 @extend_schema(
@@ -117,13 +121,13 @@ class DashboardTodayView(APIView):
     ],
     responses=WeeklyCheckInSerializer,
 )
-class WeeklyCheckInView(APIView):
+class WeeklyCheckInView(EffectiveOwnerMixin, APIView):
     """Auto-generated weekly check-in report — the self-coaching payload."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(weekly_checkin(request.user, _parse_date(request, "end")))
+        return Response(weekly_checkin(self.effective_owner, _parse_date(request, "end")))
 
 
 class DataExportView(APIView):
@@ -144,8 +148,11 @@ class DataExportView(APIView):
         return resp
 
 
-class CheckinReportView(APIView):
-    """Generate a shareable check-in report PDF for a date window (e.g. a phase)."""
+class CheckinReportView(EffectiveOwnerMixin, APIView):
+    """Generate a shareable check-in report PDF for a date window (e.g. a phase).
+
+    Honours the effective owner, so a coach can download a client's report.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -165,7 +172,7 @@ class CheckinReportView(APIView):
         start = _parse_date(request, "start") or (end - timedelta(days=84))
         inc = request.query_params.get("include")
         include = {s for s in inc.split(",") if s} if inc is not None else ALL_SECTIONS
-        filename, pdf = build_checkin_report_pdf(request.user, start, end, include)
+        filename, pdf = build_checkin_report_pdf(self.effective_owner, start, end, include)
         resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

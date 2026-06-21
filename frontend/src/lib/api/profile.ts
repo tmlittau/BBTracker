@@ -15,6 +15,7 @@ export interface Me {
 	email: string;
 	first_name: string;
 	last_name: string;
+	is_coach: boolean;
 	profile: Profile;
 }
 

@@ -77,6 +77,8 @@ class Command(BaseCommand):
         parser.add_argument("--photos-dir", default="/photos",
                             help="Directory of YYYY-MM-DD subfolders with pose photos.")
         parser.add_argument("--email", default="demo@tmlittau.com")
+        parser.add_argument("--coach-email", default="coaching@tmlittau.com",
+                            help="A coach account, linked to the demo as an active client.")
         parser.add_argument("--password", default="DemoPass2026!")
         parser.add_argument("--keep-users", nargs="*", default=["info@tmlittau.com"],
                             help="Emails (besides the demo account) to NOT delete.")
@@ -90,6 +92,7 @@ class Command(BaseCommand):
         random.seed(42)
         self.opts = opts
         self.email = opts["email"]
+        self.coach_email = opts["coach_email"]
         self.photos_dir = Path(opts["photos_dir"])
         demo_only = opts["demo_only"]
         full_wipe = not opts["no_wipe"] and not demo_only
@@ -102,7 +105,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             if full_wipe:
-                self._wipe(keep={self.email, *opts["keep_users"]})
+                self._wipe(keep={self.email, self.coach_email, *opts["keep_users"]})
             elif demo_only:
                 self._wipe_demo(user)
             refs = self._load_refs()
@@ -118,6 +121,7 @@ class Command(BaseCommand):
             self._build_doses(user, protocols, refs)
             self._build_measurements(user)
             self._build_bloodwork(user)
+            self._ensure_coach(user)
 
         n_photos = self._build_photos(user)
 
@@ -273,6 +277,37 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"Demo user ready: {self.email}")
         return user
+
+    def _ensure_coach(self, client):
+        """A coach account with an active link to the demo client, so the coaching
+        interface is demoable: log in as the coach to view the demo's data."""
+        from apps.coaching.models import CoachClientLink, LinkStatus
+        User = get_user_model()
+        coach, _ = User.objects.get_or_create(
+            email=self.coach_email, defaults={"is_active": True}
+        )
+        coach.is_active = True
+        coach.is_coach = True
+        coach.first_name = "Coach"
+        coach.set_password(self.opts["password"])
+        coach.save()
+        try:
+            from allauth.account.models import EmailAddress
+            EmailAddress.objects.update_or_create(
+                user=coach, email=self.coach_email,
+                defaults={"verified": True, "primary": True},
+            )
+        except Exception:
+            pass
+        CoachClientLink.objects.update_or_create(
+            coach=coach, client=client,
+            defaults={
+                "status": LinkStatus.ACTIVE,
+                "responded_at": timezone.now(),
+                "can_edit_prescriptions": True,
+            },
+        )
+        self.stdout.write(f"Coach ready: {self.coach_email} → coaches {client.email}")
 
     def _load_refs(self):
         from apps.diary.models import Pose

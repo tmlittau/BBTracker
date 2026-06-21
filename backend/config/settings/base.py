@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.diary",
     "apps.notifications",
     "apps.analysis",
+    "apps.coaching",
 ]
 
 MIDDLEWARE = [

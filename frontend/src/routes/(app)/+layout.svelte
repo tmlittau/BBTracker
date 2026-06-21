@@ -1,13 +1,22 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { logout } from '$lib/api/auth';
+	import { getMe } from '$lib/api/profile';
+	import { viewingClient, exitViewAsClient } from '$lib/api/acting';
 	import BottomNav from '$lib/components/ui/BottomNav.svelte';
 
 	let { children, data } = $props();
 	let menuOpen = $state(false);
+	let isCoach = $state(false);
 
-	const links = [
+	// The "Coaching" entry only exists for coach accounts (User.is_coach).
+	onMount(async () => {
+		isCoach = (await getMe().catch(() => null))?.is_coach ?? false;
+	});
+
+	const BASE_LINKS = [
 		{ href: '/dashboard', label: 'Today', accent: 'text-white' },
 		{ href: '/training', label: 'Training', accent: 'text-indigo-300' },
 		{ href: '/nutrition', label: 'Nutrition', accent: 'text-emerald-300' },
@@ -16,10 +25,22 @@
 		{ href: '/analysis', label: 'Analysis', accent: 'text-rose-300' },
 		{ href: '/phases', label: 'Phases', accent: 'text-amber-300' }
 	];
+	const links = $derived(
+		isCoach
+			? [...BASE_LINKS, { href: '/coach', label: 'Coaching', accent: 'text-teal-300' }]
+			: BASE_LINKS
+	);
 
 	async function onLogout() {
 		await logout();
 		await goto('/login');
+	}
+
+	// "View as client" read mode — leave it and return to the client's coach page.
+	async function exitView() {
+		const id = $viewingClient?.id;
+		exitViewAsClient();
+		await goto(id ? `/coach/clients/${id}` : '/coach');
 	}
 
 	function isActive(href: string): boolean {
@@ -28,6 +49,19 @@
 </script>
 
 <div class="min-h-screen">
+	{#if $viewingClient}
+		<div
+			class="sticky top-0 z-50 flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-black"
+		>
+			<span>👁 Viewing <b>{$viewingClient.name}</b>'s data — read-only</span>
+			<button
+				class="shrink-0 rounded-full bg-black/20 px-3 py-1 text-xs font-semibold hover:bg-black/30"
+				onclick={exitView}
+			>
+				Exit
+			</button>
+		</div>
+	{/if}
 	<header class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
 		<!-- Desktop nav -->
 		<nav class="hidden items-center gap-5 md:flex">
@@ -90,6 +124,9 @@
 		<div class="fixed right-3 top-14 z-40 w-56 rounded-lg border border-neutral-700 bg-neutral-950 p-2 text-sm shadow-xl md:hidden">
 			<p class="truncate px-3 py-2 text-xs text-neutral-500">{data.user?.email}</p>
 			<a href="/phases" class="block rounded px-3 py-2 hover:bg-neutral-800" onclick={() => (menuOpen = false)}>Phases</a>
+			{#if isCoach}
+				<a href="/coach" class="block rounded px-3 py-2 hover:bg-neutral-800" onclick={() => (menuOpen = false)}>Coaching</a>
+			{/if}
 			<a href="/settings" class="block rounded px-3 py-2 hover:bg-neutral-800" onclick={() => (menuOpen = false)}>Settings</a>
 			<button class="block w-full rounded px-3 py-2 text-left text-red-400 hover:bg-neutral-800" onclick={onLogout}>Log out</button>
 		</div>

@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from apps.coaching.access import EffectiveOwnerMixin
 from apps.core.viewsets import OwnerScopedViewSet, ReorderMixin
 
 from .models import (
@@ -47,7 +48,7 @@ class MuscleViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema(tags=["training"])
-class ExerciseViewSet(viewsets.ModelViewSet):
+class ExerciseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """Global (seeded) + the user's custom exercises. Users can only edit their own."""
 
     serializer_class = ExerciseSerializer
@@ -60,7 +61,7 @@ class ExerciseViewSet(viewsets.ModelViewSet):
         from django.db.models import Q
 
         qs = Exercise.objects.filter(
-            Q(owner=self.request.user) | Q(owner__isnull=True)
+            Q(owner=self.effective_owner) | Q(owner__isnull=True)
         ).prefetch_related("primary_muscles", "secondary_muscles")
         q = self.request.query_params.get("q")
         if q:
@@ -91,7 +92,7 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
         exercise = self.get_object()
-        data = exercise_history(request.user, exercise)
+        data = exercise_history(self.effective_owner, exercise)
         return Response(ExerciseHistoryPointSerializer(data, many=True).data)
 
     @extend_schema(responses=ExercisePerformanceSerializer)
@@ -100,27 +101,28 @@ class ExerciseViewSet(viewsets.ModelViewSet):
         """Best-ever set + last finished session's sets — for the live logger's
         at-a-glance stats and next-workout pre-fill."""
         exercise = self.get_object()
-        return Response(last_performance(request.user, exercise))
+        return Response(last_performance(self.effective_owner, exercise))
 
 
 @extend_schema(tags=["training"])
-class ProgramViewSet(viewsets.ModelViewSet):
+class ProgramViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = ProgramSerializer
+    prescription_write = True  # a coach may build/edit a client's program
 
     def get_queryset(self):
         return (
-            Program.objects.filter(owner=self.request.user)
+            Program.objects.filter(owner=self.effective_owner)
             .prefetch_related("days__slots__planned_sets", "days__slots__exercise")
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
-        """Make this the active program (deactivates the user's others)."""
+        """Make this the active program (deactivates the owner's others)."""
         program = self.get_object()
-        Program.objects.filter(owner=request.user).update(is_active=False)
+        Program.objects.filter(owner=self.effective_owner).update(is_active=False)
         program.is_active = True
         program.save(update_fields=["is_active"])
         return Response(self.get_serializer(program).data)
@@ -132,6 +134,7 @@ class TrainingDayViewSet(OwnerScopedViewSet):
     serializer_class = TrainingDaySerializer
     owner_path = "program__owner"
     parent_checks = [("program", Program, "owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])
@@ -140,6 +143,7 @@ class ExerciseSlotViewSet(ReorderMixin, OwnerScopedViewSet):
     serializer_class = ExerciseSlotSerializer
     owner_path = "day__program__owner"
     parent_checks = [("day", TrainingDay, "program__owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])
@@ -148,12 +152,13 @@ class PlannedSetViewSet(ReorderMixin, OwnerScopedViewSet):
     serializer_class = PlannedSetSerializer
     owner_path = "slot__day__program__owner"
     parent_checks = [("slot", ExerciseSlot, "day__program__owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["training"])
-class WorkoutSessionViewSet(viewsets.ModelViewSet):
+class WorkoutSessionViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     def get_queryset(self):
-        qs = WorkoutSession.objects.filter(owner=self.request.user)
+        qs = WorkoutSession.objects.filter(owner=self.effective_owner)
         if self.action == "list":
             frm = self.request.query_params.get("from")
             if frm:
@@ -254,7 +259,7 @@ class LoggedSetViewSet(OwnerScopedViewSet):
     parameters=[OpenApiParameter("days", int, description="Look-back window (default 7)")],
     responses=MuscleVolumeSerializer(many=True),
 )
-class MuscleVolumeView(viewsets.ViewSet):
+class MuscleVolumeView(EffectiveOwnerMixin, viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
@@ -263,7 +268,7 @@ class MuscleVolumeView(viewsets.ViewSet):
         except (TypeError, ValueError) as exc:
             raise ValidationError({"days": "must be an integer"}) from exc
         since = timezone.now() - timedelta(days=days)
-        data = weekly_muscle_volume(request.user, since=since)
+        data = weekly_muscle_volume(self.effective_owner, since=since)
         rows = [
             {"muscle": name, "sets": v["sets"], "tonnage": v["tonnage"]}
             for name, v in sorted(data.items(), key=lambda kv: -kv[1]["sets"])

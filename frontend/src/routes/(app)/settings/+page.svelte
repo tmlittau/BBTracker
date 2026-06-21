@@ -9,6 +9,7 @@
 	} from '$lib/api/profile';
 	import { notificationsApi, type ReminderSettings } from '$lib/notifications/api';
 	import { setSlotLabels } from '$lib/notifications/slots';
+	import { coachApi, type CoachLink } from '$lib/coaching/clients';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let me = $state<Me | null>(null);
@@ -22,6 +23,29 @@
 	let savingReminders = $state(false);
 	let remindersSaved = $state(false);
 	let testMsg = $state<string | null>(null);
+
+	// The client side of coaching: pending invites + active coaches (with the
+	// edit-access toggle the client controls).
+	let coachInvites = $state<CoachLink[]>([]);
+	let myCoaches = $state<CoachLink[]>([]);
+	async function loadCoachInvites() {
+		const data = await coachApi.invites().catch(() => null);
+		coachInvites = data?.received ?? [];
+		myCoaches = data?.coaches ?? [];
+	}
+	async function respondInvite(link: CoachLink, accept: boolean) {
+		await coachApi.respond(link.id, accept);
+		await loadCoachInvites();
+	}
+	async function setCoachPermission(link: CoachLink, canEdit: boolean) {
+		await coachApi.setPermission(link.id, canEdit);
+		await loadCoachInvites();
+	}
+	async function revokeCoach(link: CoachLink) {
+		if (!confirm(`Remove ${link.coach_email} as your coach?`)) return;
+		await coachApi.revoke(link.id);
+		await loadCoachInvites();
+	}
 
 	// Full data export (zip download).
 	let exporting = $state(false);
@@ -97,6 +121,7 @@
 			reminders = normalizeTimes(r);
 			setSlotLabels(reminders);
 		}
+		loadCoachInvites();
 	});
 
 	async function save(e: SubmitEvent) {
@@ -303,6 +328,67 @@
 			</div>
 			{#if testMsg}<p class="text-xs text-neutral-400">{testMsg}</p>{/if}
 		</form>
+	{/if}
+
+	{#if coachInvites.length > 0}
+		<section class="mt-8 border-t border-neutral-800 pt-6">
+			<h2 class="font-medium">Coaching invites</h2>
+			<p class="mt-1 max-w-md text-sm text-neutral-400">
+				A coach has asked to view your data. They'll see your training, nutrition, protocols and
+				bloodwork until you revoke access. Accept only people you trust.
+			</p>
+			<ul class="mt-3 space-y-2">
+				{#each coachInvites as inv (inv.id)}
+					<li
+						class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+					>
+						<span class="text-neutral-200">{inv.coach_name} <span class="text-neutral-500">({inv.coach_email})</span></span>
+						<span class="flex gap-2">
+							<button
+								class="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white hover:brightness-110"
+								onclick={() => respondInvite(inv, true)}>Accept</button
+							>
+							<button
+								class="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+								onclick={() => respondInvite(inv, false)}>Decline</button
+							>
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
+	{#if myCoaches.length > 0}
+		<section class="mt-8 border-t border-neutral-800 pt-6">
+			<h2 class="font-medium">Your coaches</h2>
+			<p class="mt-1 max-w-md text-sm text-neutral-400">
+				These coaches can view your data. Turn off "can edit plan" to keep them read-only, or remove
+				them entirely.
+			</p>
+			<ul class="mt-3 space-y-2">
+				{#each myCoaches as c (c.id)}
+					<li
+						class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+					>
+						<span class="text-neutral-200">{c.coach_name} <span class="text-neutral-500">({c.coach_email})</span></span>
+						<span class="flex items-center gap-3">
+							<label class="flex items-center gap-2 text-xs text-neutral-300">
+								<input
+									type="checkbox"
+									checked={c.can_edit_prescriptions}
+									onchange={(e) => setCoachPermission(c, e.currentTarget.checked)}
+								/>
+								can edit plan
+							</label>
+							<button class="text-xs text-red-400 hover:text-red-300" onclick={() => revokeCoach(c)}>
+								Remove
+							</button>
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
 	{/if}
 
 	<section class="mt-8 border-t border-neutral-800 pt-6">

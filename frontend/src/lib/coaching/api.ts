@@ -1,6 +1,7 @@
 // Typed client for the self-coaching layer: phases timeline, dashboard, weekly
 // check-in. Session cookies + CSRF, same pattern as the other domain clients.
 
+import { actingHeaders } from '$lib/api/acting';
 import { ensureCsrf } from '$lib/api/auth';
 
 const BASE = '/api/v1';
@@ -95,16 +96,16 @@ interface Paginated<T> {
 const list = <T>(p: Paginated<T> | T[]): T[] => (Array.isArray(p) ? p : p.results);
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-	const opts: RequestInit = { method, credentials: 'include', headers: {} };
+	const headers: Record<string, string> = { ...actingHeaders(method) };
+	let bodyStr: string | undefined;
 	if (body !== undefined) {
-		const csrf = await ensureCsrf();
-		opts.headers = { 'Content-Type': 'application/json', 'X-CSRFToken': csrf };
-		opts.body = JSON.stringify(body);
+		headers['Content-Type'] = 'application/json';
+		headers['X-CSRFToken'] = await ensureCsrf();
+		bodyStr = JSON.stringify(body);
 	} else if (method !== 'GET') {
-		const csrf = await ensureCsrf();
-		opts.headers = { 'X-CSRFToken': csrf };
+		headers['X-CSRFToken'] = await ensureCsrf();
 	}
-	const res = await fetch(`${BASE}${path}`, opts);
+	const res = await fetch(`${BASE}${path}`, { method, credentials: 'include', headers, body: bodyStr });
 	if (!res.ok) {
 		const detail = await res.text().catch(() => '');
 		throw new Error(`${method} ${path} → ${res.status} ${detail}`);
