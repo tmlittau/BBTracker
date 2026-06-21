@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     DashboardTodayView,
+    DataExportView,
     HealthzView,
     PhaseAdjustmentViewSet,
     PhaseViewSet,
@@ -17,5 +18,6 @@ urlpatterns = [
     path("healthz/", HealthzView.as_view(), name="healthz"),
     path("dashboard/today/", DashboardTodayView.as_view(), name="dashboard-today"),
     path("checkin/weekly/", WeeklyCheckInView.as_view(), name="checkin-weekly"),
+    path("export/", DataExportView.as_view(), name="data-export"),
     *router.urls,
 ]

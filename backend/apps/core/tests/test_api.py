@@ -214,3 +214,33 @@ def test_dashboard_uses_light_headline(django_assert_max_num_queries, user):
     with django_assert_max_num_queries(12):
         data = dashboard_today(user, date.today())
     assert data["nutrition"]["calories"] == "330.000"
+
+
+def test_data_export_zip(api, user, other):
+    import io
+    import json
+    import zipfile
+
+    from apps.diary.models import ProgressPhoto
+    from apps.diary.storage import get_storage
+
+    CheckIn.objects.create(owner=user, date=date(2026, 1, 1), bodyweight=90)
+    c = Compound.objects.create(name="Test E", default_unit="mg", half_life_hours="168")
+    DoseLog.objects.create(owner=user, compound=c, taken_at=timezone.now(), amount=250, unit="mg")
+    DoseLog.objects.create(owner=other, compound=c, taken_at=timezone.now(), amount=500, unit="mg")
+    get_storage().put("k1.jpg", b"img-bytes", "image/jpeg")
+    ProgressPhoto.objects.create(
+        owner=user, taken_on=date(2026, 1, 1), object_key="k1.jpg", content_type="image/jpeg"
+    )
+
+    resp = api.get("/api/v1/export/")
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    names = zf.namelist()
+    assert "data.json" in names and "csv/check_ins.csv" in names
+    photo_names = [n for n in names if n.startswith("photos/")]
+    assert photo_names and zf.read(photo_names[0]) == b"img-bytes"
+    data = json.loads(zf.read("data.json"))
+    assert len(data["check_ins"]) == 1
+    assert len(data["dose_logs"]) == 1  # owner-scoped — `other`'s dose is excluded
