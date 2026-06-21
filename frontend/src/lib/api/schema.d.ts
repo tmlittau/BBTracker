@@ -1709,6 +1709,26 @@ export interface paths {
         patch: operations["v1_protocols_vials_partial_update"];
         trace?: never;
     };
+    "/api/v1/protocols/week-prep/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Weekly pill-box plan: an every-day baseline plus per-day deviations for the
+         *     owner's oral compounds + supplements, resolving the protocol in force each day.
+         */
+        get: operations["v1_protocols_week_prep_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/training/exercise-slots/": {
         parameters: {
             query?: never;
@@ -4550,6 +4570,34 @@ export interface components {
          * @enum {string}
          */
         ViewEnum: "front" | "back" | "side";
+        WeekPrepDay: {
+            /** Format: date */
+            date: string;
+            weekday: number;
+            label: string;
+            protocol: string | null;
+            added: components["schemas"]["WeekPrepSlot"][];
+            removed: components["schemas"]["WeekPrepSlot"][];
+        };
+        WeekPrepEntry: {
+            amount: string;
+            name: string;
+            kind: string;
+        };
+        WeekPrepPlan: {
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+            protocols: string[];
+            everyday: components["schemas"]["WeekPrepSlot"][];
+            days: components["schemas"]["WeekPrepDay"][];
+        };
+        WeekPrepSlot: {
+            slot: string;
+            slot_label: string;
+            entries: components["schemas"]["WeekPrepEntry"][];
+        };
         WeeklyCheckIn: {
             start_date: string;
             end_date: string;
@@ -8545,6 +8593,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Vial"];
+                };
+            };
+        };
+    };
+    v1_protocols_week_prep_retrieve: {
+        parameters: {
+            query?: {
+                /** @description Monday of the week (YYYY-MM-DD). */
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeekPrepPlan"];
                 };
             };
         };

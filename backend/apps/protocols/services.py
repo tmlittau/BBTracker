@@ -827,3 +827,151 @@ def bloodwork_matrix(owner, sex=None):
 
 def is_injectable_route(route: str) -> bool:
     return route in INJECTABLE_ROUTES
+
+
+# --- Week prep: daily pill-box plan (every-day baseline + per-day diffs) -------
+
+WEEK_PREP_SLOTS = ["waking", "am", "noon", "pm", "night", "anytime"]
+_SLOT_LABELS = {
+    "waking": "Waking", "am": "AM", "noon": "Noon",
+    "pm": "PM", "night": "Night", "anytime": "Anytime",
+}
+_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+# An item joins the "every day" baseline if dosed on at least this many of the 7
+# days, so a 6/7 item shows once with a single "skip" note instead of six rows.
+_BASELINE_MIN_DAYS = 5
+_COUNT_UNITS = {"capsule", "tablet", "softgel", "serving", "scoop", "gummy"}
+
+
+def _fmt_qty(value) -> str:
+    """Trim trailing zeros: '0.250'→'0.25', '10.000'→'10', '2.0'→'2'."""
+    d = Decimal(str(value)).normalize()
+    if d == d.to_integral():
+        d = d.quantize(Decimal(1))
+    return f"{d:f}"
+
+
+def protocol_in_force(owner, on_date):
+    """The protocol prescribed on `on_date`: the latest phase adjustment (across the
+    owner's phases) on/before that date that sets a protocol, carried forward; else
+    the active protocol. The per-day resolution behind Week prep."""
+    from apps.core.models import PhaseAdjustment
+
+    from .models import Protocol
+
+    adj = (
+        PhaseAdjustment.objects.filter(
+            phase__owner=owner, protocol__isnull=False, effective_date__lte=on_date
+        )
+        .select_related("protocol")
+        .order_by("-effective_date", "-id")
+        .first()
+    )
+    if adj:
+        return adj.protocol
+    return Protocol.objects.filter(owner=owner, is_active=True).first()
+
+
+def _pillbox_items(protocol):
+    """Oral compounds + supplements of a protocol (injectables / PRN excluded)."""
+    out = []
+    for it in protocol.items.select_related("compound", "supplement").all():
+        if it.frequency in ("prn", "as_needed"):
+            continue
+        route = it.route or (it.compound.default_route if it.compound_id else "")
+        if it.supplement_id or route == "oral":
+            out.append(it)
+    return out
+
+
+def _pill_entry(item):
+    """(key, entry) for a pill-box item; key identifies 'the same pill' across days."""
+    qty = item.dose_amount if item.dose_amount is not None else Decimal("1")
+    q = _fmt_qty(qty)
+    unit = item.dose_unit or ""
+    if item.supplement_id:
+        u = f"{unit}s" if (unit in _COUNT_UNITS and Decimal(str(qty)) != 1) else unit
+        amount = f"{q} {u}".strip() if u else f"{q}x"
+        name, kind, ref = item.supplement.name, "supplement", item.supplement_id
+    else:
+        amount = f"{q} {unit}".strip()
+        name, kind, ref = item.compound.name, "compound", item.compound_id
+    return f"{kind}:{ref}:{q}:{unit}", {"amount": amount, "name": name, "kind": kind}
+
+
+def week_prep_plan(owner, start_date):
+    """Weekly pill-box plan for [start_date, +6 days].
+
+    Resolves the protocol in force each day, collects the oral compounds +
+    supplements due per time-of-day slot, then factors out an "every day" baseline
+    (items dosed on >= _BASELINE_MIN_DAYS of the 7 days) so each day only lists its
+    deviations: `added` (extra that day) and `removed` (baseline skipped that day).
+    """
+    days = [start_date + timedelta(days=i) for i in range(7)]
+    item_cache: dict[int, list] = {}
+
+    def items_for(proto):
+        if proto is None:
+            return []
+        if proto.id not in item_cache:
+            item_cache[proto.id] = _pillbox_items(proto)
+        return item_cache[proto.id]
+
+    # slot -> key -> {"entry": {...}, "days": set(day_index)}
+    slots: dict[str, dict] = {s: {} for s in WEEK_PREP_SLOTS}
+    day_meta = []
+    protocols_seen: list[str] = []
+    for i, d in enumerate(days):
+        proto = protocol_in_force(owner, d)
+        day_meta.append(
+            {"date": d.isoformat(), "weekday": d.weekday(),
+             "label": _WEEKDAY_LABELS[d.weekday()],
+             "protocol": proto.name if proto else None}
+        )
+        if proto and proto.name not in protocols_seen:
+            protocols_seen.append(proto.name)
+        anchor = proto.started_on if proto and proto.started_on else d
+        for it in items_for(proto):
+            if not scheduled_dose_dates(it.frequency, it.days_of_week, d, d, anchor):
+                continue
+            key, entry = _pill_entry(it)
+            for t in (it.times_of_day or ["anytime"]):
+                slot = t if t in slots else "anytime"
+                bucket = slots[slot].setdefault(key, {"entry": entry, "days": set()})
+                bucket["days"].add(i)
+
+    everyday = []
+    added: dict[int, dict] = {i: {} for i in range(7)}
+    removed: dict[int, dict] = {i: {} for i in range(7)}
+    for slot in WEEK_PREP_SLOTS:
+        base = []
+        for info in slots[slot].values():
+            present, entry = info["days"], info["entry"]
+            if len(present) >= _BASELINE_MIN_DAYS:
+                base.append(entry)
+                for i in range(7):
+                    if i not in present:
+                        removed[i].setdefault(slot, []).append(entry)
+            else:
+                for i in present:
+                    added[i].setdefault(slot, []).append(entry)
+        if base:
+            everyday.append({"slot": slot, "slot_label": _SLOT_LABELS[slot], "entries": base})
+
+    def _slots(by_day):
+        return [
+            {"slot": s, "slot_label": _SLOT_LABELS[s], "entries": by_day[s]}
+            for s in WEEK_PREP_SLOTS if s in by_day
+        ]
+
+    days_out = [
+        {**day_meta[i], "added": _slots(added[i]), "removed": _slots(removed[i])}
+        for i in range(7)
+    ]
+    return {
+        "start": days[0].isoformat(),
+        "end": days[-1].isoformat(),
+        "protocols": protocols_seen,
+        "everyday": everyday,
+        "days": days_out,
+    }

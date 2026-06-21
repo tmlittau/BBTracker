@@ -311,6 +311,32 @@ export interface PhaseDoseMatrix {
 	rows: MatrixRow[];
 }
 
+export interface WeekPrepEntry {
+	amount: string;
+	name: string;
+	kind: 'compound' | 'supplement';
+}
+export interface WeekPrepSlot {
+	slot: string;
+	slot_label: string;
+	entries: WeekPrepEntry[];
+}
+export interface WeekPrepDay {
+	date: string;
+	weekday: number;
+	label: string;
+	protocol: string | null;
+	added: WeekPrepSlot[];
+	removed: WeekPrepSlot[];
+}
+export interface WeekPrepPlan {
+	start: string;
+	end: string;
+	protocols: string[];
+	everyday: WeekPrepSlot[];
+	days: WeekPrepDay[];
+}
+
 export const protocolsApi = {
 	compounds: (q = '') =>
 		req<Paginated<Compound> | Compound[]>(
@@ -366,6 +392,7 @@ export const protocolsApi = {
 		req<ProtocolRelease>('GET', `/protocols/${id}/release/?horizon_days=${horizonDays}`),
 	plot: (payload: { horizon_days: number; items: PlotItemInput[] }) =>
 		req<CompoundPlot>('POST', '/plot/', payload),
+	weekPrep: (start: string) => req<WeekPrepPlan>('GET', `/week-prep/?start=${start}`),
 
 	phaseMatrix: (protocolId: number, phaseId?: number) =>
 		req<PhaseDoseMatrix>(
