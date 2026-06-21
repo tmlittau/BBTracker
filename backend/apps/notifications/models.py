@@ -14,9 +14,16 @@ def _t(hour, minute=0):
     return datetime.time(hour, minute)
 
 
+# Canonical time-of-day slots + their default display names. Users can rename the
+# slots (the keys never change) in their reminder settings.
+SLOT_KEYS = ["waking", "am", "noon", "pm", "night"]
+DEFAULT_SLOT_LABELS = {"waking": "Waking", "am": "AM", "noon": "Noon", "pm": "PM", "night": "Night"}
+
+
 class ReminderSettings(models.Model):
     """Per-user notification preferences. Slot times are in the user's profile
-    timezone (accounts.Profile.timezone)."""
+    timezone (accounts.Profile.timezone); slot *labels* are user-customisable
+    display names (blank → the default for that slot)."""
 
     owner = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reminder_settings"
@@ -28,10 +35,23 @@ class ReminderSettings(models.Model):
     noon = models.TimeField(default=_t(15, 0))
     pm = models.TimeField(default=_t(19, 0))
     night = models.TimeField(default=_t(21, 0))
+    # Optional custom display names for the slots (blank → DEFAULT_SLOT_LABELS).
+    waking_label = models.CharField(max_length=24, blank=True)
+    am_label = models.CharField(max_length=24, blank=True)
+    noon_label = models.CharField(max_length=24, blank=True)
+    pm_label = models.CharField(max_length=24, blank=True)
+    night_label = models.CharField(max_length=24, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def slot_time(self, slot):
         return getattr(self, slot, None)
+
+    def label(self, slot):
+        custom = (getattr(self, f"{slot}_label", "") or "").strip()
+        return custom or DEFAULT_SLOT_LABELS.get(slot, slot)
+
+    def labels(self):
+        return {slot: self.label(slot) for slot in SLOT_KEYS}
 
     def __str__(self):
         return f"ReminderSettings(owner={self.owner_id})"

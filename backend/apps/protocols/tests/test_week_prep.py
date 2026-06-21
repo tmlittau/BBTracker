@@ -109,3 +109,17 @@ def test_phase_adjustment_switches_protocol(user):
     assert plan["protocols"] == ["A", "B"]
     assert "AlphaPill" in _names(days["Mon"]["added"], "am")
     assert "BetaPill" in _names(days["Thu"]["added"], "am")
+
+
+def test_custom_slot_labels(user):
+    from apps.notifications.models import ReminderSettings
+
+    p = Protocol.objects.create(owner=user, name="Stack", is_active=True, started_on=MON)
+    _item(p, compound=_oral(user, "Cardarine"), dose="10", times=["am"])
+    _item(p, compound=_oral(user, "Melatonin"), dose="3", times=["night"])
+    ReminderSettings.objects.create(owner=user, am_label="Pre-workout")  # night left default
+
+    plan = week_prep_plan(user, MON)
+    by_slot = {s["slot"]: s["slot_label"] for s in plan["everyday"]}
+    assert by_slot["am"] == "Pre-workout"   # custom label honoured
+    assert by_slot["night"] == "Night"      # blank → default

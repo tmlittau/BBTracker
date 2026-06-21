@@ -899,6 +899,18 @@ def _pill_entry(item):
     return f"{kind}:{ref}:{q}:{unit}", {"amount": amount, "name": name, "kind": kind}
 
 
+def _owner_slot_labels(owner):
+    """Slot display labels for an owner: their custom names over the defaults."""
+    from apps.notifications.models import DEFAULT_SLOT_LABELS, ReminderSettings
+
+    labels = dict(_SLOT_LABELS)
+    rs = ReminderSettings.objects.filter(owner=owner).first()
+    if rs:
+        for slot in DEFAULT_SLOT_LABELS:
+            labels[slot] = rs.label(slot)
+    return labels
+
+
 def week_prep_plan(owner, start_date):
     """Weekly pill-box plan for [start_date, +6 days].
 
@@ -906,8 +918,10 @@ def week_prep_plan(owner, start_date):
     supplements due per time-of-day slot, then factors out an "every day" baseline
     (items dosed on >= _BASELINE_MIN_DAYS of the 7 days) so each day only lists its
     deviations: `added` (extra that day) and `removed` (baseline skipped that day).
+    Slot labels honour the owner's custom names from their reminder settings.
     """
     days = [start_date + timedelta(days=i) for i in range(7)]
+    labels = _owner_slot_labels(owner)
     item_cache: dict[int, list] = {}
 
     def items_for(proto):
@@ -956,11 +970,11 @@ def week_prep_plan(owner, start_date):
                 for i in present:
                     added[i].setdefault(slot, []).append(entry)
         if base:
-            everyday.append({"slot": slot, "slot_label": _SLOT_LABELS[slot], "entries": base})
+            everyday.append({"slot": slot, "slot_label": labels[slot], "entries": base})
 
     def _slots(by_day):
         return [
-            {"slot": s, "slot_label": _SLOT_LABELS[s], "entries": by_day[s]}
+            {"slot": s, "slot_label": labels[s], "entries": by_day[s]}
             for s in WEEK_PREP_SLOTS if s in by_day
         ]
 

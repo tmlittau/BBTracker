@@ -3,7 +3,6 @@
 	import {
 		protocolsApi,
 		FREQUENCIES,
-		TIMES_OF_DAY,
 		isScheduledToday,
 		type Compound,
 		type DoseLog,
@@ -12,6 +11,7 @@
 		type ProtocolRelease,
 		type SiteRecency
 	} from '$lib/protocols/api';
+	import { SLOT_KEYS, slotLabels, timesOfDay, ensureSlotLabels } from '$lib/notifications/slots';
 	import { isoDate, shiftISODate } from '$lib/date';
 	import ProtocolReleaseChart from '$lib/protocols/ProtocolReleaseChart.svelte';
 	import SiteSelectModal from '$lib/protocols/SiteSelectModal.svelte';
@@ -30,7 +30,7 @@
 	const today = isoDate();
 	const active = $derived(protocols.find((p) => p.is_active) ?? null);
 	const SLOT_ORDER: Record<string, number> = Object.fromEntries(
-		TIMES_OF_DAY.map((t, i) => [t.key, i])
+		SLOT_KEYS.map((k, i) => [k, i])
 	);
 	const yesterday = shiftISODate(today, -1);
 	// Template clock time per slot — used to back-log a dose missed yesterday so it
@@ -93,17 +93,19 @@
 			return times.slice(logged).map((slotKey) => ({
 				item,
 				slotKey,
-				slotLabel: TIMES_OF_DAY.find((t) => t.key === slotKey)?.label ?? slotKey
+				slotLabel: $slotLabels[slotKey] ?? slotKey
 			}));
 		})
 	);
 
 	const slotGroups = $derived(
-		TIMES_OF_DAY.map((t) => ({
-			key: t.key,
-			label: t.label,
-			items: (active?.items ?? []).filter((i) => dueAtSlot(i, t.key))
-		})).filter((g) => g.items.length > 0)
+		$timesOfDay
+			.map((t) => ({
+				key: t.key,
+				label: t.label,
+				items: (active?.items ?? []).filter((i) => dueAtSlot(i, t.key))
+			}))
+			.filter((g) => g.items.length > 0)
 	);
 	const anytimeItems = $derived((active?.items ?? []).filter(dueAnytime));
 	const nothingDue = $derived(
@@ -155,6 +157,7 @@
 		}
 	}
 	onMount(async () => {
+		ensureSlotLabels();
 		try {
 			await load();
 		} catch (e) {
