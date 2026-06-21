@@ -172,6 +172,21 @@ def times_per_day_count(times_of_day, frequency) -> int:
     return n
 
 
+# A fixed Monday epoch used to phase interval cadences (eod / every-3 / weekly)
+# when a protocol has no explicit start date. Keeping it a single global reference
+# (instead of "today") means the cadence stays a true 1-in-N pattern that drifts
+# across weekdays week to week — never collapsing to "every day" — and every view
+# (week prep, quick log, release curves, dose matrix) agrees on the dosing days.
+CADENCE_EPOCH = date(2000, 1, 3)
+
+
+def dose_anchor(protocol):
+    """Reference date for phasing a protocol's interval cadences: its start date if
+    set, else the stable epoch (so the cadence never collapses to daily)."""
+    started = getattr(protocol, "started_on", None) if protocol else None
+    return started or CADENCE_EPOCH
+
+
 def scheduled_dose_dates(frequency, days_of_week, start_date, end_date, anchor_date):
     """Dates in [start_date, end_date] on which an item is dosed (one per dosing day).
 
@@ -307,7 +322,7 @@ def protocol_release_curves(owner, protocol, now=None, horizon_days=84,
     # Plot window: start at the protocol start (or first dose, or today), clamped.
     start_date = protocol.started_on or (first_dose.date() if first_dose else today)
     start_date = max(start_date, today - timedelta(days=max_history_days))
-    anchor = protocol.started_on or start_date
+    anchor = dose_anchor(protocol)
 
     dosing_end = protocol.ended_on or (today + timedelta(days=horizon_days))
     max_hl_days = max(float(g["compound"].half_life_hours) / 24.0 for g in grouped.values())
@@ -494,7 +509,7 @@ def plot_compounds(user, items, horizon_days=84, step_days=1):
     from .models import Compound
 
     horizon = max(1, min(int(horizon_days or 84), 730))
-    anchor = date(2000, 1, 3)  # a Monday → sane weekday scheduling
+    anchor = CADENCE_EPOCH  # fixed Monday → relative interval scheduling
     by_id = {c.id: c for c in Compound.objects.filter(Q(owner=user) | Q(owner__isnull=True))}
 
     grouped: dict[int, dict] = {}
@@ -643,7 +658,7 @@ def phase_dose_matrix(owner, phase, protocol):
         weeks.append({"index": len(weeks), "start": d, "end": w_end})
         d += timedelta(days=7)
 
-    anchor = protocol.started_on or start
+    anchor = dose_anchor(protocol)
 
     # All doses in the phase window in ONE query, bucketed by compound/supplement —
     # avoids a per-item query inside the loop below.
@@ -1034,7 +1049,7 @@ def week_prep_plan(owner, start_date):
         )
         if proto and proto.name not in protocols_seen:
             protocols_seen.append(proto.name)
-        anchor = proto.started_on if proto and proto.started_on else d
+        anchor = dose_anchor(proto)
         for it in items_for(proto):
             if not scheduled_dose_dates(it.frequency, it.days_of_week, d, d, anchor):
                 continue
