@@ -9,6 +9,7 @@
 	} from '$lib/api/profile';
 	import { notificationsApi, type ReminderSettings } from '$lib/notifications/api';
 	import { setSlotLabels } from '$lib/notifications/slots';
+	import { coachApi, type CoachLink } from '$lib/coaching/clients';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let me = $state<Me | null>(null);
@@ -22,6 +23,16 @@
 	let savingReminders = $state(false);
 	let remindersSaved = $state(false);
 	let testMsg = $state<string | null>(null);
+
+	// Coaching invites received from coaches (the client side of the relationship).
+	let coachInvites = $state<CoachLink[]>([]);
+	async function loadCoachInvites() {
+		coachInvites = (await coachApi.invites().catch(() => null))?.received ?? [];
+	}
+	async function respondInvite(link: CoachLink, accept: boolean) {
+		await coachApi.respond(link.id, accept);
+		await loadCoachInvites();
+	}
 
 	// Full data export (zip download).
 	let exporting = $state(false);
@@ -97,6 +108,7 @@
 			reminders = normalizeTimes(r);
 			setSlotLabels(reminders);
 		}
+		loadCoachInvites();
 	});
 
 	async function save(e: SubmitEvent) {
@@ -303,6 +315,35 @@
 			</div>
 			{#if testMsg}<p class="text-xs text-neutral-400">{testMsg}</p>{/if}
 		</form>
+	{/if}
+
+	{#if coachInvites.length > 0}
+		<section class="mt-8 border-t border-neutral-800 pt-6">
+			<h2 class="font-medium">Coaching invites</h2>
+			<p class="mt-1 max-w-md text-sm text-neutral-400">
+				A coach has asked to view your data. They'll see your training, nutrition, protocols and
+				bloodwork until you revoke access. Accept only people you trust.
+			</p>
+			<ul class="mt-3 space-y-2">
+				{#each coachInvites as inv (inv.id)}
+					<li
+						class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"
+					>
+						<span class="text-neutral-200">{inv.coach_name} <span class="text-neutral-500">({inv.coach_email})</span></span>
+						<span class="flex gap-2">
+							<button
+								class="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white hover:brightness-110"
+								onclick={() => respondInvite(inv, true)}>Accept</button
+							>
+							<button
+								class="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+								onclick={() => respondInvite(inv, false)}>Decline</button
+							>
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
 	{/if}
 
 	<section class="mt-8 border-t border-neutral-800 pt-6">

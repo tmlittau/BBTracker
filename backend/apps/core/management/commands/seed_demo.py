@@ -77,7 +77,7 @@ class Command(BaseCommand):
         parser.add_argument("--photos-dir", default="/photos",
                             help="Directory of YYYY-MM-DD subfolders with pose photos.")
         parser.add_argument("--email", default="demo@tmlittau.com")
-        parser.add_argument("--coach-email", default="coach@tmlittau.com",
+        parser.add_argument("--coach-email", default="coaching@tmlittau.com",
                             help="A coach account, linked to the demo as an active client.")
         parser.add_argument("--password", default="DemoPass2026!")
         parser.add_argument("--keep-users", nargs="*", default=["info@tmlittau.com"],
