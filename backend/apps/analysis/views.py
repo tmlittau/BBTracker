@@ -28,10 +28,12 @@ class BodyMeasurementViewSet(viewsets.ModelViewSet):
 @extend_schema(tags=["analysis"])
 class BodyAnalysisView(APIView):
     @extend_schema(
-        parameters=[OpenApiParameter("date", str)],
+        parameters=[OpenApiParameter("date", str), OpenApiParameter("start", str)],
         responses=BodyAnalysisSerializer,
     )
     def get(self, request):
         d = request.query_params.get("date")
         on_date = date_cls.fromisoformat(d) if d else date_cls.today()
-        return Response(body_analysis(request.user, on_date))
+        s = request.query_params.get("start")
+        window_start = date_cls.fromisoformat(s) if s else None
+        return Response(body_analysis(request.user, on_date, window_start))

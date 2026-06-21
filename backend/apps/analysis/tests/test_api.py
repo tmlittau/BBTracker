@@ -145,3 +145,27 @@ def test_phase2_keys_in_endpoint(api):
     assert isinstance(data["composition_trend"], list)
     assert isinstance(data["insights"], list)
     assert "derived" in data["bloodwork"] and "trends" in data["bloodwork"]
+
+
+def test_body_analysis_windows_bloodwork_to_phase(user):
+    """window_start + on_date bound bloodwork to the phase (latest within it)."""
+    from apps.protocols.models import BloodMarker, BloodResult
+
+    m = BloodMarker.objects.create(
+        name="Testosterone", slug="testosterone", unit="nmol/L",
+        ref_low_male=8, ref_high_male=29,
+    )
+    # results: before the window, inside it (high), and after on_date
+    BloodResult.objects.create(owner=user, marker=m, value=12, measured_on=date(2026, 1, 10))
+    BloodResult.objects.create(owner=user, marker=m, value=40, measured_on=date(2026, 2, 10))
+    BloodResult.objects.create(owner=user, marker=m, value=50, measured_on=date(2026, 5, 10))
+
+    res = services.body_analysis(user, date(2026, 2, 28), window_start=date(2026, 2, 1))
+    t = next(x for x in res["bloodwork"]["trends"] if x["slug"] == "testosterone")
+    assert t["value"] == 40.0 and t["flag"] == "high"  # only the in-window result counts
+
+
+def test_body_analysis_start_param(api, user):
+    resp = api.get("/api/v1/analysis/body/?date=2026-03-31&start=2026-03-01")
+    assert resp.status_code == 200
+    assert resp.json()["date"] == "2026-03-31"

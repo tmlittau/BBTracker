@@ -240,19 +240,24 @@ def egfr_ckdepi(creatinine_umol_l, age, sex):
     return round(egfr)
 
 
-def _bloodwork_metrics(owner, sex=None, age=None):
+def _bloodwork_metrics(owner, sex=None, age=None, since=None, until=None):
     """One pass over the owner's bloodwork → atherogenic ratios, derived values
     (free testosterone, eGFR) and longitudinal flags (out of range, or in range but
     trending toward a bound). Marker slugs are matched defensively (SI seed naming).
+    `since`/`until` bound the results to a window (e.g. a phase).
     """
     from apps.protocols.models import BloodResult
     from apps.protocols.services import flag_value, result_range
 
+    qs = BloodResult.objects.filter(owner=owner).select_related("marker")
+    if since is not None:
+        qs = qs.filter(measured_on__gte=since)
+    if until is not None:
+        qs = qs.filter(measured_on__lte=until)
+
     latest: dict = {}
     by_marker: dict = {}
-    for r in (
-        BloodResult.objects.filter(owner=owner).select_related("marker").order_by("measured_on")
-    ):
+    for r in qs.order_by("measured_on"):
         latest[r.marker.slug] = _f(r.value)  # ascending → latest wins
         by_marker.setdefault(r.marker_id, []).append(r)
 
@@ -327,9 +332,13 @@ def _bloodwork_metrics(owner, sex=None, age=None):
     return {"ratios": ratios, "derived": derived, "trends": trends[:8]}
 
 
-def body_analysis(owner, on_date):
-    """The full Body Analysis payload for `on_date` across profile, check-ins,
-    measurements, nutrition and bloodwork."""
+def body_analysis(owner, on_date, window_start=None):
+    """The full Body Analysis payload as of `on_date` across profile, check-ins,
+    measurements, nutrition and bloodwork.
+
+    `window_start` scopes the windowed parts (adaptive expenditure, energy balance,
+    composition trend, bloodwork) to a range — e.g. a whole phase. When omitted the
+    usual rolling windows apply (28 days for expenditure, 180 for the trend)."""
     from apps.diary.models import CheckIn
 
     profile = getattr(owner, "profile", None)
@@ -378,13 +387,14 @@ def body_analysis(owner, on_date):
 
     bmr_m = bmr_mifflin(sex, weight, height, age)
     bmr_lbm = bmr_katch_mcardle(lean_mass)
-    window_start = on_date - timedelta(days=27)
+    # Expenditure window: the phase (if given) or the rolling 28 days.
+    adaptive_start = window_start or (on_date - timedelta(days=27))
     weight_by_day = {
         c.date: _f(c.bodyweight)
         for c in check_ins
-        if c.date >= window_start and _f(c.bodyweight)
+        if c.date >= adaptive_start and _f(c.bodyweight)
     }
-    adaptive = adaptive_tdee(_intake_by_day(owner, window_start, on_date), weight_by_day)
+    adaptive = adaptive_tdee(_intake_by_day(owner, adaptive_start, on_date), weight_by_day)
     energy = {
         "bmr_mifflin": bmr_m,
         "bmr_katch_mcardle": bmr_lbm,
@@ -392,17 +402,20 @@ def body_analysis(owner, on_date):
         "adaptive": adaptive,
     }
     if adaptive:
-        recent = _intake_by_day(owner, on_date - timedelta(days=6), on_date)
-        vals = [_f(v) for v in recent.values() if _f(v) and _f(v) > 0]
+        # Energy balance vs intake: averaged over the phase, or the last 7 days.
+        intake_start = window_start or (on_date - timedelta(days=6))
+        intake = _intake_by_day(owner, intake_start, on_date)
+        vals = [_f(v) for v in intake.values() if _f(v) and _f(v) > 0]
         if vals:
             energy["recent_intake"] = round(sum(vals) / len(vals))
             energy["balance"] = round(energy["recent_intake"] - adaptive["tdee"])
         if energy["bmr"]:
             energy["activity_factor"] = round(adaptive["tdee"] / energy["bmr"], 2)
 
-    bloodwork = _bloodwork_metrics(owner, sex, age)
+    bloodwork = _bloodwork_metrics(owner, sex, age, since=window_start, until=on_date)
     assessments = _assess(sex, composition, distribution, energy, bp, bloodwork)
-    comp_trend = composition_series(owner, on_date - timedelta(days=180), on_date, sex, height)
+    comp_start = window_start or (on_date - timedelta(days=180))
+    comp_trend = composition_series(owner, comp_start, on_date, sex, height)
     insights = _insights(comp_trend, energy)
 
     return {

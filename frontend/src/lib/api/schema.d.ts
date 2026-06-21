@@ -4688,6 +4688,7 @@ export interface operations {
         parameters: {
             query?: {
                 date?: string;
+                start?: string;
             };
             header?: never;
             path?: never;

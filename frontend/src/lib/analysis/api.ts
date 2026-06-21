@@ -152,7 +152,13 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 const list = <T>(p: Paginated<T> | T[]): T[] => (Array.isArray(p) ? p : p.results);
 
 export const analysisApi = {
-	body: (date?: string) => req<BodyAnalysis>('GET', `/body/${date ? `?date=${date}` : ''}`),
+	body: (date?: string, start?: string) => {
+		const qs = new URLSearchParams();
+		if (date) qs.set('date', date);
+		if (start) qs.set('start', start);
+		const q = qs.toString();
+		return req<BodyAnalysis>('GET', `/body/${q ? `?${q}` : ''}`);
+	},
 	measurements: (type?: string) =>
 		req<Paginated<BodyMeasurement>>(
 			'GET',

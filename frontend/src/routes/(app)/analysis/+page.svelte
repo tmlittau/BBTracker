@@ -7,45 +7,82 @@
 		type BodyAnalysis,
 		type BodyMeasurement
 	} from '$lib/analysis/api';
+	import { coachingApi, type Phase } from '$lib/coaching/api';
 	import { measurementsVersion } from '$lib/analysis/store';
+	import { isoDate } from '$lib/date';
 	import LineChart from '$lib/components/ui/LineChart.svelte';
 	import MeasurementModal from '$lib/analysis/MeasurementModal.svelte';
 
 	let analysis = $state<BodyAnalysis | null>(null);
 	let measurements = $state<BodyMeasurement[]>([]);
+	let phases = $state<Phase[]>([]);
+	let selectedPhaseId = $state<number | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
 	let trendType = $state('waist');
-
 	let showAdd = $state(false);
 
-	async function load() {
-		[analysis, measurements] = await Promise.all([analysisApi.body(), analysisApi.measurements()]);
-	}
-	onMount(async () => {
+	const today = isoDate();
+	const selectedPhase = $derived(phases.find((p) => p.id === selectedPhaseId) ?? null);
+	// The window the page is scoped to: a phase's [start, end] (end = today while the
+	// phase is current), or all-time when no phase is picked.
+	const win = $derived.by(() => {
+		const p = selectedPhase;
+		if (!p) return { start: undefined, asOf: undefined, current: true, label: 'Recent' };
+		const current = today >= p.start_date && (!p.end_date || today <= p.end_date);
+		return {
+			start: p.start_date as string | undefined,
+			asOf: (current ? today : (p.end_date ?? today)) as string | undefined,
+			current,
+			label: current ? 'Recent' : 'Final'
+		};
+	});
+
+	async function loadBody() {
+		loading = true;
+		error = null;
 		try {
-			await load();
+			analysis = await analysisApi.body(win.asOf, win.start);
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
 			loading = false;
 		}
+	}
+
+	onMount(async () => {
+		try {
+			[phases, measurements] = await Promise.all([
+				coachingApi.phases(),
+				analysisApi.measurements()
+			]);
+			// Default to the phase that contains today, if any.
+			selectedPhaseId =
+				phases.find((p) => today >= p.start_date && (!p.end_date || today <= p.end_date))?.id ??
+				null;
+			await loadBody();
+		} catch (e) {
+			error = (e as Error).message;
+			loading = false;
+		}
 	});
 
-	// Reload when a measurement is added via the layout's modal.
+	// Reload when a measurement is added via the modal.
 	let lastVer = 0;
 	$effect(() => {
 		const v = $measurementsVersion;
 		if (v !== lastVer) {
 			lastVer = v;
-			load();
+			analysisApi.measurements().then((m) => (measurements = m));
+			loadBody();
 		}
 	});
 
 	async function removeMeasurement(id: number) {
 		await analysisApi.deleteMeasurement(id);
-		await load();
+		measurements = await analysisApi.measurements();
+		await loadBody();
 	}
 
 	const unitFor = (t: string) => MEASUREMENT_TYPES.find((m) => m.key === t)?.unit ?? '';
@@ -74,10 +111,16 @@
 		{ points: compTrend.map((p) => ({ x: p.date, y: p.lean_mass_kg })), color: '#34d399', label: 'Lean', dots: true }
 	]);
 
+	// Measurements scoped to the selected phase window (all-time when none picked).
+	const windowMeasurements = $derived(
+		selectedPhase && win.start && win.asOf
+			? measurements.filter((m) => m.date >= win.start! && m.date <= win.asOf!)
+			: measurements
+	);
 	// Trend: history for the selected measurement type (oldest→newest).
 	const trendSeries = $derived([
 		{
-			points: measurements
+			points: windowMeasurements
 				.filter((m) => m.type === trendType)
 				.map((m) => ({ x: m.date, y: Number(m.value) }))
 				.sort((a, b) => (a.x < b.x ? -1 : 1)),
@@ -85,7 +128,7 @@
 			dots: true
 		}
 	]);
-	const recent = $derived(measurements.slice(0, 12));
+	const recent = $derived(windowMeasurements.slice(0, 12));
 	const fmtNum = (v: number | null | undefined, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 </script>
 
@@ -93,12 +136,31 @@
 	Estimates from anthropometric formulas — informational, not medical advice. Each figure shows its
 	source; a DEXA/scan reading always overrides an estimate.
 </p> -->
-<button
+<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="flex items-center gap-2">
+		<label for="phase-sel" class="text-sm text-neutral-400">Phase</label>
+		<select
+			id="phase-sel"
+			bind:value={selectedPhaseId}
+			onchange={loadBody}
+			class="rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+		>
+			<option value={null}>All time</option>
+			{#each phases as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+		</select>
+		{#if selectedPhase}
+			<span class="text-xs text-neutral-500">
+				{selectedPhase.start_date} → {win.current ? 'now' : (selectedPhase.end_date ?? 'ongoing')}
+			</span>
+		{/if}
+	</div>
+	<button
 		class="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
 		onclick={() => (showAdd = true)}
 	>
 		New measurement
 	</button>
+</div>
 {#if loading}
 	<p class="mt-6 text-neutral-400">Loading…</p>
 {:else if error}
@@ -140,7 +202,7 @@
 				<p class="mt-1 text-2xl font-bold {energy.balance < 0 ? 'text-sky-300' : energy.balance > 0 ? 'text-amber-300' : ''}">
 					{energy.balance > 0 ? '+' : ''}{energy.balance} <span class="text-sm font-normal text-neutral-500">kcal/day</span>
 				</p>
-				<p class="text-xs text-neutral-500">intake {energy.recent_intake} vs expenditure {adaptive?.tdee}</p>
+				<p class="text-xs text-neutral-500">avg intake {energy.recent_intake} vs expenditure {adaptive?.tdee}</p>
 			{:else}
 				<p class="mt-1 text-sm text-neutral-400">Needs adaptive expenditure + recent intake.</p>
 			{/if}
@@ -183,7 +245,9 @@
 			</div>
 			<div class="mt-3"><LineChart series={compSeries} unit="kg" /></div>
 			<p class="mt-2 text-xs text-neutral-500">
-				Bodyweight split into fat vs lean mass at each body-fat reading over the last ~6 months.
+				Bodyweight split into fat vs lean mass at each body-fat reading{selectedPhase
+					? ` across ${selectedPhase.name}`
+					: ' over the last ~6 months'}.
 			</p>
 		</section>
 	{/if}
@@ -256,25 +320,7 @@
 		</section>
 	{/if}
 
-	<!-- Recent measurements -->
-	{#if recent.length}
-		<section class="mt-8">
-			<h2 class="font-medium">Recent measurements</h2>
-			<ul class="mt-3 divide-y divide-neutral-800 text-sm">
-				{#each recent as m (m.id)}
-					<li class="flex items-center justify-between py-1.5">
-						<span>{typeLabel(m.type)} <span class="text-neutral-500">· {Number(m.value)} {m.unit}{#if m.method} · {m.method}{/if}</span></span>
-						<span class="flex items-center gap-3 text-xs text-neutral-500">
-							{m.date}
-							<button class="text-neutral-600 hover:text-red-400" aria-label="Delete" onclick={() => removeMeasurement(m.id)}>✕</button>
-						</span>
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{/if}
-
-	<!-- Trend -->
+	<!-- Trend (selectable measurement type, over the window) -->
 	<section class="mt-8 rounded-lg border border-neutral-800 p-4">
 		<div class="flex items-center justify-between">
 			<h2 class="font-medium">Trend</h2>
@@ -288,6 +334,24 @@
 			<p class="mt-3 text-sm text-neutral-500">Log this measurement on at least two dates to see a trend.</p>
 		{/if}
 	</section>
+
+	<!-- Measurements: final values for the phase (or recent) -->
+	{#if recent.length}
+		<section class="mt-8">
+			<h2 class="font-medium">{win.label} measurements</h2>
+			<ul class="mt-3 divide-y divide-neutral-800 text-sm">
+				{#each recent as m (m.id)}
+					<li class="flex items-center justify-between py-1.5">
+						<span>{typeLabel(m.type)} <span class="text-neutral-500">· {Number(m.value)} {m.unit}{#if m.method} · {m.method}{/if}</span></span>
+						<span class="flex items-center gap-3 text-xs text-neutral-500">
+							{m.date}
+							<button class="text-neutral-600 hover:text-red-400" aria-label="Delete" onclick={() => removeMeasurement(m.id)}>✕</button>
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 {/if}
 
 <MeasurementModal bind:open={showAdd} onsaved={() => measurementsVersion.update((n) => n + 1)} />
