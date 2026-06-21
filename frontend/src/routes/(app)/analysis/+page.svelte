@@ -9,6 +9,7 @@
 	} from '$lib/analysis/api';
 	import { measurementsVersion } from '$lib/analysis/store';
 	import LineChart from '$lib/components/ui/LineChart.svelte';
+	import MeasurementModal from '$lib/analysis/MeasurementModal.svelte';
 
 	let analysis = $state<BodyAnalysis | null>(null);
 	let measurements = $state<BodyMeasurement[]>([]);
@@ -16,6 +17,8 @@
 	let error = $state<string | null>(null);
 
 	let trendType = $state('waist');
+
+	let showAdd = $state(false);
 
 	async function load() {
 		[analysis, measurements] = await Promise.all([analysisApi.body(), analysisApi.measurements()]);
@@ -86,11 +89,16 @@
 	const fmtNum = (v: number | null | undefined, d = 1) => (v == null ? '—' : Number(v).toFixed(d));
 </script>
 
-<p class="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+<!-- <p class="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
 	Estimates from anthropometric formulas — informational, not medical advice. Each figure shows its
 	source; a DEXA/scan reading always overrides an estimate.
-</p>
-
+</p> -->
+<button
+		class="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+		onclick={() => (showAdd = true)}
+	>
+		New measurement
+	</button>
 {#if loading}
 	<p class="mt-6 text-neutral-400">Loading…</p>
 {:else if error}
@@ -281,3 +289,5 @@
 		{/if}
 	</section>
 {/if}
+
+<MeasurementModal bind:open={showAdd} onsaved={() => measurementsVersion.update((n) => n + 1)} />

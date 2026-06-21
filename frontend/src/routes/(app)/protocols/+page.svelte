@@ -279,7 +279,6 @@
 />
 
 <div class="flex items-center justify-between">
-	<h1 class="text-xl font-semibold">Protocols</h1>
 	<div class="flex flex-wrap gap-2">
 		<a
 			href="/protocols/manage"

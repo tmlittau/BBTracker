@@ -148,12 +148,12 @@
 	}
 </script>
 
-<h1 class="text-xl font-semibold">Phases timeline</h1>
+<!-- <h1 class="text-xl font-semibold">Phases timeline</h1>
 <p class="mt-1 text-sm text-neutral-400">
 	A phase spans a date range; within it, dated <em>adjustments</em> record how the prescription
 	(nutrition target, program, protocol) evolves. The dashboard resolves whichever adjustment is in
 	force today.
-</p>
+</p> -->
 
 <form class="mt-6 max-w-2xl space-y-3 rounded-lg border border-neutral-800 p-4" onsubmit={save}>
 	<h2 class="text-sm font-medium">{editing ? `Edit "${editing.name}"` : 'New phase'}</h2>

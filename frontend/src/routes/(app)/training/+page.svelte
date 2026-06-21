@@ -28,22 +28,12 @@
 		goto(`/training/log?day=${dayId}`);
 	}
 	function startEmpty() {
-		goto('/training/log');
+		goto('/training/log?day=empty');
 	}
 	function resume(id: number) {
 		goto(`/training/log?session=${id}`);
 	}
 </script>
-
-<div class="flex items-center justify-between">
-	<h1 class="text-xl font-semibold">Training</h1>
-	<button
-		onclick={startEmpty}
-		class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
-	>
-		Empty workout
-	</button>
-</div>
 
 {#if loading}
 	<p class="mt-6 text-neutral-400">Loading…</p>
@@ -114,6 +104,16 @@
 			</p>
 		{/if}
 	</section>
+
+	<div class="flex items-right justify-between my-6">
+		<button
+			onclick={startEmpty}
+			class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+		>
+			Empty workout
+		</button>
+	</div>
+	
 
 	<!-- Recent workouts -->
 	<section class="mt-8">

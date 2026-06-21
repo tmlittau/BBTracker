@@ -117,7 +117,9 @@
 			// Resume an existing (usually in-progress) session, or start from a day.
 			const sessionParam = $page.url.searchParams.get('session');
 			const dayParam = $page.url.searchParams.get('day');
+			console.log(sessionParam, dayParam);
 			if (sessionParam) session = await trainingApi.session(Number(sessionParam));
+			else if (dayParam === 'empty') await startEmpty();
 			else if (dayParam) await startDay(Number(dayParam));
 		} catch (e) {
 			error = (e as Error).message;

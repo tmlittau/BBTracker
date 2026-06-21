@@ -51,16 +51,6 @@
 	}
 </script>
 
-<div class="flex items-center justify-between">
-	<div>
-		<h1 class="text-xl font-semibold">Today</h1>
-		
-	</div>
-	<a class="arrow-link" href="/phases">Manage Phases</a>
-	<a class="arrow-link" href="/check-in">Check-in Overview</a>
-	<a class="arrow-link" href="/analysis">Analysis</a>
-</div>
-
 {#if today}
 	<!-- Current phase banner -->
 	<section
@@ -247,18 +237,18 @@
 	<!-- <p class="mb-2 w-1/2 text-sm text-neutral-400 float-right">
 			
 	</p> -->
-	<div class="mt-4 flex w-1/2 gap-3 xs:w-full">
-		<a href="/week-prep" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
-			Week prep
-		</a>
+	<div class="mt-4 flex w-1/2 gap-3 sm:w-full">
 		<a href="/phases" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
 			Phases
 		</a>
 		<a href="/check-in" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
-			Check-ins
+			Logs
 		</a>
 		<a href="/analysis" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
 			Analysis
+		</a>
+		<a href="/week-prep" class="inline-flex flex-1 items-center justify-center rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-200 transition hover:border-orange-400 hover:text-orange-300">
+			Week
 		</a>
 	</div>
 {:else}

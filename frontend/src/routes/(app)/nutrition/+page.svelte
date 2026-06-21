@@ -211,8 +211,6 @@
 	};
 </script>
 
-<h1 class="text-xl font-semibold">Nutrition</h1>
-
 <!-- Date navigator -->
 <div class="mt-4 flex items-center justify-between rounded-lg border border-neutral-800 px-3 py-2">
 	<button class="px-2 text-neutral-400 hover:text-white" onclick={() => shiftDate(-1)}>‹ Prev</button>

@@ -61,7 +61,6 @@
 </script>
 
 <div class="flex items-center justify-between">
-	<h1 class="text-xl font-semibold">Progress diary</h1>
 	<a href="/diary/check-in" class="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:brightness-110">New check-in</a>
 </div>
 
