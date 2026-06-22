@@ -290,6 +290,7 @@ export interface MatrixCell {
 	week: number;
 	scheduled: number;
 	planned_amount: string | null;
+	daily_amount: string | null;
 	taken_count: number;
 	skipped_count: number;
 	taken_amount: string;
@@ -307,7 +308,7 @@ export interface MatrixRow {
 }
 export interface PhaseDoseMatrix {
 	phase: { id: number; name: string; start_date: string; end_date: string | null };
-	weeks: { index: number; start: string; end: string }[];
+	weeks: { index: number; start: string; end: string; protocol: string | null }[];
 	rows: MatrixRow[];
 }
 

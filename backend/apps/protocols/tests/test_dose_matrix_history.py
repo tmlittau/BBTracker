@@ -28,9 +28,9 @@ def _oral(user, name):
     )
 
 
-def _item(protocol, compound):
+def _item(protocol, compound, dose="10"):
     return ProtocolItem.objects.create(
-        protocol=protocol, compound=compound, dose_amount="10", dose_unit="mg",
+        protocol=protocol, compound=compound, dose_amount=dose, dose_unit="mg",
         route="oral", frequency="daily", times_of_day=["am"],
     )
 
@@ -71,16 +71,45 @@ def test_matrix_preserves_history_across_adjustment(user):
     names = {r["name"] for r in m["rows"]}
     assert {"Xandrol", "Yfenil"} <= names  # both kept, not just the current protocol
 
+    # Each week is labelled with the protocol in force; the adjustment is at week 2.
+    assert [w["protocol"] for w in m["weeks"]] == ["A", "A", "B", "B"]
+
     xc = _row(m, "Xandrol")["cells"]
     yc = _row(m, "Yfenil")["cells"]
-    # Dropped compound: logged in the early weeks, then nothing scheduled after.
+    # Dropped compound: logged in the early weeks, then nothing scheduled (and no dose
+    # shown) after — it is not carried into the weeks the new protocol governs.
     assert xc[0]["taken_count"] == 1 and xc[1]["taken_count"] == 1
     assert xc[2]["scheduled"] == 0 and xc[2]["state"] == "none"
     assert xc[3]["scheduled"] == 0 and xc[3]["state"] == "none"
-    # New compound: not scheduled before its week; logged now; planned in the future.
+    assert xc[2]["daily_amount"] is None and xc[3]["daily_amount"] is None
+    # New compound: not scheduled (no dose) before its week; logged now; planned ahead.
     assert yc[0]["scheduled"] == 0 and yc[1]["scheduled"] == 0
+    assert yc[0]["daily_amount"] is None and yc[1]["daily_amount"] is None
     assert yc[2]["taken_count"] == 1
     assert yc[3]["scheduled"] > 0 and yc[3]["state"] == "planned"
+
+
+def test_daily_dose_reflects_per_week_protocol(user):
+    """A compound kept across the adjustment but at a different dose shows the dose in
+    force *that* week — not the currently-active protocol's dose for every week."""
+    start = TODAY - timedelta(days=14)
+    phase = Phase.objects.create(
+        owner=user, name="Block", phase_type="bulk",
+        start_date=start, end_date=TODAY + timedelta(days=7),
+    )
+    a = Protocol.objects.create(owner=user, name="A", is_active=False)
+    b = Protocol.objects.create(owner=user, name="B", is_active=True)
+    shared = _oral(user, "Anavar")  # in both protocols; dose raised by the adjustment
+    _item(a, shared, dose="10")
+    _item(b, shared, dose="30")
+    PhaseAdjustment.objects.create(phase=phase, effective_date=start, protocol=a)
+    PhaseAdjustment.objects.create(phase=phase, effective_date=TODAY, protocol=b)
+
+    cells = _row(phase_dose_matrix(user, phase, b), "Anavar")["cells"]
+    assert float(cells[0]["daily_amount"]) == 10  # early weeks keep A's lower dose
+    assert float(cells[1]["daily_amount"]) == 10
+    assert float(cells[2]["daily_amount"]) == 30  # later weeks use B's raised dose
+    assert float(cells[3]["daily_amount"]) == 30
 
 
 def test_in_force_endpoint_returns_dated_protocol(user):
