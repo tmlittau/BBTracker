@@ -794,8 +794,9 @@ def phase_dose_matrix(owner, phase, protocol):
                 )
                 scheduled = len(sched_days) * tpd
                 planned_amt = per * scheduled if per is not None else None
+                daily_amt = per * tpd if per is not None else None
             else:
-                scheduled, planned_amt = 0, None
+                scheduled, planned_amt, daily_amt = 0, None, None
 
             if ws > today:
                 state = "planned" if scheduled else "none"
@@ -810,6 +811,7 @@ def phase_dose_matrix(owner, phase, protocol):
                     "week": w["index"],
                     "scheduled": scheduled,
                     "planned_amount": str(_q(planned_amt)) if planned_amt is not None else None,
+                    "daily_amount": str(_q(daily_amt)) if daily_amt is not None else None,
                     "taken_count": taken_n,
                     "skipped_count": skipped_n,
                     "taken_amount": str(_q(taken_amt)),
@@ -829,7 +831,12 @@ def phase_dose_matrix(owner, phase, protocol):
             "end_date": phase.end_date.isoformat() if phase.end_date else None,
         },
         "weeks": [
-            {"index": w["index"], "start": w["start"].isoformat(), "end": w["end"].isoformat()}
+            {
+                "index": w["index"],
+                "start": w["start"].isoformat(),
+                "end": w["end"].isoformat(),
+                "protocol": (week_plan[w["index"]][0].name if week_plan[w["index"]][0] else None),
+            }
             for w in weeks
         ],
         "rows": rows,

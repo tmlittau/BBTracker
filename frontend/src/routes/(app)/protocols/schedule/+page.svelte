@@ -67,16 +67,27 @@
 		none: 'text-neutral-700'
 	};
 
-	// Main dose number for a cell: weekly = summed taken (or planned for future
-	// weeks); daily = the per-day dose straight from the protocol.
+	// Main dose number for a cell — always the plan in force *that* week, so the table
+	// reflects the true history across adjustments (not the currently-active protocol).
+	// Weekly = summed dose (taken for logged weeks, else planned); daily = per-day dose.
 	function mainDose(row: MatrixRow, cell: MatrixCell): string {
 		if (row.mode === 'weekly') {
 			if (cell.state === 'planned') return cell.planned_amount ? `${Math.round(num(cell.planned_amount))} ${row.unit}` : '—';
 			if (cell.taken_count || cell.skipped_count) return `${Math.round(num(cell.taken_amount))} ${row.unit}`;
 			return cell.planned_amount ? `${Math.round(num(cell.planned_amount))} ${row.unit}` : '—';
 		}
-		return row.daily_dose ? `${Math.round(num(row.daily_dose))} ${row.unit}/d` : '—';
+		return cell.daily_amount ? `${Math.round(num(cell.daily_amount))} ${row.unit}/d` : '—';
 	}
+
+	// Weeks where the in-force protocol changes vs. the previous week — drawn with a
+	// divider + label so an adjustment is obvious at a glance.
+	const adjustmentWeeks = $derived.by(() => {
+		const out = new Set<number>();
+		const ws = matrix?.weeks ?? [];
+		for (let i = 1; i < ws.length; i++)
+			if (ws[i].protocol !== ws[i - 1].protocol) out.add(ws[i].index);
+		return out;
+	});
 
 	function badge(cell: MatrixCell): string {
 		const parts: string[] = [];
@@ -140,9 +151,14 @@
 					<tr class="text-xs text-neutral-500">
 						<th class="sticky left-0 z-10 bg-neutral-950 px-2 py-2 text-left font-medium">Item</th>
 						{#each matrix.weeks as w (w.index)}
-							<th class="px-2 py-2 text-center font-medium whitespace-nowrap">
+							<th class="px-2 py-2 text-center font-medium whitespace-nowrap {adjustmentWeeks.has(w.index) ? 'border-l-2 border-orange-500/60' : ''}">
 								<div>Wk {w.index + 1}</div>
 								<div class="text-[10px] font-normal text-neutral-600">{fmt(w.start)}</div>
+								{#if (w.index === 0 || adjustmentWeeks.has(w.index)) && w.protocol}
+									<div class="text-[9px] font-medium text-orange-400">
+										{adjustmentWeeks.has(w.index) ? '→ ' : ''}{w.protocol}
+									</div>
+								{/if}
 							</th>
 						{/each}
 					</tr>
@@ -162,7 +178,7 @@
 								</div>
 							</td>
 							{#each row.cells as cell (cell.week)}
-								<td class="px-1 py-1 text-center">
+								<td class="px-1 py-1 text-center {adjustmentWeeks.has(cell.week) ? 'border-l-2 border-orange-500/30' : ''}">
 									<div class="rounded px-1.5 py-1 {STATE_CLASS[cell.state]}">
 										<div class="whitespace-nowrap {cell.state === 'skipped' && !cell.taken_count ? 'line-through' : ''}">
 											{mainDose(row, cell)}
@@ -180,7 +196,7 @@
 			</table>
 		</div>
 		<p class="mt-3 text-xs text-neutral-600">
-			Legend: ✓ taken · ⊘ skipped · ·N scheduled this week.
+			Legend: ✓ taken · ⊘ skipped · ·N scheduled this week · <span class="text-orange-400">orange divider</span> = protocol adjusted (new plan from that week).
 		</p>
 	{/if}
 {/if}
