@@ -636,16 +636,56 @@ def protocol_adherence(owner, protocol, window_days=28):
     return rows
 
 
-def phase_dose_matrix(owner, phase, protocol):
-    """Week-by-week dose table for a phase, from the protocol's plan + the user's logs.
+def _matrix_row_meta(key, rep, obj):
+    """Row metadata for the dose table — name / group / unit / mode + the current daily
+    dose. `rep` is the most recent prescribing item (None for a logged-only / dropped
+    row); `obj` is the underlying Compound or Supplement."""
+    is_compound = key[0] == "compound"
+    route = (rep.route if rep and rep.route else (obj.default_route if is_compound else "")) or ""
+    injectable_anabolic = (
+        is_compound and obj.compound_class == "anabolic" and route in INJECTABLE_ROUTES
+    )
+    if not is_compound:
+        group = "Supplements"
+    elif obj.compound_class == "anabolic":
+        group = "Injectable steroids" if route in INJECTABLE_ROUTES else "Oral steroids"
+    else:
+        group = {"peptide": "Peptides", "sarm": "SARMs", "ancillary": "Ancillaries"}.get(
+            obj.compound_class, "Other"
+        )
+    if rep is not None:
+        per = Decimal(str(rep.dose_amount)) if rep.dose_amount is not None else None
+        tpd = times_per_day_count(rep.times_of_day, rep.frequency)
+        daily_dose = str(_q(per * tpd)) if per is not None else None
+        unit, item_id = rep.dose_unit, rep.id
+    else:  # dropped/logged-only row: no current plan, synthesise a stable unique id
+        daily_dose, unit = None, (obj.default_unit if is_compound else "serving")
+        item_id = -(key[1] if is_compound else key[1] + 10_000_000)
+    return {
+        "item_id": item_id,
+        "name": str(obj),
+        "kind": key[0],
+        "group": group,
+        "mode": "weekly" if injectable_anabolic else "daily",
+        "unit": unit,
+        "daily_dose": daily_dose,
+    }
 
-    Each row is a protocol item; each column a 7-day week of the phase. Past/current
-    weeks reflect what was actually logged (taken / skipped); future weeks show the
-    current plan — so adjusting the protocol only changes weeks not yet logged.
+
+def phase_dose_matrix(owner, phase, protocol):
+    """Week-by-week dose table for a phase — a historical + plan record across changes.
+
+    Each row is a compound/supplement that was prescribed at any point in the phase OR
+    logged during it; each column is a 7-day week. Each week's plan is resolved from the
+    protocol in force that week (so a phase adjustment that drops a compound, adds one, or
+    changes a dose is reflected per week), while past/current weeks show what was actually
+    logged. An adjustment therefore changes upcoming weeks without erasing the compounds
+    or doses that came before — a dropped compound keeps its logged history then reads
+    `none`, and a newly-introduced one appears only from its week.
     Injectable anabolics report a summed **weekly** dose; everything else its **daily**
     dose. Cell `state`: done / partial / skipped / planned (future) / none.
     """
-    from .models import DoseLog
+    from .models import Compound, DoseLog, Supplement
 
     start = phase.start_date
     end = phase.end_date or timezone.now().date()
@@ -658,55 +698,85 @@ def phase_dose_matrix(owner, phase, protocol):
         weeks.append({"index": len(weeks), "start": d, "end": w_end})
         d += timedelta(days=7)
 
-    anchor = dose_anchor(protocol)
+    def _key(it):
+        return ("compound", it.compound_id) if it.compound_id else ("supplement", it.supplement_id)
 
-    # All doses in the phase window in ONE query, bucketed by compound/supplement —
-    # avoids a per-item query inside the loop below.
-    logs_by_compound: dict[int, list] = {}
-    logs_by_supplement: dict[int, list] = {}
+    # The plan in force at the start of each week, indexed by (kind, ref_id). The protocol
+    # can change across the phase via adjustments; resolve from the adjustment timeline
+    # (fetched once, not per week) and fall back to the passed protocol.
+    from apps.core.models import PhaseAdjustment
+
+    adjustments = list(
+        PhaseAdjustment.objects.filter(
+            phase__owner=owner, protocol__isnull=False, effective_date__lte=end
+        )
+        .select_related("protocol")
+        .order_by("-effective_date", "-id")
+    )
+
+    def _in_force(on):
+        for adj in adjustments:
+            if adj.effective_date <= on:
+                return adj.protocol
+        return protocol
+
+    plan_cache: dict[int, dict] = {}
+    week_plan = []  # per week: (protocol_or_None, {(kind, ref): item})
+    for w in weeks:
+        pf = _in_force(w["start"])
+        if pf is None:
+            week_plan.append((None, {}))
+            continue
+        if pf.id not in plan_cache:
+            plan_cache[pf.id] = {
+                _key(it): it
+                for it in pf.items.select_related("compound", "supplement").all()
+                if it.compound_id or it.supplement_id
+            }
+        week_plan.append((pf, plan_cache[pf.id]))
+
+    # Every dose logged in the phase window, bucketed by (kind, ref_id) — one query.
+    logs_by_key: dict[tuple, list] = {}
     for cid, sid, ta, amt, st in DoseLog.objects.filter(
         owner=owner, taken_at__date__gte=start, taken_at__date__lte=end
     ).values_list("compound_id", "supplement_id", "taken_at", "amount", "status"):
-        if cid is not None:
-            logs_by_compound.setdefault(cid, []).append((ta, amt, st))
-        elif sid is not None:
-            logs_by_supplement.setdefault(sid, []).append((ta, amt, st))
+        key = ("compound", cid) if cid else ("supplement", sid) if sid else None
+        if key is not None:
+            logs_by_key.setdefault(key, []).append((ta, amt, st))
+
+    # Rows = everything ever planned in the phase ∪ everything logged in it.
+    keys = set(logs_by_key)
+    for _pf, items in week_plan:
+        keys |= set(items)
+
+    # Underlying objects. Prescribed rows already carry their compound/supplement
+    # (select_related on the items); only logged-only / dropped keys need a lookup.
+    objs = {}
+    for _pf, items in week_plan:
+        for key, it in items.items():
+            objs.setdefault(key, it.compound or it.supplement)
+    miss_c = [r for (k, r) in keys if k == "compound" and (k, r) not in objs]
+    miss_s = [r for (k, r) in keys if k == "supplement" and (k, r) not in objs]
+    if miss_c:
+        objs.update({("compound", c.id): c for c in Compound.objects.filter(id__in=miss_c)})
+    if miss_s:
+        objs.update({("supplement", s.id): s for s in Supplement.objects.filter(id__in=miss_s)})
 
     rows = []
-    for item in protocol.items.select_related("compound", "supplement").all():
-        obj = item.compound or item.supplement
+    for key in keys:
+        obj = objs.get(key)
         if obj is None:
             continue
-        is_compound = item.compound_id is not None
-        route = item.route or (item.compound.default_route if item.compound else "")
-        injectable_anabolic = (
-            is_compound
-            and item.compound.compound_class == "anabolic"
-            and route in INJECTABLE_ROUTES
-        )
-        mode = "weekly" if injectable_anabolic else "daily"
-        per = Decimal(str(item.dose_amount)) if item.dose_amount is not None else None
-        # Administrations per dosing day (e.g. Waking + Night = 2) — the daily dose
-        # is the per-administration amount times this.
-        times_per_day = times_per_day_count(item.times_of_day, item.frequency)
-        # Subgroup for the dose table, so it can be split into per-class sections.
-        if not is_compound:
-            group = "Supplements"
-        elif item.compound.compound_class == "anabolic":
-            group = "Injectable steroids" if route in INJECTABLE_ROUTES else "Oral steroids"
-        else:
-            group = {
-                "peptide": "Peptides",
-                "sarm": "SARMs",
-                "ancillary": "Ancillaries",
-            }.get(item.compound.compound_class, "Other")
-
-        log_val = item.compound_id if is_compound else item.supplement_id
-        logs = (logs_by_compound if is_compound else logs_by_supplement).get(log_val, [])
+        # Most recent week that prescribes this row → its current name/dose/unit.
+        rep = next((items[key] for _pf, items in reversed(week_plan) if key in items), None)
+        logs = logs_by_key.get(key, [])
 
         cells = []
-        for w in weeks:
+        for wi, w in enumerate(weeks):
             ws, we = w["start"], w["end"]
+            pf, items = week_plan[wi]
+            item = items.get(key)  # this row's plan THIS week (None if not prescribed then)
+
             taken_amt, taken_n, skipped_n = Decimal("0"), 0, 0
             for ta, amt, status in logs:
                 if ws <= ta.date() <= we:
@@ -715,13 +785,19 @@ def phase_dose_matrix(owner, phase, protocol):
                     else:
                         taken_n += 1
                         taken_amt += Decimal(str(amt or 0))
-            sched_days = scheduled_dose_dates(
-                item.frequency, item.days_of_week, ws, we, anchor
-            )
-            scheduled = len(sched_days) * times_per_day
-            planned_amt = per * scheduled if per is not None else None
-            future = ws > today
-            if future:
+
+            if item is not None:
+                per = Decimal(str(item.dose_amount)) if item.dose_amount is not None else None
+                tpd = times_per_day_count(item.times_of_day, item.frequency)
+                sched_days = scheduled_dose_dates(
+                    item.frequency, item.days_of_week, ws, we, dose_anchor(pf)
+                )
+                scheduled = len(sched_days) * tpd
+                planned_amt = per * scheduled if per is not None else None
+            else:
+                scheduled, planned_amt = 0, None
+
+            if ws > today:
                 state = "planned" if scheduled else "none"
             elif taken_n:
                 state = "done" if (not scheduled or taken_n >= scheduled) else "partial"
@@ -741,18 +817,9 @@ def phase_dose_matrix(owner, phase, protocol):
                 }
             )
 
-        rows.append(
-            {
-                "item_id": item.id,
-                "name": str(obj),
-                "kind": "compound" if is_compound else "supplement",
-                "group": group,
-                "mode": mode,
-                "unit": item.dose_unit,
-                "daily_dose": str(_q(per * times_per_day)) if per is not None else None,
-                "cells": cells,
-            }
-        )
+        rows.append({**_matrix_row_meta(key, rep, obj), "cells": cells})
+
+    rows.sort(key=lambda r: r["name"].lower())
 
     return {
         "phase": {
