@@ -1341,6 +1341,29 @@ export interface paths {
         patch: operations["v1_protocols_dose_logs_partial_update"];
         trace?: never;
     };
+    "/api/v1/protocols/in-force/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The protocol prescribed on ?date= per the phase-adjustment timeline (or null).
+         *
+         *     Lets the dashboard's "not logged yesterday" reflect the plan that actually applied
+         *     that day — the old protocol on the transitory day an adjustment takes effect —
+         *     rather than whatever is active now.
+         */
+        get: operations["v1_protocols_in_force_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols/injection-sites/": {
         parameters: {
             query?: never;
@@ -7912,6 +7935,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoseLog"];
+                };
+            };
+        };
+    };
+    v1_protocols_in_force_retrieve: {
+        parameters: {
+            query?: {
+                /** @description ISO date (default today). */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Protocol"];
                 };
             };
         };

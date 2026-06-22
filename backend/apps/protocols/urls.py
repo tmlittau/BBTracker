@@ -10,6 +10,7 @@ from .views import (
     DoseLogViewSet,
     InjectionSiteViewSet,
     PhaseLevelsView,
+    ProtocolInForceView,
     ProtocolItemViewSet,
     ProtocolViewSet,
     SupplementViewSet,
@@ -33,5 +34,6 @@ urlpatterns = [
     path("plot/", CompoundPlotView.as_view(), name="compound-plot"),
     path("week-prep/", WeekPrepView.as_view(), name="week-prep"),
     path("phase-levels/", PhaseLevelsView.as_view(), name="phase-levels"),
+    path("in-force/", ProtocolInForceView.as_view(), name="protocol-in-force"),
     *router.urls,
 ]

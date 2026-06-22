@@ -19,6 +19,9 @@
 	let protocols = $state<Protocol[]>([]);
 	let todayDoses = $state<DoseLog[]>([]);
 	let yesterdayDoses = $state<DoseLog[]>([]);
+	// The protocol prescribed yesterday (may differ from today's active one on the day
+	// a phase adjustment takes effect) — "missed yesterday" is computed against it.
+	let yesterdayProtocol = $state<Protocol | null>(null);
 	let compounds = $state<Compound[]>([]);
 	let release = $state<ProtocolRelease | null>(null);
 	let sites = $state<SiteRecency[]>([]);
@@ -79,9 +82,9 @@
 	// slot; untimed daily items collapse to one "Anytime". PRN is never "missed".
 	const yesterdayDate = new Date(yesterday + 'T12:00:00');
 	const missedYesterday = $derived(
-		(active?.items ?? []).flatMap((item) => {
+		(yesterdayProtocol?.items ?? []).flatMap((item) => {
 			if (item.frequency === 'prn' || item.frequency === 'as_needed') return [];
-			if (!isScheduledToday(item, active?.started_on ?? null, yesterdayDate)) return [];
+			if (!isScheduledToday(item, yesterdayProtocol?.started_on ?? null, yesterdayDate)) return [];
 			const logged = loggedYesterday(item);
 			const times = [...(item.times_of_day ?? [])].sort(
 				(a, b) => (SLOT_ORDER[a] ?? 0) - (SLOT_ORDER[b] ?? 0)
@@ -136,9 +139,10 @@
 
 	// --- data loading ---
 	async function loadDoses() {
-		[todayDoses, yesterdayDoses] = await Promise.all([
+		[todayDoses, yesterdayDoses, yesterdayProtocol] = await Promise.all([
 			protocolsApi.doses({ date: today }),
-			protocolsApi.doses({ date: yesterday })
+			protocolsApi.doses({ date: yesterday }),
+			protocolsApi.inForce(yesterday)
 		]);
 	}
 	async function loadSites() {

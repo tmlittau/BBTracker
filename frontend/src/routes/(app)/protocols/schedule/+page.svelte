@@ -122,7 +122,8 @@
 	Weekly plan vs. what you logged. Injectable anabolics are summed to a <strong>weekly</strong> dose;
 	everything else lists its <strong>daily</strong> dose. Past/current weeks reflect your logs
 	(<span class="text-green-400">taken ✓</span>, <span class="text-red-400">skipped ⊘</span>); future
-	weeks show the current plan, so adjusting the protocol only changes weeks you haven't logged yet.
+	weeks show the plan in force that week. It spans the whole phase across protocol changes —
+	a dropped compound keeps its logged weeks (then blank), and a newly-added one appears from its week.
 </p>
 
 {#if loading}
@@ -131,7 +132,7 @@
 	<p class="mt-6 text-sm text-amber-400">{error}</p>
 {:else if matrix}
 	{#if matrix.rows.length === 0}
-		<p class="mt-6 text-sm text-neutral-500">This protocol has no items yet.</p>
+		<p class="mt-6 text-sm text-neutral-500">Nothing planned or logged in this phase yet.</p>
 	{:else}
 		<div class="mt-4 overflow-x-auto">
 			<table class="min-w-full border-separate border-spacing-0 text-sm">

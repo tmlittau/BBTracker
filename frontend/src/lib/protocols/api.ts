@@ -396,6 +396,9 @@ export const protocolsApi = {
 		req<CompoundPlot>('POST', '/plot/', payload),
 	weekPrep: (start: string) => req<WeekPrepPlan>('GET', `/week-prep/?start=${start}`),
 
+	// The protocol prescribed on a date (phase-adjustment timeline), or null.
+	inForce: (date: string) => req<Protocol | null>('GET', `/in-force/?date=${date}`),
+
 	phaseMatrix: (protocolId: number, phaseId?: number) =>
 		req<PhaseDoseMatrix>(
 			'GET',

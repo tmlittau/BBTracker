@@ -52,6 +52,7 @@ from .services import (
     phase_dose_matrix,
     plot_compounds,
     protocol_adherence,
+    protocol_in_force,
     protocol_release_curves,
     suggest_next_site,
     week_prep_plan,
@@ -163,6 +164,33 @@ class PhaseLevelsView(APIView):
         except ValueError:
             raise ValidationError({"detail": "Use YYYY-MM-DD dates."}) from None
         return Response(phase_compound_levels(request.user, start, end))
+
+
+@extend_schema(
+    tags=["protocols"],
+    parameters=[OpenApiParameter("date", str, description="ISO date (default today).")],
+    responses=ProtocolSerializer,
+)
+class ProtocolInForceView(APIView):
+    """The protocol prescribed on ?date= per the phase-adjustment timeline (or null).
+
+    Lets the dashboard's "not logged yesterday" reflect the plan that actually applied
+    that day — the old protocol on the transitory day an adjustment takes effect —
+    rather than whatever is active now.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        raw = request.query_params.get("date")
+        try:
+            on = date.fromisoformat(raw) if raw else timezone.localdate()
+        except ValueError:
+            raise ValidationError({"date": "Use YYYY-MM-DD."}) from None
+        proto = protocol_in_force(request.user, on)
+        if proto is None:
+            return Response(None)
+        return Response(ProtocolSerializer(proto, context={"request": request}).data)
 
 
 @extend_schema(tags=["protocols"])
