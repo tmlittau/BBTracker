@@ -64,6 +64,41 @@ def current_phase_config(owner, on_date):
     return phase, adjustment
 
 
+def seed_initial_adjustment(phase):
+    """Record the owner's currently-active prescription as the phase's initial
+    adjustment (effective at its start date), so the timeline is well-formed from day
+    one — `protocol_in_force` resolves the start of every phase instead of falling back
+    to the global active flag, and the history is preserved across later adjustments.
+
+    No-op (returns None) when an adjustment already covers the start, or when the owner
+    has no active protocol / program / nutrition target to capture. Idempotent.
+    """
+    from apps.nutrition.models import NutritionTarget
+    from apps.protocols.models import Protocol
+    from apps.training.models import Program
+
+    from .models import PhaseAdjustment
+
+    if PhaseAdjustment.objects.filter(
+        phase=phase, effective_date__lte=phase.start_date
+    ).exists():
+        return None
+    owner = phase.owner
+    protocol = Protocol.objects.filter(owner=owner, is_active=True).first()
+    program = Program.objects.filter(owner=owner, is_active=True).first()
+    target = NutritionTarget.objects.filter(owner=owner, is_active=True).first()
+    if not (protocol or program or target):
+        return None
+    return PhaseAdjustment.objects.create(
+        phase=phase,
+        effective_date=phase.start_date,
+        reason="Initial plan",
+        protocol=protocol,
+        program=program,
+        nutrition_target=target,
+    )
+
+
 def dashboard_today(owner, on_date):
     """Everything a coach glances at for one day, across all five domains."""
     from apps.nutrition.services import nutrition_headline

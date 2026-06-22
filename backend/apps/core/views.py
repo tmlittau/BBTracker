@@ -21,7 +21,7 @@ from .serializers import (
     PhaseSerializer,
     WeeklyCheckInSerializer,
 )
-from .services import dashboard_today, weekly_checkin
+from .services import dashboard_today, seed_initial_adjustment, weekly_checkin
 
 
 class HealthzView(APIView):
@@ -61,7 +61,10 @@ class PhaseViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        phase = serializer.save(owner=self.request.user)
+        # Seed the phase's initial adjustment from the active plan so its timeline is
+        # well-formed from the start (history survives later adjustments).
+        seed_initial_adjustment(phase)
 
 
 @extend_schema(tags=["core"])
