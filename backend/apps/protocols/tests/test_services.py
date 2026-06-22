@@ -151,14 +151,24 @@ class TestTimesPerDay:
 
 
 class TestSiteStatus:
-    def test_buckets(self):
-        assert site_status(None) == "rested"
-        assert site_status(10) == "rested"
-        assert site_status(7) == "rested"
-        assert site_status(5) == "recovering"
-        assert site_status(3) == "recovering"
-        assert site_status(1) == "fresh"
-        assert site_status(0) == "fresh"
+    def test_im_buckets(self):
+        # IM recovers over ~a week: red days 0-2, amber 3-6, green from day 7.
+        assert site_status(None, "im") == "rested"
+        assert site_status(10, "im") == "rested"
+        assert site_status(7, "im") == "rested"
+        assert site_status(5, "im") == "recovering"
+        assert site_status(3, "im") == "recovering"
+        assert site_status(1, "im") == "fresh"
+        assert site_status(0, "im") == "fresh"
+        assert site_status(5) == "recovering"  # defaults to IM thresholds
+
+    def test_subq_buckets(self):
+        # subQ recovers over ~a day: red day 0, amber day 1, green from day 2.
+        assert site_status(0, "subq") == "fresh"
+        assert site_status(1, "subq") == "recovering"
+        assert site_status(2, "subq") == "rested"
+        assert site_status(5, "subq") == "rested"
+        assert site_status(None, "subq") == "rested"
 
 
 class TestAdherence:

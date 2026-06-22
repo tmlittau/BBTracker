@@ -1,13 +1,18 @@
 from decimal import Decimal
 
 import pytest
+from django.utils import timezone
 
+from apps.accounts.models import User
 from apps.training.enums import SetType
+from apps.training.models import Exercise, LoggedExercise, LoggedSet, Muscle, WorkoutSession
 from apps.training.services import (
     brzycki_1rm,
+    counts_as_set,
     epley_1rm,
     estimated_1rm,
     set_volume,
+    weekly_muscle_volume,
 )
 
 
@@ -55,3 +60,39 @@ class TestSetVolume:
     def test_missing_data_is_zero(self):
         assert set_volume(None, 5, SetType.WORKING) == Decimal("0")
         assert set_volume(100, None, SetType.WORKING) == Decimal("0")
+
+
+class TestCountsAsSet:
+    def test_working_and_top_set_count(self):
+        assert counts_as_set(SetType.WORKING)
+        assert counts_as_set(SetType.TOP_SET)
+
+    def test_warmups_and_intensity_techniques_do_not(self):
+        for t in (
+            SetType.WARMUP, SetType.DROP, SetType.REST_PAUSE, SetType.MYO_REP,
+            SetType.CLUSTER, SetType.AMRAP, SetType.BACKOFF, SetType.FAILURE,
+        ):
+            assert not counts_as_set(t)
+
+
+@pytest.mark.django_db
+def test_weekly_muscle_volume_counts_only_hard_sets():
+    user = User.objects.create_user(email="vol@example.com", password="x")
+    chest = Muscle.objects.create(name="Chest", slug="chest")
+    bench = Exercise.objects.create(name="Bench Press")
+    bench.primary_muscles.add(chest)
+    session = WorkoutSession.objects.create(owner=user, started_at=timezone.now())
+    le = LoggedExercise.objects.create(session=session, exercise=bench, order=0)
+    for order, (st, w, r) in enumerate([
+        (SetType.WORKING, "100", 5),   # counts; 500 tonnage
+        (SetType.TOP_SET, "100", 3),   # counts; 300 tonnage
+        (SetType.DROP, "60", 12),      # tonnage only (720), not a counted set
+        (SetType.WARMUP, "40", 10),    # excluded entirely
+    ]):
+        LoggedSet.objects.create(
+            logged_exercise=le, order=order, set_type=st, weight=w, reps=r, is_completed=True
+        )
+
+    vol = weekly_muscle_volume(user)
+    assert vol["Chest"]["sets"] == 2  # working + top set only
+    assert vol["Chest"]["tonnage"] == Decimal("1520.00")  # incl. the drop set's work
