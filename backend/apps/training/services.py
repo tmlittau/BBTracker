@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from .enums import WORKING_SET_TYPES
+from .enums import COUNTED_SET_TYPES, WORKING_SET_TYPES
 
 # Above this many reps, rep-based 1RM formulas lose accuracy; treat as not meaningful.
 MAX_REPS_FOR_E1RM = 30
@@ -47,6 +47,11 @@ def _round2(value) -> Decimal:
 
 def is_working_set(set_type: str) -> bool:
     return set_type in WORKING_SET_TYPES
+
+
+def counts_as_set(set_type: str) -> bool:
+    """Whether a set is tallied as a discrete hard set for weekly set counts."""
+    return set_type in COUNTED_SET_TYPES
 
 
 def set_volume(weight, reps, set_type: str) -> Decimal:
@@ -204,10 +209,11 @@ def last_performance(owner, exercise):
 
 
 def weekly_muscle_volume(owner, since=None):
-    """Working-set counts and tonnage grouped by muscle since a given datetime.
+    """Hard-set counts and tonnage grouped by muscle since a given datetime.
 
-    Each working set credits its exercise's primary muscles one set each; tonnage
-    is summed per primary muscle. Returns {muscle_name: {"sets": int, "tonnage": Decimal}}.
+    Each *counted* set (working / top set) credits its exercise's primary muscles one
+    set each; tonnage sums all non-warm-up work (so intensity techniques add tonnage
+    but not extra sets). Returns {muscle_name: {"sets": int, "tonnage": Decimal}}.
     """
     from .models import LoggedSet
 
@@ -222,8 +228,10 @@ def weekly_muscle_volume(owner, since=None):
         if not is_working_set(s.set_type):
             continue
         tonnage = set_volume(s.weight, s.reps, s.set_type)
+        counted = counts_as_set(s.set_type)
         for muscle in s.logged_exercise.exercise.primary_muscles.all():
             bucket = result.setdefault(muscle.name, {"sets": 0, "tonnage": Decimal("0")})
-            bucket["sets"] += 1
+            if counted:
+                bucket["sets"] += 1
             bucket["tonnage"] += tonnage
     return result

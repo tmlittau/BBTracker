@@ -13,11 +13,16 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.utils import timezone
 
-from .enums import FREQUENCY_PER_WEEK, INJECTABLE_ROUTES
+from .enums import FREQUENCY_PER_WEEK, INJECTABLE_ROUTES, Route
 
-# Injection-site recency thresholds (days since last use).
-SITE_REST_DAYS = 7      # >= this → fully rested (green)
-SITE_RECOVER_DAYS = 3   # >= this → recovering (amber); below → fresh/needs-rest (red)
+# Injection-site recovery thresholds by route: (rest_days, recover_days), in days
+# since last use. >= rest_days → rested (green); >= recover_days → recovering (amber);
+# below → fresh / needs-rest (red). IM needs ~a week (scar tissue); subQ ~a day.
+SITE_RECOVERY_DAYS = {
+    Route.IM: (7, 3),
+    Route.SUBQ: (2, 1),
+}
+DEFAULT_SITE_RECOVERY = (7, 3)
 
 
 def _q(value, places="0.001") -> Decimal:
@@ -224,11 +229,15 @@ def scheduled_dose_dates(frequency, days_of_week, start_date, end_date, anchor_d
 # --- Pure: rotation & adherence ----------------------------------------------
 
 
-def site_status(days_since_last: float | None) -> str:
-    """Recency bucket for an injection site: rested / recovering / fresh."""
-    if days_since_last is None or days_since_last >= SITE_REST_DAYS:
+def site_status(days_since_last: float | None, route: str = Route.IM) -> str:
+    """Recency bucket for an injection site, by route: rested / recovering / fresh.
+
+    IM sites recover over ~a week (scar-tissue concern); subQ over ~a day.
+    """
+    rest_days, recover_days = SITE_RECOVERY_DAYS.get(route, DEFAULT_SITE_RECOVERY)
+    if days_since_last is None or days_since_last >= rest_days:
         return "rested"
-    if days_since_last >= SITE_RECOVER_DAYS:
+    if days_since_last >= recover_days:
         return "recovering"
     return "fresh"
 
@@ -586,7 +595,7 @@ def injection_site_recency(owner, days=30):
                 "y": site.y,
                 "last_used": last.isoformat() if last else None,
                 "days_since": round(days_since, 1) if days_since is not None else None,
-                "status": site_status(days_since),
+                "status": site_status(days_since, site.route),
             }
         )
     return rows

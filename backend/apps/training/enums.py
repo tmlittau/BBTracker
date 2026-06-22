@@ -19,10 +19,17 @@ class SetType(models.TextChoices):
     FAILURE = "failure", "To failure"
 
 
-# Set types that count toward "working" volume (exclude warm-ups).
+# Set types that count toward "working" volume / tonnage (exclude warm-ups).
 WORKING_SET_TYPES = frozenset(
     t for t in SetType.values if t != SetType.WARMUP
 )
+
+
+# Set types tallied as a discrete "hard set" for weekly set-count targets. Intensity
+# techniques (drop / rest-pause / myo-rep / cluster / back-off / AMRAP / failure)
+# extend an adjacent working set rather than adding a separate set, so they still add
+# tonnage but are not counted as extra sets. Warm-ups count for neither.
+COUNTED_SET_TYPES = frozenset({SetType.WORKING, SetType.TOP_SET})
 
 
 # Sensible default rest (seconds) per set type, used when a planned set leaves

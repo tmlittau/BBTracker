@@ -19,10 +19,12 @@ export function activeAmount(
 
 export type SiteStatus = 'rested' | 'recovering' | 'fresh';
 
-/** Recency bucket for an injection site (matches backend thresholds). */
-export function siteStatus(daysSince: number | null): SiteStatus {
-	if (daysSince == null || daysSince >= 7) return 'rested';
-	if (daysSince >= 3) return 'recovering';
+/** Recency bucket for an injection site, by route (matches backend thresholds):
+ *  IM recovers over ~a week, subQ over ~a day. */
+export function siteStatus(daysSince: number | null, route: 'im' | 'subq' = 'im'): SiteStatus {
+	const [rest, recover] = route === 'subq' ? [2, 1] : [7, 3];
+	if (daysSince == null || daysSince >= rest) return 'rested';
+	if (daysSince >= recover) return 'recovering';
 	return 'fresh';
 }
 
