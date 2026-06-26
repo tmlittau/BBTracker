@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -7,6 +8,7 @@ from apps.accounts.models import User
 from apps.training.enums import SetType
 from apps.training.models import Exercise, LoggedExercise, LoggedSet, Muscle, WorkoutSession
 from apps.training.services import (
+    average_weekly_muscle_volume,
     brzycki_1rm,
     counts_as_set,
     epley_1rm,
@@ -14,6 +16,18 @@ from apps.training.services import (
     set_volume,
     weekly_muscle_volume,
 )
+
+
+def _log_sets(user, muscle, started_at, n, set_type=SetType.WORKING, weight="50", reps=10):
+    bench, _ = Exercise.objects.get_or_create(name="Bench Press")
+    bench.primary_muscles.add(muscle)
+    sess = WorkoutSession.objects.create(owner=user, started_at=started_at)
+    le = LoggedExercise.objects.create(session=sess, exercise=bench, order=0)
+    for i in range(n):
+        LoggedSet.objects.create(
+            logged_exercise=le, order=i, set_type=set_type,
+            weight=weight, reps=reps, is_completed=True,
+        )
 
 
 class TestE1RM:
@@ -96,3 +110,31 @@ def test_weekly_muscle_volume_counts_only_hard_sets():
     vol = weekly_muscle_volume(user)
     assert vol["Chest"]["sets"] == 2  # working + top set only
     assert vol["Chest"]["tonnage"] == Decimal("1520.00")  # incl. the drop set's work
+
+
+@pytest.mark.django_db
+def test_average_weekly_muscle_volume_reports_per_week():
+    now = timezone.now()
+    user = User.objects.create_user(email="avg@example.com", password="x")
+    chest = Muscle.objects.create(name="Chest", slug="chest")
+    # 4 weekly sessions, 12 working sets each (48 total). First is 27d ago → span 28
+    # days = 4.0 weeks → 48 / 4 = 12 sets/week, 24000 / 4 = 6000 kg/week.
+    for wk in range(4):
+        _log_sets(user, chest, now - timedelta(days=27 - wk * 7), 12)
+
+    out = average_weekly_muscle_volume(user, window_days=30, now=now)
+    assert out["Chest"]["sets"] == 12
+    assert out["Chest"]["tonnage"] == Decimal("6000.00")
+
+
+@pytest.mark.django_db
+def test_average_weekly_muscle_volume_floors_short_history_at_one_week():
+    now = timezone.now()
+    user = User.objects.create_user(email="new@example.com", password="x")
+    chest = Muscle.objects.create(name="Chest", slug="chest")
+    # Only ~3 days of logging: 12 sets must read ~12/wk (÷ 1 week), not diluted by the
+    # 30-day window (which would give 12 ÷ ~4.3 ≈ 3).
+    _log_sets(user, chest, now - timedelta(days=2), 12)
+
+    out = average_weekly_muscle_volume(user, window_days=30, now=now)
+    assert out["Chest"]["sets"] == 12
