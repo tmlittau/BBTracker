@@ -3310,12 +3310,16 @@ export interface components {
             readonly id: number;
             nutrient: number;
             /** Format: decimal */
-            amount: string;
+            min_amount?: string | null;
+            /** Format: decimal */
+            max_amount?: string | null;
         };
         NutrientTargetRequest: {
             nutrient: number;
             /** Format: decimal */
-            amount: string;
+            min_amount?: string | null;
+            /** Format: decimal */
+            max_amount?: string | null;
         };
         /**
          * @description * `kcal` - kcal
@@ -3951,7 +3955,9 @@ export interface components {
         PatchedNutrientTargetRequest: {
             nutrient?: number;
             /** Format: decimal */
-            amount?: string;
+            min_amount?: string | null;
+            /** Format: decimal */
+            max_amount?: string | null;
         };
         PatchedNutritionTargetRequest: {
             name?: string;
@@ -4543,6 +4549,8 @@ export interface components {
             amount: string;
             /** Format: decimal */
             target: string | null;
+            /** Format: decimal */
+            target_max: string | null;
             percent: number | null;
         };
         Supplement: {

@@ -173,16 +173,19 @@ def daily_summary(owner, date):
             "fiber": target.fiber_g,
         }
         for nt in target.nutrient_targets.all():
-            target_by_nutrient[nt.nutrient_id] = nt.amount
+            target_by_nutrient[nt.nutrient_id] = (nt.min_amount, nt.max_amount)
 
     nutrients = []
     for n in cached_nutrients():
         amount = totals.get(n["id"], Decimal("0"))
-        tgt = target_by_nutrient.get(n["id"])
+        # Custom per-micronutrient range (min floor / max ceiling), if set for this target.
+        custom = target_by_nutrient.get(n["id"])
+        tgt = custom[0] if custom else None
+        tgt_max = custom[1] if custom else None
         if tgt is None and target:
             tgt = macro_targets.get(n["slug"])
         if tgt is None:
-            tgt = n["rda"]  # fall back to RDA for micros
+            tgt = n["rda"]  # fall back to RDA for the floor
         nutrients.append(
             {
                 "id": n["id"],
@@ -192,6 +195,7 @@ def daily_summary(owner, date):
                 "category": n["category"],
                 "amount": _q(amount, "0.001"),
                 "target": tgt,
+                "target_max": tgt_max,
                 "percent": percent_of_target(amount, tgt),
             }
         )

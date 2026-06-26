@@ -140,7 +140,16 @@ class DiaryEntrySerializer(serializers.ModelSerializer):
 class NutrientTargetSerializer(serializers.ModelSerializer):
     class Meta:
         model = NutrientTarget
-        fields = ["id", "nutrient", "amount"]
+        fields = ["id", "nutrient", "min_amount", "max_amount"]
+
+    def validate(self, attrs):
+        lo = attrs.get("min_amount", getattr(self.instance, "min_amount", None))
+        hi = attrs.get("max_amount", getattr(self.instance, "max_amount", None))
+        if lo is None and hi is None:
+            raise serializers.ValidationError("Set a min, a max, or both for a micronutrient.")
+        if lo is not None and hi is not None and hi < lo:
+            raise serializers.ValidationError("Max must be greater than or equal to min.")
+        return attrs
 
 
 class NutritionTargetSerializer(serializers.ModelSerializer):
@@ -200,6 +209,9 @@ class SummaryNutrientSerializer(serializers.Serializer):
     category = serializers.CharField()
     amount = serializers.DecimalField(max_digits=12, decimal_places=3)
     target = serializers.DecimalField(
+        max_digits=12, decimal_places=3, allow_null=True
+    )
+    target_max = serializers.DecimalField(
         max_digits=12, decimal_places=3, allow_null=True
     )
     percent = serializers.IntegerField(allow_null=True)

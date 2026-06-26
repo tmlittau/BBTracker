@@ -268,24 +268,27 @@
 		{:else}
 			<p class="mt-2 text-xs text-neutral-500">
 				Dot shows progress to target/RDA (<span class="text-green-400">met</span>,
-				<span class="text-amber-400">partial</span>, <span class="text-red-400">low</span>); the bar
-				fills as you consume.
+				<span class="text-amber-400">partial</span>, <span class="text-red-400">low</span>); a
+				value like <span class="text-neutral-400">/90–2000</span> is your custom min–max, and an
+				<span class="text-red-300">over max</span> flag means you’ve passed the ceiling you set.
 			</p>
 			<div class="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
 				{#each micros as n (n.id)}
+					{@const over = n.target_max != null && num(n.amount) > num(n.target_max)}
 					<div class="text-sm">
 						<div class="flex items-center justify-between">
 							<span class="flex items-center gap-2">
-								<span class="h-2 w-2 rounded-full {microDot[microColor(n.percent)]}"></span>
+								<span class="h-2 w-2 rounded-full {over ? 'bg-red-500' : microDot[microColor(n.percent)]}"></span>
 								{n.name}
 							</span>
 							<span class="text-neutral-400">
-								{num(n.amount).toFixed(1)}{#if n.target}<span class="text-neutral-600">/{num(n.target).toFixed(0)}</span>{/if}
+								{num(n.amount).toFixed(1)}{#if n.target_max}<span class="text-neutral-600">/{num(n.target).toFixed(0)}–{num(n.target_max).toFixed(0)}</span>{:else if n.target}<span class="text-neutral-600">/{num(n.target).toFixed(0)}</span>{/if}
 								{n.unit}
+								{#if over}<span class="ml-1 rounded bg-red-950/60 px-1 text-[10px] font-medium text-red-300">over max</span>{/if}
 							</span>
 						</div>
 						<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800/60">
-							<div class="h-1.5 rounded-full bg-neutral-500" style="width: {barWidth(n.percent)}%"></div>
+							<div class="h-1.5 rounded-full {over ? 'bg-red-500/70' : 'bg-neutral-500'}" style="width: {barWidth(n.percent)}%"></div>
 						</div>
 					</div>
 				{/each}
