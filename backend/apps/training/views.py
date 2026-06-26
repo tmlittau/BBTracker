@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.db.models import Count, ProtectedError
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -36,7 +34,7 @@ from .serializers import (
     WorkoutSessionListSerializer,
     WorkoutSessionSerializer,
 )
-from .services import exercise_history, last_performance, weekly_muscle_volume
+from .services import average_weekly_muscle_volume, exercise_history, last_performance
 
 
 @extend_schema(tags=["training"])
@@ -262,8 +260,7 @@ class MuscleVolumeView(viewsets.ViewSet):
             days = int(request.query_params.get("days", 7))
         except (TypeError, ValueError) as exc:
             raise ValidationError({"days": "must be an integer"}) from exc
-        since = timezone.now() - timedelta(days=days)
-        data = weekly_muscle_volume(request.user, since=since)
+        data = average_weekly_muscle_volume(request.user, window_days=days)
         rows = [
             {"muscle": name, "sets": v["sets"], "tonnage": v["tonnage"]}
             for name, v in sorted(data.items(), key=lambda kv: -kv[1]["sets"])

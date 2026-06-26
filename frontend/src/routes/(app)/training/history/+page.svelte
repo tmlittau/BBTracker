@@ -109,7 +109,7 @@
 	</section>
 
 	<section class="mt-8">
-		<h2 class="font-medium">Weekly volume by muscle (last 30 days)</h2>
+		<h2 class="font-medium">Weekly sets by muscle (avg/week over last 30 days)</h2>
 		{#if volume.length === 0}
 			<p class="mt-2 text-sm text-neutral-500">No working sets logged in this window.</p>
 		{:else}
@@ -117,7 +117,7 @@
 				{#each volume as v (v.muscle)}
 					<div class="flex items-center justify-between rounded border border-neutral-800 px-3 py-2 text-sm">
 						<span>{v.muscle}</span>
-						<span class="text-neutral-400">{v.sets} sets · {Number(v.tonnage).toLocaleString()} kg</span>
+						<span class="text-neutral-400">{v.sets} sets/wk · {Number(v.tonnage).toLocaleString()} kg/wk</span>
 					</div>
 				{/each}
 			</div>

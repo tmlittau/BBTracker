@@ -235,3 +235,42 @@ def weekly_muscle_volume(owner, since=None):
                 bucket["sets"] += 1
             bucket["tonnage"] += tonnage
     return result
+
+
+def average_weekly_muscle_volume(owner, window_days=30, now=None):
+    """Per-muscle weekly *averages* over the last `window_days`.
+
+    `weekly_muscle_volume` returns raw totals for a window; here we divide them by the
+    number of weeks actually covered so the figure reads as sets-per-week. The divisor
+    is the span from the owner's first logged session in the window to now (capped at
+    the window, floored at one week) — so a sub-`window_days` history isn't diluted by
+    days before they started logging. Returns {muscle: {"sets": int, "tonnage": Decimal}}.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .models import WorkoutSession
+
+    now = now or timezone.now()
+    since = now - timedelta(days=window_days)
+    totals = weekly_muscle_volume(owner, since=since)
+    if not totals:
+        return {}
+
+    first = (
+        WorkoutSession.objects.filter(owner=owner, started_at__gte=since)
+        .order_by("started_at")
+        .values_list("started_at", flat=True)
+        .first()
+    )
+    span_days = (now - first).days + 1 if first is not None else window_days
+    weeks = max(1.0, min(window_days, span_days) / 7.0)
+    wk = Decimal(str(weeks))
+    return {
+        m: {
+            "sets": round(v["sets"] / weeks),
+            "tonnage": (v["tonnage"] / wk).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        }
+        for m, v in totals.items()
+    }
