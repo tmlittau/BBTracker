@@ -160,17 +160,30 @@ class NutritionTarget(TimeStampedModel):
 
 
 class NutrientTarget(models.Model):
-    """Optional per-micronutrient goal within a NutritionTarget."""
+    """Optional per-micronutrient goal within a NutritionTarget — a `min_amount`
+    (floor / daily goal; falls back to the nutrient's RDA when unset) and/or a
+    `max_amount` (ceiling, to flag over-intake of nutrients that can be toxic). At
+    least one bound is set; serious lifters / PED users often need values above the RDA.
+    """
 
     target = models.ForeignKey(
         NutritionTarget, on_delete=models.CASCADE, related_name="nutrient_targets"
     )
     nutrient = models.ForeignKey(Nutrient, on_delete=models.PROTECT)
-    amount = models.DecimalField(max_digits=12, decimal_places=3)
+    min_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    max_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["target", "nutrient"], name="uniq_target_nutrient")
+            models.UniqueConstraint(fields=["target", "nutrient"], name="uniq_target_nutrient"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(min_amount__isnull=True)
+                    | models.Q(max_amount__isnull=True)
+                    | models.Q(max_amount__gte=models.F("min_amount"))
+                ),
+                name="nutrient_target_max_gte_min",
+            ),
         ]
 
 

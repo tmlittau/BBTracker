@@ -82,7 +82,10 @@ export interface DiaryEntry {
 export interface NutrientTarget {
 	id?: number;
 	nutrient: number;
-	amount: string;
+	/** Daily floor (defaults to the nutrient's RDA when null). */
+	min_amount: string | null;
+	/** Ceiling — intake above this is flagged (toxicity). Null = no cap. */
+	max_amount: string | null;
 }
 
 export interface NutritionTarget {
@@ -106,6 +109,8 @@ export interface SummaryNutrient {
 	category: string;
 	amount: string;
 	target: string | null;
+	/** Optional ceiling for this nutrient; intake above it is flagged. */
+	target_max: string | null;
 	percent: number | null;
 }
 

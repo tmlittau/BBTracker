@@ -152,7 +152,7 @@ def test_summary_totals_and_target(api, user, chicken, nutrients):
     target = NutritionTarget.objects.create(
         owner=user, name="Cut", is_active=True, calories=2000, protein_g=150
     )
-    target.nutrient_targets.create(nutrient=nutrients["vitamin_c"], amount=90)
+    target.nutrient_targets.create(nutrient=nutrients["vitamin_c"], min_amount=90)
 
     # Log 200 g chicken → 330 kcal, 62 g protein.
     DiaryEntry.objects.create(
@@ -172,6 +172,55 @@ def test_summary_totals_and_target(api, user, chicken, nutrients):
     assert by_slug["protein"]["percent"] == 41
     # energy: 330 / 2000 = 16%
     assert by_slug["energy"]["percent"] == 16
+    # Vitamin C floor came from the custom min_amount; no ceiling set.
+    assert float(by_slug["vitamin_c"]["target"]) == 90
+    assert by_slug["vitamin_c"]["target_max"] is None
+
+
+def test_summary_custom_micro_range(api, user, nutrients):
+    food = Food.objects.create(name="C powder", source="seed", owner=None)
+    FoodNutrient.objects.create(food=food, nutrient=nutrients["vitamin_c"], amount_per_100g=100)
+    target = NutritionTarget.objects.create(owner=user, name="Custom", is_active=True)
+    # Floor 200 mg, ceiling 1000 mg — both above the 90 mg RDA.
+    target.nutrient_targets.create(nutrient=nutrients["vitamin_c"], min_amount=200, max_amount=1000)
+    DiaryEntry.objects.create(owner=user, date=date(2026, 5, 30), food=food, quantity=1500)
+
+    data = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
+    vit_c = next(n for n in data["nutrients"] if n["slug"] == "vitamin_c")
+    assert float(vit_c["target"]) == 200       # custom floor wins over the RDA
+    assert float(vit_c["target_max"]) == 1000  # ceiling exposed for the toxicity flag
+    assert float(vit_c["amount"]) == 1500      # over the ceiling
+
+
+def test_summary_defaults_to_rda_without_custom(api, user, nutrients):
+    NutritionTarget.objects.create(owner=user, name="Plain", is_active=True)
+    data = api.get("/api/v1/nutrition/summary/?date=2026-05-30").json()
+    vit_c = next(n for n in data["nutrients"] if n["slug"] == "vitamin_c")
+    assert float(vit_c["target"]) == 90  # RDA floor
+    assert vit_c["target_max"] is None  # no ceiling by default
+
+
+def test_create_target_with_micro_ranges(api, nutrients):
+    payload = {
+        "name": "Lifter",
+        "nutrient_targets": [
+            {"nutrient": nutrients["vitamin_c"].id, "min_amount": "200", "max_amount": "1000"},
+        ],
+    }
+    resp = api.post("/api/v1/nutrition/targets/", payload, format="json")
+    assert resp.status_code == 201, resp.content
+    nt = resp.json()["nutrient_targets"]
+    assert len(nt) == 1 and float(nt[0]["min_amount"]) == 200 and float(nt[0]["max_amount"]) == 1000
+
+
+def test_micro_range_rejects_max_below_min(api, nutrients):
+    payload = {
+        "name": "Bad",
+        "nutrient_targets": [
+            {"nutrient": nutrients["vitamin_c"].id, "min_amount": "500", "max_amount": "100"},
+        ],
+    }
+    assert api.post("/api/v1/nutrition/targets/", payload, format="json").status_code == 400
 
 
 def test_summary_empty_day(api, user, nutrients):
