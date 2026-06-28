@@ -4,6 +4,9 @@ from .models import (
     DiaryEntry,
     Food,
     FoodNutrient,
+    Meal,
+    MealTemplate,
+    MealTemplateItem,
     Nutrient,
     NutrientTarget,
     NutritionTarget,
@@ -63,4 +66,24 @@ class RecipeAdmin(admin.ModelAdmin):
 @admin.register(DiaryEntry)
 class DiaryEntryAdmin(admin.ModelAdmin):
     list_display = ["date", "meal", "owner", "food", "recipe", "quantity", "grams"]
-    list_filter = ["meal", "date"]
+    list_filter = ["date"]
+    search_fields = ["owner__email"]
+
+
+@admin.register(Meal)
+class MealAdmin(admin.ModelAdmin):
+    list_display = ["name", "date", "owner", "order"]
+    list_filter = ["date"]
+    search_fields = ["owner__email", "name"]
+
+
+class MealTemplateItemInline(admin.TabularInline):
+    model = MealTemplateItem
+    extra = 0
+
+
+@admin.register(MealTemplate)
+class MealTemplateAdmin(admin.ModelAdmin):
+    list_display = ["name", "owner"]
+    search_fields = ["owner__email", "name"]
+    inlines = [MealTemplateItemInline]
