@@ -100,11 +100,14 @@ def _active_protocol(user):
 def item_scheduled_on(item, on_date) -> bool:
     """Whether a protocol item is scheduled on ``on_date`` (mirrors the frontend
     isScheduledToday). PRN items are never auto-reminded."""
-    from apps.protocols.services import scheduled_dose_dates
+    from apps.protocols.services import dose_anchor, scheduled_dose_dates
 
     if item.frequency in ("prn", "as_needed"):
         return False
-    anchor = item.protocol.started_on or on_date
+    # Phase interval cadences (eod / every-3 / weekly) to the same anchor as the rest
+    # of the app — the protocol's start, else the fixed epoch. Falling back to `on_date`
+    # would make the cadence collapse to "every day" (delta 0) when started_on is unset.
+    anchor = dose_anchor(item.protocol)
     return bool(scheduled_dose_dates(item.frequency, item.days_of_week, on_date, on_date, anchor))
 
 

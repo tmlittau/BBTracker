@@ -50,6 +50,37 @@ def active_item(user, compound):
     )
 
 
+# --- interval-cadence scheduling (reminder worker) ----------------------------
+
+
+def _every3(user, compound, started_on):
+    proto = Protocol.objects.create(
+        owner=user, name="C", is_active=True, started_on=started_on
+    )
+    return ProtocolItem.objects.create(
+        protocol=proto, compound=compound, dose_amount="1", dose_unit="mg",
+        frequency="every_3_days", times_of_day=["waking"],
+    )
+
+
+def test_item_scheduled_on_every_3_days_phased_to_start(user, compound):
+    start = timezone.now().date()
+    item = _every3(user, compound, start)
+    assert services.item_scheduled_on(item, start) is True
+    assert services.item_scheduled_on(item, start + timedelta(days=1)) is False
+    assert services.item_scheduled_on(item, start + timedelta(days=2)) is False
+    assert services.item_scheduled_on(item, start + timedelta(days=3)) is True
+
+
+def test_item_scheduled_on_every_3_days_without_start_is_not_daily(user, compound):
+    # No start date → phased to the fixed epoch, so exactly one day in three fires —
+    # not "every day" (the old reminder bug anchored to the day being checked).
+    item = _every3(user, compound, None)
+    base = timezone.now().date()
+    flags = [services.item_scheduled_on(item, base + timedelta(days=i)) for i in range(3)]
+    assert sum(flags) == 1
+
+
 # --- ha_notify client ---------------------------------------------------------
 
 
