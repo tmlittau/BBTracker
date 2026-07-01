@@ -74,6 +74,12 @@ class Exercise(TimeStampedModel):
     is_unilateral = models.BooleanField(
         default=False, help_text="Performed one side at a time (logged load is per-side)."
     )
+    rest_by_set_type = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Rest seconds per set type, e.g. {'working': 180, 'warmup': 60}. "
+        "Missing types fall back to DEFAULT_REST_SECONDS.",
+    )
 
     class Meta:
         ordering = ["name"]
