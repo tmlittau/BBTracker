@@ -26,9 +26,37 @@ export interface Assessment {
 export interface AdaptiveTDEE {
 	tdee: number;
 	weight_slope_kg_wk: number;
+	weight_rate_pct_wk: number | null;
+	trend_weight: number | null;
 	days: number;
 	intake_days: number;
 	confidence: string;
+}
+
+export interface Partitioning {
+	weight_change_kg: number;
+	lean_change_kg: number;
+	fat_change_kg: number;
+	p_ratio: number;
+	days: number;
+}
+
+// --- Explore / overlay time-series ---
+export interface Metric {
+	key: string;
+	label: string;
+	unit: string;
+	group: string;
+}
+export interface MetricSeries extends Metric {
+	points: { date: string; value: number }[];
+}
+export interface SeriesOverlay {
+	start: string;
+	end: string;
+	metrics: MetricSeries[];
+	phases: { name: string; start: string; end: string }[];
+	events: { date: string; label: string }[];
 }
 
 export interface FreeTestosterone {
@@ -85,6 +113,7 @@ export interface BodyAnalysis {
 		recent_intake?: number;
 		balance?: number;
 		activity_factor?: number;
+		partitioning?: Partitioning | null;
 	};
 	blood_pressure: { systolic: number; diastolic: number } | null;
 	bloodwork: {
@@ -171,5 +200,12 @@ export const analysisApi = {
 		method?: string;
 		notes?: string;
 	}) => req<BodyMeasurement>('POST', '/measurements/', data),
-	deleteMeasurement: (id: number) => req<void>('DELETE', `/measurements/${id}/`)
+	deleteMeasurement: (id: number) => req<void>('DELETE', `/measurements/${id}/`),
+	metricCatalog: () => req<Metric[]>('GET', '/metrics/'),
+	series: (keys: string[], start?: string, end?: string) => {
+		const qs = new URLSearchParams({ metrics: keys.join(',') });
+		if (start) qs.set('start', start);
+		if (end) qs.set('end', end);
+		return req<SeriesOverlay>('GET', `/series/?${qs.toString()}`);
+	}
 };

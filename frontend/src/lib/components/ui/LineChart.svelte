@@ -15,15 +15,23 @@
 		label?: string;
 	}
 
+	interface Marker {
+		x: string; // ISO date
+		label?: string;
+		color?: string;
+	}
+
 	let {
 		series,
 		band,
+		markers = [],
 		unit = '',
 		height = 180,
 		baselineZero = false
 	}: {
 		series: Series[];
 		band?: { low: number | null; high: number | null };
+		markers?: Marker[];
 		unit?: string;
 		height?: number;
 		baselineZero?: boolean;
@@ -82,6 +90,15 @@
 		<!-- Axes -->
 		<line x1={pad} y1={height - pad} x2={W - pad} y2={height - pad} stroke="#404040" stroke-width="1" />
 		<line x1={pad} y1={pad} x2={pad} y2={height - pad} stroke="#404040" stroke-width="1" />
+
+		<!-- Vertical annotation markers (phase / protocol changes) -->
+		{#each markers as m (m.x + (m.label ?? ''))}
+			{@const mx = sx(new Date(m.x).getTime())}
+			{#if mx >= pad && mx <= W - pad}
+				<line x1={mx} y1={pad} x2={mx} y2={height - pad} stroke={m.color ?? '#f59e0b'} stroke-width="1" stroke-dasharray="3 3" opacity="0.55" />
+				{#if m.label}<text x={mx + 2} y={pad + 8} fill={m.color ?? '#f59e0b'} font-size="8">{m.label}</text>{/if}
+			{/if}
+		{/each}
 
 		{#each series as s (s.label ?? s.color)}
 			{#if s.points.length >= 2}
