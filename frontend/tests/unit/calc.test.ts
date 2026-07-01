@@ -44,11 +44,19 @@ describe('setVolume', () => {
 });
 
 describe('platesPerSide', () => {
-	it('computes plates for a standard 100kg load on a 20kg bar', () => {
-		// (100 - 20) / 2 = 40 per side → 25 + 15
+	it('computes plates for a standard 100kg load on a 20kg bar (metric)', () => {
+		// (100 - 20) / 2 = 40 per side → 20 + 20 (one metric plate = 20 kg)
 		const r = platesPerSide(100);
-		expect(r.perSide).toEqual([25, 15]);
+		expect(r.perSide).toEqual([20, 20]);
 		expect(r.achievable).toBe(100);
+		expect(r.remainder).toBe(0);
+	});
+
+	it('uses the 45 lb bar + imperial plates when imperial', () => {
+		// (135 - 45) / 2 = 45 per side → one 45 lb plate
+		const r = platesPerSide(135, 'imperial');
+		expect(r.perSide).toEqual([45]);
+		expect(r.achievable).toBe(135);
 		expect(r.remainder).toBe(0);
 	});
 
