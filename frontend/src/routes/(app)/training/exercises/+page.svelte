@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { trainingApi, type Exercise, type Muscle } from '$lib/training/api';
+	import { defaultRestSeconds } from '$lib/training/calc';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -17,6 +18,7 @@
 	let newCategory = $state('barbell');
 	let selectedMuscles = $state<number[]>([]);
 	let restTimes = $state<Record<string, string>>({});
+	let restSetType = $state('working');
 	let saving = $state(false);
 
 	const categories = [
@@ -54,6 +56,7 @@
 		newCategory = 'barbell';
 		selectedMuscles = [];
 		restTimes = blankRest();
+		restSetType = 'working';
 		showForm = true;
 	}
 	function startEdit(ex: Exercise) {
@@ -155,21 +158,29 @@
 			</div>
 		</div>
 		<div>
-			<p class="mb-1 text-xs text-neutral-500">Rest timers (seconds per set type; blank = default 120)</p>
-			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-				{#each SET_TYPES as st (st)}
-					<label class="flex items-center justify-between gap-2 rounded border border-neutral-800 px-2 py-1 text-xs text-neutral-400">
-						<span class="capitalize">{st.replace('_', ' ')}</span>
-						<input
-							type="number"
-							min="0"
-							step="15"
-							placeholder="120"
-							bind:value={restTimes[st]}
-							class="w-16 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-right text-neutral-100 tabular-nums"
-						/>
-					</label>
-				{/each}
+			<p class="mb-1 text-xs text-neutral-500">
+				Rest timer per set type (blank = default; working 120s, others 0s)
+			</p>
+			<div class="flex items-center gap-2">
+				<select
+					bind:value={restSetType}
+					class="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm capitalize text-neutral-100"
+				>
+					{#each SET_TYPES as st (st)}
+						<option value={st}>{st.replace('_', ' ')}</option>
+					{/each}
+				</select>
+				<input
+					type="number"
+					min="0"
+					step="15"
+					aria-label="Rest seconds"
+					placeholder={String(defaultRestSeconds(restSetType))}
+					value={restTimes[restSetType] ?? ''}
+					oninput={(e) => (restTimes[restSetType] = (e.currentTarget as HTMLInputElement).value)}
+					class="w-24 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-right text-sm text-neutral-100 tabular-nums"
+				/>
+				<span class="text-xs text-neutral-500">seconds</span>
 			</div>
 		</div>
 		<Button type="submit" disabled={saving}>

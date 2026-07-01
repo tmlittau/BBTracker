@@ -54,12 +54,23 @@ def counts_as_set(set_type: str) -> bool:
     return set_type in COUNTED_SET_TYPES
 
 
-def rest_seconds_for(exercise, set_type: str) -> int:
-    """Rest (seconds) configured on the exercise for this set type, else the default."""
-    from .enums import DEFAULT_REST_SECONDS
+def default_rest_seconds(set_type: str) -> int:
+    """Default rest when an exercise hasn't configured this set type: 120s for working
+    sets, 0 otherwise."""
+    from .enums import DEFAULT_REST_SECONDS, SetType
 
+    return DEFAULT_REST_SECONDS if set_type == SetType.WORKING else 0
+
+
+def rest_seconds_for(exercise, set_type: str) -> int:
+    """Rest (seconds) configured on the exercise for this set type, else the default.
+
+    An explicit 0 is honoured (no rest); only an unset / invalid value falls back.
+    """
     value = (exercise.rest_by_set_type or {}).get(set_type)
-    return int(value) if isinstance(value, (int, float)) and value > 0 else DEFAULT_REST_SECONDS
+    if isinstance(value, (int, float)) and value >= 0:
+        return int(value)
+    return default_rest_seconds(set_type)
 
 
 def set_volume(weight, reps, set_type: str) -> Decimal:

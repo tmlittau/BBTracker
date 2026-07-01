@@ -34,6 +34,11 @@ export interface PlateResult {
 	remainder: number;
 }
 
+/** Default rest (seconds) for a set type: 120 for working sets, 0 otherwise. */
+export function defaultRestSeconds(setType: string): number {
+	return setType === 'working' ? 120 : 0;
+}
+
 export type UnitSystem = 'metric' | 'imperial';
 
 /** Weight unit label for a unit system. */

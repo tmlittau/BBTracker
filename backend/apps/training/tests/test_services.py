@@ -20,15 +20,19 @@ from apps.training.services import (
 
 
 class TestRestSecondsFor:
-    def test_uses_configured_value_else_default(self):
+    def test_uses_configured_value(self):
         ex = Exercise(rest_by_set_type={"working": 180, "warmup": 45})
         assert rest_seconds_for(ex, "working") == 180
         assert rest_seconds_for(ex, "warmup") == 45
-        assert rest_seconds_for(ex, "drop") == 120  # unset → default
 
-    def test_empty_or_junk_falls_back_to_default(self):
-        assert rest_seconds_for(Exercise(rest_by_set_type={}), "working") == 120
-        assert rest_seconds_for(Exercise(rest_by_set_type={"working": 0}), "working") == 120
+    def test_default_is_120_for_working_and_0_otherwise(self):
+        ex = Exercise(rest_by_set_type={})
+        assert rest_seconds_for(ex, "working") == 120
+        assert rest_seconds_for(ex, "warmup") == 0
+        assert rest_seconds_for(ex, "drop") == 0
+
+    def test_explicit_zero_is_honoured(self):
+        assert rest_seconds_for(Exercise(rest_by_set_type={"working": 0}), "working") == 0
 
 
 def _log_sets(user, muscle, started_at, n, set_type=SetType.WORKING, weight="50", reps=10):

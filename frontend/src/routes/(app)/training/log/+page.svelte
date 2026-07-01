@@ -20,6 +20,7 @@
 		platesPerSide,
 		barWeight,
 		weightUnit,
+		defaultRestSeconds,
 		type UnitSystem
 	} from '$lib/training/calc';
 	import { getMe } from '$lib/api/profile';
@@ -27,8 +28,6 @@
 	import StepperInput from '$lib/training/StepperInput.svelte';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import { notificationsApi } from '$lib/notifications/api';
-
-	const DEFAULT_REST = 120;
 
 	let session = $state<WorkoutSession | null>(null);
 	let exercises = $state<Exercise[]>([]);
@@ -61,7 +60,7 @@
 
 	const exerciseOf = (le: LoggedExercise) => exercises.find((e) => e.id === le.exercise) ?? null;
 	const restFor = (le: LoggedExercise, setType: string) =>
-		exerciseOf(le)?.rest_by_set_type?.[setType] ?? DEFAULT_REST;
+		exerciseOf(le)?.rest_by_set_type?.[setType] ?? defaultRestSeconds(setType);
 	const isComplete = (le: LoggedExercise) =>
 		le.sets.length > 0 && le.sets.every((s) => s.is_completed);
 	const doneCount = (le: LoggedExercise) => le.sets.filter((s) => s.is_completed).length;
@@ -217,7 +216,8 @@
 			weight: d.weight === '' ? null : String(Number(d.weight)),
 			is_completed: true
 		});
-		startRest(restFor(le, d.set_type));
+		const rest = restFor(le, d.set_type);
+		if (rest > 0) startRest(rest);
 		await refresh();
 	}
 
