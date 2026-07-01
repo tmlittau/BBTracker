@@ -16,11 +16,15 @@
 	let newName = $state('');
 	let newCategory = $state('barbell');
 	let selectedMuscles = $state<number[]>([]);
+	let restTimes = $state<Record<string, string>>({});
 	let saving = $state(false);
 
 	const categories = [
 		'barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'smith', 'kettlebell', 'banded', 'other'
 	];
+	// Set types with editable rest — matches the live logger's set-type options.
+	const SET_TYPES = ['working', 'warmup', 'top_set', 'backoff', 'drop', 'amrap', 'failure'];
+	const blankRest = () => Object.fromEntries(SET_TYPES.map((st) => [st, '']));
 
 	async function load() {
 		loading = true;
@@ -49,6 +53,7 @@
 		newName = '';
 		newCategory = 'barbell';
 		selectedMuscles = [];
+		restTimes = blankRest();
 		showForm = true;
 	}
 	function startEdit(ex: Exercise) {
@@ -56,12 +61,19 @@
 		newName = ex.name;
 		newCategory = ex.category;
 		selectedMuscles = [...ex.primary_muscles];
+		const rt = blankRest();
+		for (const st of SET_TYPES) {
+			const v = ex.rest_by_set_type?.[st];
+			if (v != null) rt[st] = String(v);
+		}
+		restTimes = rt;
 		showForm = true;
 	}
 	function cancelForm() {
 		showForm = false;
 		editingId = null;
 		newName = '';
+		restTimes = blankRest();
 	}
 	function toggleMuscle(id: number) {
 		selectedMuscles = selectedMuscles.includes(id)
@@ -74,7 +86,17 @@
 		if (!newName.trim()) return;
 		saving = true;
 		try {
-			const payload = { name: newName.trim(), category: newCategory, primary_muscles: selectedMuscles };
+			const rest_by_set_type: Record<string, number> = {};
+			for (const st of SET_TYPES) {
+				const v = String(restTimes[st] ?? '').trim();
+				if (v !== '' && Number.isFinite(Number(v))) rest_by_set_type[st] = Math.round(Number(v));
+			}
+			const payload = {
+				name: newName.trim(),
+				category: newCategory,
+				primary_muscles: selectedMuscles,
+				rest_by_set_type
+			};
 			if (editingId != null) {
 				await trainingApi.updateExercise(editingId, payload);
 			} else {
@@ -129,6 +151,24 @@
 					>
 						{mu.name}
 					</button>
+				{/each}
+			</div>
+		</div>
+		<div>
+			<p class="mb-1 text-xs text-neutral-500">Rest timers (seconds per set type; blank = default 120)</p>
+			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+				{#each SET_TYPES as st (st)}
+					<label class="flex items-center justify-between gap-2 rounded border border-neutral-800 px-2 py-1 text-xs text-neutral-400">
+						<span class="capitalize">{st.replace('_', ' ')}</span>
+						<input
+							type="number"
+							min="0"
+							step="15"
+							placeholder="120"
+							bind:value={restTimes[st]}
+							class="w-16 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 text-right text-neutral-100 tabular-nums"
+						/>
+					</label>
 				{/each}
 			</div>
 		</div>
