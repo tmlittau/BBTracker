@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { trainingApi, type Exercise, type Muscle } from '$lib/training/api';
+	import { defaultRestSeconds } from '$lib/training/calc';
 	import { apiErrorMessage } from '$lib/api/errors';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -16,11 +17,16 @@
 	let newName = $state('');
 	let newCategory = $state('barbell');
 	let selectedMuscles = $state<number[]>([]);
+	let restTimes = $state<Record<string, string>>({});
+	let restSetType = $state('working');
 	let saving = $state(false);
 
 	const categories = [
 		'barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'smith', 'kettlebell', 'banded', 'other'
 	];
+	// Set types with editable rest — matches the live logger's set-type options.
+	const SET_TYPES = ['working', 'warmup', 'top_set', 'backoff', 'drop', 'amrap', 'failure'];
+	const blankRest = () => Object.fromEntries(SET_TYPES.map((st) => [st, '']));
 
 	async function load() {
 		loading = true;
@@ -49,6 +55,8 @@
 		newName = '';
 		newCategory = 'barbell';
 		selectedMuscles = [];
+		restTimes = blankRest();
+		restSetType = 'working';
 		showForm = true;
 	}
 	function startEdit(ex: Exercise) {
@@ -56,12 +64,19 @@
 		newName = ex.name;
 		newCategory = ex.category;
 		selectedMuscles = [...ex.primary_muscles];
+		const rt = blankRest();
+		for (const st of SET_TYPES) {
+			const v = ex.rest_by_set_type?.[st];
+			if (v != null) rt[st] = String(v);
+		}
+		restTimes = rt;
 		showForm = true;
 	}
 	function cancelForm() {
 		showForm = false;
 		editingId = null;
 		newName = '';
+		restTimes = blankRest();
 	}
 	function toggleMuscle(id: number) {
 		selectedMuscles = selectedMuscles.includes(id)
@@ -74,7 +89,17 @@
 		if (!newName.trim()) return;
 		saving = true;
 		try {
-			const payload = { name: newName.trim(), category: newCategory, primary_muscles: selectedMuscles };
+			const rest_by_set_type: Record<string, number> = {};
+			for (const st of SET_TYPES) {
+				const v = String(restTimes[st] ?? '').trim();
+				if (v !== '' && Number.isFinite(Number(v))) rest_by_set_type[st] = Math.round(Number(v));
+			}
+			const payload = {
+				name: newName.trim(),
+				category: newCategory,
+				primary_muscles: selectedMuscles,
+				rest_by_set_type
+			};
 			if (editingId != null) {
 				await trainingApi.updateExercise(editingId, payload);
 			} else {
@@ -130,6 +155,32 @@
 						{mu.name}
 					</button>
 				{/each}
+			</div>
+		</div>
+		<div>
+			<p class="mb-1 text-xs text-neutral-500">
+				Rest timer per set type (blank = default; working 120s, others 0s)
+			</p>
+			<div class="flex items-center gap-2">
+				<select
+					bind:value={restSetType}
+					class="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm capitalize text-neutral-100"
+				>
+					{#each SET_TYPES as st (st)}
+						<option value={st}>{st.replace('_', ' ')}</option>
+					{/each}
+				</select>
+				<input
+					type="number"
+					min="0"
+					step="15"
+					aria-label="Rest seconds"
+					placeholder={String(defaultRestSeconds(restSetType))}
+					value={restTimes[restSetType] ?? ''}
+					oninput={(e) => (restTimes[restSetType] = (e.currentTarget as HTMLInputElement).value)}
+					class="w-24 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-right text-sm text-neutral-100 tabular-nums"
+				/>
+				<span class="text-xs text-neutral-500">seconds</span>
 			</div>
 		</div>
 		<Button type="submit" disabled={saving}>

@@ -13,9 +13,26 @@ from apps.training.services import (
     counts_as_set,
     epley_1rm,
     estimated_1rm,
+    rest_seconds_for,
     set_volume,
     weekly_muscle_volume,
 )
+
+
+class TestRestSecondsFor:
+    def test_uses_configured_value(self):
+        ex = Exercise(rest_by_set_type={"working": 180, "warmup": 45})
+        assert rest_seconds_for(ex, "working") == 180
+        assert rest_seconds_for(ex, "warmup") == 45
+
+    def test_default_is_120_for_working_and_0_otherwise(self):
+        ex = Exercise(rest_by_set_type={})
+        assert rest_seconds_for(ex, "working") == 120
+        assert rest_seconds_for(ex, "warmup") == 0
+        assert rest_seconds_for(ex, "drop") == 0
+
+    def test_explicit_zero_is_honoured(self):
+        assert rest_seconds_for(Exercise(rest_by_set_type={"working": 0}), "working") == 0
 
 
 def _log_sets(user, muscle, started_at, n, set_type=SetType.WORKING, weight="50", reps=10):

@@ -36,7 +36,27 @@ class ExerciseSerializer(serializers.ModelSerializer):
             "id", "name", "category", "load_type",
             "primary_muscles", "secondary_muscles", "primary_muscle_names",
             "equipment", "instructions", "is_unilateral", "is_global",
+            "rest_by_set_type",
         ]
+
+    def validate_rest_by_set_type(self, value):
+        from .enums import SetType
+
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Expected an object of set_type → seconds.")
+        valid = set(SetType.values)
+        cleaned = {}
+        for key, seconds in value.items():
+            if key not in valid:
+                raise serializers.ValidationError(f"Unknown set type {key!r}.")
+            try:
+                secs = int(seconds)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f"Rest for {key!r} must be an integer.") from None
+            if not 0 <= secs <= 3600:
+                raise serializers.ValidationError(f"Rest for {key!r} must be 0–3600 seconds.")
+            cleaned[key] = secs
+        return cleaned
 
     def get_primary_muscle_names(self, obj) -> list[str]:
         return [m.name for m in obj.primary_muscles.all()]

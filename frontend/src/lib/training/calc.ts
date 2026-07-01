@@ -34,29 +34,48 @@ export interface PlateResult {
 	remainder: number;
 }
 
+/** Default rest (seconds) for a set type: 120 for working sets, 0 otherwise. */
+export function defaultRestSeconds(setType: string): number {
+	return setType === 'working' ? 120 : 0;
+}
+
+export type UnitSystem = 'metric' | 'imperial';
+
+/** Weight unit label for a unit system. */
+export function weightUnit(unit: UnitSystem): string {
+	return unit === 'imperial' ? 'lb' : 'kg';
+}
+
+/** Standard Olympic bar weight (kg / lb). */
+export function barWeight(unit: UnitSystem): number {
+	return unit === 'imperial' ? 45 : 20;
+}
+
+// Standard per-side plate denominations. Metric's "one plate" is 20 kg (not 25);
+// imperial's is 45 lb.
+const PLATES: Record<UnitSystem, number[]> = {
+	metric: [20, 15, 10, 5, 2.5, 1.25],
+	imperial: [45, 35, 25, 10, 5, 2.5]
+};
+
 /**
- * Plate calculator: which plates per side to load a barbell to `target`.
- * `plates` are the denominations available (per side, any count). Greedy —
- * correct for standard gym plate sets.
+ * Plate calculator: which plates per side to load a barbell to `target`, using the
+ * standard bar + plate set for the unit system. Greedy — correct for standard sets.
  */
-export function platesPerSide(
-	target: number,
-	barWeight = 20,
-	plates: number[] = [25, 20, 15, 10, 5, 2.5, 1.25]
-): PlateResult {
+export function platesPerSide(target: number, unit: UnitSystem = 'metric'): PlateResult {
+	const bar = barWeight(unit);
 	const perSide: number[] = [];
-	if (target <= barWeight) {
-		return { perSide, achievable: barWeight, remainder: round2(Math.max(0, target - barWeight)) };
+	if (target <= bar) {
+		return { perSide, achievable: bar, remainder: round2(Math.max(0, target - bar)) };
 	}
-	let remaining = (target - barWeight) / 2;
-	const sorted = [...plates].sort((a, b) => b - a);
-	for (const plate of sorted) {
+	let remaining = (target - bar) / 2;
+	for (const plate of PLATES[unit]) {
 		while (remaining >= plate - 1e-9) {
 			perSide.push(plate);
 			remaining = round2(remaining - plate);
 		}
 	}
-	const achievable = round2(barWeight + 2 * perSide.reduce((s, p) => s + p, 0));
+	const achievable = round2(bar + 2 * perSide.reduce((s, p) => s + p, 0));
 	return { perSide, achievable, remainder: round2(target - achievable) };
 }
 

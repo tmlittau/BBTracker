@@ -24,6 +24,8 @@ export interface Exercise {
 	instructions: string;
 	is_unilateral: boolean;
 	is_global: boolean;
+	/** Rest seconds per set type, e.g. { working: 180 }. Missing → default (120). */
+	rest_by_set_type: Record<string, number>;
 }
 
 export interface PlannedSet {

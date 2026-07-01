@@ -118,6 +118,30 @@ def test_global_exercise_is_editable(api, bench):
     assert bench.name == "Flat Bench Press"
 
 
+def test_exercise_rest_by_set_type_roundtrip(api, bench):
+    resp = api.patch(
+        f"/api/v1/training/exercises/{bench.id}/",
+        {"rest_by_set_type": {"working": 180, "warmup": 60}},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.content
+    bench.refresh_from_db()
+    assert bench.rest_by_set_type == {"working": 180, "warmup": 60}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"nonsense": 120}, {"working": "abc"}, {"working": 99999}],
+)
+def test_exercise_rest_by_set_type_rejects_bad(api, bench, bad):
+    resp = api.patch(
+        f"/api/v1/training/exercises/{bench.id}/",
+        {"rest_by_set_type": bad},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
 def test_global_exercise_delete_blocked_when_used(api, bench):
     spare = Exercise.objects.create(name="Spare Global")  # unused → deletable
     assert api.delete(f"/api/v1/training/exercises/{spare.id}/").status_code == 204

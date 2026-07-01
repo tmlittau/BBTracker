@@ -32,6 +32,10 @@ WORKING_SET_TYPES = frozenset(
 COUNTED_SET_TYPES = frozenset({SetType.WORKING, SetType.TOP_SET})
 
 
+# Fallback rest (seconds) when an exercise has no per-set-type rest configured.
+DEFAULT_REST_SECONDS = 120
+
+
 # Sensible default rest (seconds) per set type, used when a planned set leaves
 # `rest_seconds` blank or a freeform set is logged. Warm-ups rest little; heavy
 # top/back-off/AMRAP work rests longest; intensity techniques are near-continuous.

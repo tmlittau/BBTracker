@@ -2995,6 +2995,8 @@ export interface components {
             /** @description Performed one side at a time (logged load is per-side). */
             is_unilateral?: boolean;
             readonly is_global: boolean;
+            /** @description Rest seconds per set type, e.g. {'working': 180, 'warmup': 60}. Missing types fall back to DEFAULT_REST_SECONDS. */
+            rest_by_set_type?: unknown;
         };
         /**
          * @description * `barbell` - Barbell
@@ -3038,6 +3040,8 @@ export interface components {
             instructions?: string;
             /** @description Performed one side at a time (logged load is per-side). */
             is_unilateral?: boolean;
+            /** @description Rest seconds per set type, e.g. {'working': 180, 'warmup': 60}. Missing types fall back to DEFAULT_REST_SECONDS. */
+            rest_by_set_type?: unknown;
         };
         ExerciseSlot: {
             readonly id: number;
@@ -3905,6 +3909,8 @@ export interface components {
             instructions?: string;
             /** @description Performed one side at a time (logged load is per-side). */
             is_unilateral?: boolean;
+            /** @description Rest seconds per set type, e.g. {'working': 180, 'warmup': 60}. Missing types fall back to DEFAULT_REST_SECONDS. */
+            rest_by_set_type?: unknown;
         };
         PatchedExerciseSlotRequest: {
             day?: number;
