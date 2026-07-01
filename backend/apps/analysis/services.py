@@ -123,15 +123,17 @@ def _slope_per_day(points):
 def adaptive_tdee(intake_by_day, weight_by_day, min_days=10):
     """Estimate expenditure from the energy-balance identity over a window.
 
-    TDEE ≈ mean daily intake − (kg/day weight slope × ENERGY_PER_KG). Needs at least
-    `min_days` weight points (least-squares slope to damp daily noise) and enough
-    logged-intake days. Returns a dict or None when there isn't enough data.
+    TDEE ≈ mean daily intake − (kg/day weight trend × ENERGY_PER_KG). The trend is a
+    Theil-Sen slope (median of pairwise slopes) so a water-weight spike doesn't skew it,
+    and an EWMA gives a smoothed "trend weight" + a rate as %/wk. Needs at least
+    `min_days` weight points and enough logged-intake days. Returns a dict or None.
     """
+    from .stats import ewma, theil_sen_slope
+
     weights = sorted((d, _f(w)) for d, w in weight_by_day.items() if _f(w))
     if len(weights) < min_days:
         return None
-    base = weights[0][0]
-    slope = _slope_per_day([((d - base).days, w) for d, w in weights])
+    slope = theil_sen_slope(weights)
     if slope is None:
         return None
     intakes = [_f(v) for v in intake_by_day.values() if _f(v) and _f(v) > 0]
@@ -142,12 +144,42 @@ def adaptive_tdee(intake_by_day, weight_by_day, min_days=10):
     if not (800 < tdee < 8000):  # implausible → not enough signal yet
         return None
     span = (weights[-1][0] - weights[0][0]).days + 1
+    smoothed = ewma(weights, halflife_days=10.0)
+    trend_weight = round(smoothed[-1][1], 2) if smoothed else None
     return {
         "tdee": round(tdee),
         "weight_slope_kg_wk": round(slope * 7, 3),
+        "weight_rate_pct_wk": (
+            round(slope * 7 / trend_weight * 100, 2) if trend_weight else None
+        ),
+        "trend_weight": trend_weight,
         "days": span,
         "intake_days": len(intakes),
         "confidence": "high" if span >= 21 and len(intakes) >= 14 else "medium",
+    }
+
+
+def partitioning(comp_trend):
+    """Lean vs fat split of the weight change across the composition window (the
+    p-ratio = fraction of the weight change that was lean mass). None if <2 points or
+    negligible change. Direction-agnostic: the UI reads the signed kg changes.
+    """
+    from datetime import date
+
+    if not comp_trend or len(comp_trend) < 2:
+        return None
+    a, b = comp_trend[0], comp_trend[-1]
+    dw = round(b["weight_kg"] - a["weight_kg"], 2)
+    if abs(dw) < 0.3:
+        return None
+    d_lean = round(b["lean_mass_kg"] - a["lean_mass_kg"], 2)
+    d_fat = round(b["fat_mass_kg"] - a["fat_mass_kg"], 2)
+    return {
+        "weight_change_kg": dw,
+        "lean_change_kg": d_lean,
+        "fat_change_kg": d_fat,
+        "p_ratio": round(d_lean / dw, 2),
+        "days": (date.fromisoformat(b["date"]) - date.fromisoformat(a["date"])).days,
     }
 
 
@@ -416,6 +448,7 @@ def body_analysis(owner, on_date, window_start=None):
     assessments = _assess(sex, composition, distribution, energy, bp, bloodwork)
     comp_start = window_start or (on_date - timedelta(days=180))
     comp_trend = composition_series(owner, comp_start, on_date, sex, height)
+    energy["partitioning"] = partitioning(comp_trend)
     insights = _insights(comp_trend, energy)
 
     return {

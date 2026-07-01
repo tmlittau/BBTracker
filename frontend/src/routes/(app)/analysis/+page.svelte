@@ -11,6 +11,7 @@
 	import { measurementsVersion } from '$lib/analysis/store';
 	import { isoDate } from '$lib/date';
 	import LineChart from '$lib/components/ui/LineChart.svelte';
+	import AnalysisExplore from '$lib/analysis/AnalysisExplore.svelte';
 	import MeasurementModal from '$lib/analysis/MeasurementModal.svelte';
 
 	let analysis = $state<BodyAnalysis | null>(null);
@@ -158,6 +159,7 @@
 	const bwDerived = $derived(analysis?.bloodwork.derived);
 	const bwTrends = $derived(analysis?.bloodwork.trends ?? []);
 	const compTrend = $derived(analysis?.composition_trend ?? []);
+	const partitioning = $derived(energy?.partitioning ?? null);
 	const compSeries = $derived([
 		{ points: compTrend.map((p) => ({ x: p.date, y: p.fat_mass_kg })), color: '#fb7185', label: 'Fat', dots: true },
 		{ points: compTrend.map((p) => ({ x: p.date, y: p.lean_mass_kg })), color: '#34d399', label: 'Lean', dots: true }
@@ -279,8 +281,11 @@
 			{#if adaptive}
 				<p class="mt-1 text-2xl font-bold">{adaptive.tdee} <span class="text-sm font-normal text-neutral-500">kcal/day</span></p>
 				<p class="text-xs text-neutral-500">
-					{adaptive.confidence} confidence · {adaptive.weight_slope_kg_wk > 0 ? '+' : ''}{adaptive.weight_slope_kg_wk} kg/wk over {adaptive.days} d
+					{adaptive.confidence} confidence · {adaptive.weight_slope_kg_wk > 0 ? '+' : ''}{adaptive.weight_slope_kg_wk} kg/wk{#if adaptive.weight_rate_pct_wk != null} ({adaptive.weight_rate_pct_wk > 0 ? '+' : ''}{adaptive.weight_rate_pct_wk}%/wk){/if} over {adaptive.days} d
 				</p>
+				{#if adaptive.trend_weight != null}
+					<p class="text-xs text-neutral-600">trend weight {adaptive.trend_weight} kg (smoothed)</p>
+				{/if}
 			{:else}
 				<p class="mt-1 text-sm text-neutral-400">Log bodyweight + food for ~2–3 weeks to estimate your real maintenance.</p>
 			{/if}
@@ -338,8 +343,27 @@
 					? ` across ${selectedPhase.name}`
 					: ' over the last ~6 months'}.
 			</p>
+			{#if partitioning}
+				<p class="mt-2 text-xs">
+					<span class="text-neutral-400">Over {partitioning.days} d:</span>
+					<span class="{partitioning.weight_change_kg >= 0 ? 'text-amber-300' : 'text-sky-300'}">{partitioning.weight_change_kg > 0 ? '+' : ''}{partitioning.weight_change_kg} kg</span>
+					=
+					<span class="text-emerald-300">{partitioning.lean_change_kg > 0 ? '+' : ''}{partitioning.lean_change_kg} kg lean</span>
+					+
+					<span class="text-rose-300">{partitioning.fat_change_kg > 0 ? '+' : ''}{partitioning.fat_change_kg} kg fat</span>
+					<span class="text-neutral-600">(p-ratio {partitioning.p_ratio})</span>
+				</p>
+			{/if}
 		</section>
 	{/if}
+
+	<!-- Explore: cross-domain metric overlay (Phase A) -->
+	<section class="mt-8 rounded-lg border border-neutral-800 p-4">
+		<h2 class="font-medium">Explore</h2>
+		<div class="mt-3">
+			<AnalysisExplore start={win.start} end={win.asOf} />
+		</div>
+	</section>
 
 	<!-- Assessments -->
 	{#if analysis.assessments.length}

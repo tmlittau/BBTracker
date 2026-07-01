@@ -14,6 +14,23 @@ class BodyMeasurementSerializer(serializers.ModelSerializer):
         return unit_for(obj.type)
 
 
+class MetricSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    unit = serializers.CharField()
+    group = serializers.CharField()
+
+
+class SeriesOverlaySerializer(serializers.Serializer):
+    """Aligned metric series + phase/protocol annotations for the explore tool."""
+
+    start = serializers.CharField()
+    end = serializers.CharField()
+    metrics = serializers.ListField(child=serializers.DictField())
+    phases = serializers.ListField(child=serializers.DictField())
+    events = serializers.ListField(child=serializers.DictField())
+
+
 class BodyAnalysisSerializer(serializers.Serializer):
     """Loose shape for the computed analysis (documented for the client)."""
 

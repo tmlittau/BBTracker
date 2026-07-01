@@ -52,6 +52,40 @@ export interface paths {
         patch: operations["v1_analysis_measurements_partial_update"];
         trace?: never;
     };
+    "/api/v1/analysis/metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Metrics the user has data for — the explore-tool picker. */
+        get: operations["v1_analysis_metrics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analysis/series/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Aligned time-series for `metrics` (comma-separated keys) over [start, end]. */
+        get: operations["v1_analysis_series_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf/": {
         parameters: {
             query?: never;
@@ -3271,6 +3305,12 @@ export interface components {
          * @enum {string}
          */
         MethodEnum: "dexa" | "bia" | "calipers" | "scale" | "estimate";
+        Metric: {
+            key: string;
+            label: string;
+            unit: string;
+            group: string;
+        };
         Muscle: {
             readonly id: number;
             name: string;
@@ -4481,6 +4521,20 @@ export interface components {
          * @enum {string}
          */
         RouteEnum: "im" | "subq" | "oral" | "topical" | "nasal" | "other";
+        /** @description Aligned metric series + phase/protocol annotations for the explore tool. */
+        SeriesOverlay: {
+            start: string;
+            end: string;
+            metrics: {
+                [key: string]: unknown;
+            }[];
+            phases: {
+                [key: string]: unknown;
+            }[];
+            events: {
+                [key: string]: unknown;
+            }[];
+        };
         ServingSize: {
             readonly id: number;
             label: string;
@@ -4935,6 +4989,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BodyMeasurement"];
+                };
+            };
+        };
+    };
+    v1_analysis_metrics_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Metric"][];
+                };
+            };
+        };
+    };
+    v1_analysis_series_retrieve: {
+        parameters: {
+            query?: {
+                end?: string;
+                /** @description Comma-separated metric keys */
+                metrics?: string;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesOverlay"];
                 };
             };
         };
