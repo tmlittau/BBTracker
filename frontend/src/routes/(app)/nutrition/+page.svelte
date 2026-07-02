@@ -16,6 +16,7 @@
 	import FoodSearch from '$lib/nutrition/FoodSearch.svelte';
 	import AddEntryDialog from '$lib/nutrition/AddEntryDialog.svelte';
 	import FoodCreateModal from '$lib/nutrition/FoodCreateModal.svelte';
+	import WaterCard from '$lib/nutrition/WaterCard.svelte';
 
 	function todayISO(): string {
 		return isoDate();
@@ -295,6 +296,9 @@
 			</div>
 		{/if}
 	</section>
+
+	<!-- Water quick-add -->
+	<WaterCard {date} goalMl={summary.water?.goal_ml ?? null} />
 
 	<!-- Meals (dynamic per day) -->
 	{#if meals.length === 0}

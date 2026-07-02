@@ -21,7 +21,7 @@
 		['fiber_g', 'Fiber']
 	];
 	let goals = $state<Record<string, string>>({
-		calories: '', protein_g: '', carb_g: '', fat_g: '', fiber_g: ''
+		calories: '', protein_g: '', carb_g: '', fat_g: '', fiber_g: '', water_ml: ''
 	});
 	let saving = $state(false);
 
@@ -57,7 +57,7 @@
 	function reset() {
 		editing = null;
 		name = '';
-		goals = { calories: '', protein_g: '', carb_g: '', fat_g: '', fiber_g: '' };
+		goals = { calories: '', protein_g: '', carb_g: '', fat_g: '', fiber_g: '', water_ml: '' };
 		customizeMicros = false;
 		microGoals = blankMicroGoals();
 	}
@@ -70,7 +70,8 @@
 			protein_g: t.protein_g ?? '',
 			carb_g: t.carb_g ?? '',
 			fat_g: t.fat_g ?? '',
-			fiber_g: t.fiber_g ?? ''
+			fiber_g: t.fiber_g ?? '',
+			water_ml: t.water_ml != null ? String(t.water_ml) : ''
 		};
 		const mg = blankMicroGoals();
 		for (const nt of t.nutrient_targets) {
@@ -99,6 +100,7 @@
 			carb_g: dec(goals.carb_g),
 			fat_g: dec(goals.fat_g),
 			fiber_g: dec(goals.fiber_g),
+			water_ml: goals.water_ml.trim() === '' ? null : Math.round(num(goals.water_ml)),
 			nutrient_targets
 		};
 	}
@@ -148,6 +150,19 @@
 			<span class="text-amber-400">(differs from your {num(goals.calories)} kcal goal)</span>
 		{/if}
 	</p>
+
+	<label class="flex flex-col text-xs text-neutral-500">
+		Water goal (ml/day)
+		<input
+			name="water_ml"
+			type="number"
+			step="50"
+			min="0"
+			placeholder="e.g. 3000"
+			bind:value={goals.water_ml}
+			class="mt-1 w-40 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+		/>
+	</label>
 
 	<label class="flex items-center gap-2 border-t border-neutral-800 pt-3 text-sm text-neutral-300">
 		<input type="checkbox" bind:checked={customizeMicros} class="accent-orange-500" />

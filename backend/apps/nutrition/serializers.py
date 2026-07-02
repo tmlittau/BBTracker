@@ -15,6 +15,7 @@ from .models import (
     Recipe,
     RecipeItem,
     ServingSize,
+    WaterLog,
 )
 
 
@@ -159,7 +160,7 @@ class NutritionTargetSerializer(serializers.ModelSerializer):
         model = NutritionTarget
         fields = [
             "id", "name", "is_active", "day_type",
-            "calories", "protein_g", "carb_g", "fat_g", "fiber_g",
+            "calories", "protein_g", "carb_g", "fat_g", "fiber_g", "water_ml",
             "nutrient_targets",
         ]
 
@@ -180,6 +181,13 @@ class NutritionTargetSerializer(serializers.ModelSerializer):
             for m in micros:
                 NutrientTarget.objects.create(target=instance, **m)
         return instance
+
+
+class WaterLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WaterLog
+        fields = ["id", "date", "amount_ml", "source"]
+        read_only_fields = ["source"]
 
 
 class RecipeItemSerializer(serializers.ModelSerializer):
@@ -225,6 +233,11 @@ class MealMacroSerializer(serializers.Serializer):
     fat_g = serializers.DecimalField(max_digits=12, decimal_places=3)
 
 
+class WaterSummarySerializer(serializers.Serializer):
+    total_ml = serializers.IntegerField()
+    goal_ml = serializers.IntegerField(allow_null=True)
+
+
 class DailySummarySerializer(serializers.Serializer):
     date = serializers.CharField()
     has_target = serializers.BooleanField()
@@ -232,6 +245,7 @@ class DailySummarySerializer(serializers.Serializer):
     totals = serializers.DictField()
     nutrients = SummaryNutrientSerializer(many=True)
     meals = MealMacroSerializer(many=True)
+    water = WaterSummarySerializer()
 
 
 class MealTemplateItemSerializer(serializers.ModelSerializer):

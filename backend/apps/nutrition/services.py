@@ -136,7 +136,9 @@ def daily_summary(owner, date):
     Returns a dict with `date`, `totals` (macro headline numbers) and a
     `nutrients` list of {id,name,unit,category,amount,target,percent}.
     """
-    from .models import DiaryEntry, NutritionTarget
+    from django.db.models import Sum
+
+    from .models import DiaryEntry, NutritionTarget, WaterLog
 
     entries = (
         DiaryEntry.objects.filter(owner=owner, date=date)
@@ -237,6 +239,10 @@ def daily_summary(owner, date):
             }
         )
 
+    water_total = (
+        WaterLog.objects.filter(owner=owner, date=date).aggregate(t=Sum("amount_ml"))["t"] or 0
+    )
+
     return {
         "date": date.isoformat() if hasattr(date, "isoformat") else str(date),
         "has_target": target is not None,
@@ -244,6 +250,7 @@ def daily_summary(owner, date):
         "totals": headline,
         "nutrients": nutrients,
         "meals": meals,
+        "water": {"total_ml": int(water_total), "goal_ml": target.water_ml if target else None},
     }
 
 
@@ -387,8 +394,11 @@ OFF_NUTRIENT_MAP: dict[str, str] = {
     "phosphorus": "phosphorus",
     "potassium": "potassium",
     "sodium": "sodium",
+    "chloride": "chloride",
     "zinc": "zinc",
     "selenium": "selenium",
+    # Other
+    "caffeine": "caffeine",
 }
 
 # Slugs kept even when the reported value is 0 — a real "0 g fat" is meaningful.

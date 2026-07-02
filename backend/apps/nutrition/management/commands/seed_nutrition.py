@@ -42,8 +42,11 @@ NUTRIENTS = [
     ("phosphorus", "Phosphorus", C.MINERAL, U.MG, Decimal("700"), 53, False),
     ("potassium", "Potassium", C.MINERAL, U.MG, Decimal("3400"), 54, False),
     ("sodium", "Sodium", C.MINERAL, U.MG, Decimal("2300"), 55, False),
-    ("zinc", "Zinc", C.MINERAL, U.MG, Decimal("11"), 56, False),
-    ("selenium", "Selenium", C.MINERAL, U.MCG, Decimal("55"), 57, False),
+    ("chloride", "Chloride", C.MINERAL, U.MG, Decimal("2300"), 56, False),
+    ("zinc", "Zinc", C.MINERAL, U.MG, Decimal("11"), 57, False),
+    ("selenium", "Selenium", C.MINERAL, U.MCG, Decimal("55"), 58, False),
+    # Other trackable intakes
+    ("caffeine", "Caffeine", C.OTHER, U.MG, None, 60, False),
 ]
 
 # name, brand, [(serving_label, grams, is_default)], {nutrient_slug: per_100g}

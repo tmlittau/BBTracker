@@ -98,7 +98,16 @@ export interface NutritionTarget {
 	carb_g: string | null;
 	fat_g: string | null;
 	fiber_g: string | null;
+	/** Daily hydration goal in millilitres (null = no goal). */
+	water_ml: number | null;
 	nutrient_targets: NutrientTarget[];
+}
+
+export interface WaterLog {
+	id: number;
+	date: string;
+	amount_ml: number;
+	source: string;
 }
 
 export interface SummaryNutrient {
@@ -135,6 +144,7 @@ export interface DailySummary {
 	};
 	nutrients: SummaryNutrient[];
 	meals: MealMacro[];
+	water: { total_ml: number; goal_ml: number | null };
 }
 
 interface Paginated<T> {
@@ -239,7 +249,13 @@ export const nutritionApi = {
 		req<NutritionTarget>('PATCH', `/targets/${id}/`, data),
 	activateTarget: (id: number) => req<NutritionTarget>('POST', `/targets/${id}/activate/`),
 
-	summary: (date: string) => req<DailySummary>('GET', `/summary/?date=${date}`)
+	summary: (date: string) => req<DailySummary>('GET', `/summary/?date=${date}`),
+
+	water: (date: string) =>
+		req<Paginated<WaterLog>>('GET', `/water/?date=${date}`).then(list),
+	logWater: (date: string, amount_ml: number) =>
+		req<WaterLog>('POST', '/water/', { date, amount_ml }),
+	deleteWater: (id: number) => req<void>('DELETE', `/water/${id}/`)
 };
 
 // Suggested meal names for one-tap creation (meals are free-form per day now).

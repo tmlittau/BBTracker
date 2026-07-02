@@ -12,6 +12,7 @@ from .views import (
     NutritionTargetViewSet,
     RecipeItemViewSet,
     RecipeViewSet,
+    WaterLogViewSet,
 )
 
 router = DefaultRouter()
@@ -24,6 +25,7 @@ router.register("targets", NutritionTargetViewSet, basename="nutritiontarget")
 router.register("nutrient-targets", NutrientTargetViewSet, basename="nutrienttarget")
 router.register("recipes", RecipeViewSet, basename="recipe")
 router.register("recipe-items", RecipeItemViewSet, basename="recipeitem")
+router.register("water", WaterLogViewSet, basename="waterlog")
 
 urlpatterns = [
     path("summary/", NutritionSummaryView.as_view(), name="nutrition-summary"),

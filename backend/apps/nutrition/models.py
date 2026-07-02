@@ -148,6 +148,9 @@ class NutritionTarget(TimeStampedModel):
     carb_g = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True)
     fat_g = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True)
     fiber_g = models.DecimalField(max_digits=6, decimal_places=1, null=True, blank=True)
+    water_ml = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Daily hydration goal in millilitres."
+    )
     micro_targets = models.ManyToManyField(
         Nutrient, through="NutrientTarget", related_name="targets"
     )
@@ -286,3 +289,30 @@ class MealTemplateItem(models.Model):
 
     def __str__(self):
         return f"{self.template.name}: {self.food}"
+
+
+class WaterSource(models.TextChoices):
+    MANUAL = "manual", "Logged in app"
+    HEALTHKIT = "healthkit", "Apple Health"
+
+
+class WaterLog(TimeStampedModel):
+    """A single hydration entry (quick-added in the app, or later synced from a
+    wearable). The day's intake is the sum of its rows; `source` lets an Apple
+    Health import be told apart from / de-duped against manual entries later."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="water_logs"
+    )
+    date = models.DateField()
+    amount_ml = models.PositiveIntegerField()
+    source = models.CharField(
+        max_length=10, choices=WaterSource.choices, default=WaterSource.MANUAL
+    )
+
+    class Meta:
+        ordering = ["date", "id"]
+        indexes = [models.Index(fields=["owner", "date"])]
+
+    def __str__(self):
+        return f"{self.date} · {self.amount_ml} ml"

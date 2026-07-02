@@ -44,6 +44,21 @@ export function num(value: string | number | null | undefined): number {
 	return typeof value === 'number' ? value : parseFloat(value) || 0;
 }
 
+// Table salt is NaCl: sodium is 22.99/58.44 = 39.34% of its mass, chloride the
+// rest (60.66%). Used by the food editor to fill sodium + chloride (mg) from a
+// gram figure that's easier to read off a label / recipe.
+export const SALT_TO_SODIUM_MG = 393.37;
+export const SALT_TO_CHLORIDE_MG = 606.63;
+
+/** Sodium + chloride (mg) contributed by `saltGrams` of table salt, rounded to 0.1. */
+export function saltToSodiumChloride(saltGrams: number): { sodium: number; chloride: number } {
+	const round1 = (x: number) => Math.round(x * 10) / 10;
+	return {
+		sodium: round1(saltGrams * SALT_TO_SODIUM_MG),
+		chloride: round1(saltGrams * SALT_TO_CHLORIDE_MG)
+	};
+}
+
 /**
  * A distinct hue per macro (kept separate from the red/amber/green *status*
  * scale) so the macro bars read as four different things at a glance. Keyed by

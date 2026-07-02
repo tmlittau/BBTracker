@@ -21,6 +21,7 @@ from .models import (
     NutritionTarget,
     Recipe,
     RecipeItem,
+    WaterLog,
 )
 from .serializers import (
     BarcodeDraftSerializer,
@@ -35,6 +36,7 @@ from .serializers import (
     NutritionTargetSerializer,
     RecipeItemSerializer,
     RecipeSerializer,
+    WaterLogSerializer,
 )
 from .services import (
     NoNutrimentsError,
@@ -311,6 +313,23 @@ class NutritionSummaryView(APIView):
         else:
             day = date_cls.today()
         return Response(daily_summary(request.user, day))
+
+
+@extend_schema(tags=["nutrition"])
+class WaterLogViewSet(viewsets.ModelViewSet):
+    """Hydration entries — quick-added in the app; the day's intake is their sum."""
+
+    serializer_class = WaterLogSerializer
+
+    def get_queryset(self):
+        qs = WaterLog.objects.filter(owner=self.request.user)
+        d = self.request.query_params.get("date")
+        if d:
+            qs = qs.filter(date=d)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 
 @extend_schema(tags=["nutrition"])
