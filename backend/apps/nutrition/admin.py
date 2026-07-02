@@ -13,6 +13,7 @@ from .models import (
     Recipe,
     RecipeItem,
     ServingSize,
+    WaterLog,
 )
 
 
@@ -87,3 +88,10 @@ class MealTemplateAdmin(admin.ModelAdmin):
     list_display = ["name", "owner"]
     search_fields = ["owner__email", "name"]
     inlines = [MealTemplateItemInline]
+
+
+@admin.register(WaterLog)
+class WaterLogAdmin(admin.ModelAdmin):
+    list_display = ["date", "owner", "amount_ml", "source"]
+    list_filter = ["date", "source"]
+    search_fields = ["owner__email"]

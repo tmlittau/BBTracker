@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { nutritionApi, type BarcodeLookup, type Food, type Nutrient } from '$lib/nutrition/api';
-	import { kcalFromMacros, num } from '$lib/nutrition/calc';
+	import { kcalFromMacros, num, saltToSodiumChloride, SALT_TO_SODIUM_MG } from '$lib/nutrition/calc';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -33,7 +33,11 @@
 		energy: '', protein: '', carbohydrate: '', fat: '', fiber: ''
 	});
 	let micros = $state<Record<string, string>>({});
+	let saltG = $state('');
 	let showMicros = $state(false);
+
+	// Entering salt per 100 g/ml auto-fills the sodium + chloride micronutrient
+	// fields (mg per 100) — see saltToSodiumChloride for the NaCl mass split.
 	let extraServings = $state<{ label: string; grams: string }[]>([]);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
@@ -67,8 +71,22 @@
 		unit = 'g';
 		macros = { energy: '', protein: '', carbohydrate: '', fat: '', fiber: '' };
 		micros = {};
+		saltG = '';
 		showMicros = false;
 		extraServings = [];
+	}
+
+	// Salt convenience: writes sodium + chloride from grams of salt (clearing it
+	// clears both, since the salt figure and those two fields are linked).
+	function applySalt(v: string) {
+		saltG = v;
+		const g = num(v);
+		if (v.trim() === '' || g <= 0) {
+			micros = { ...micros, sodium: '', chloride: '' };
+			return;
+		}
+		const { sodium, chloride } = saltToSodiumChloride(g);
+		micros = { ...micros, sodium: String(sodium), chloride: String(chloride) };
 	}
 
 	function addServing() {
@@ -91,6 +109,8 @@
 			if (!MACRO_SLUGS.has(slug)) m[slug] = amt;
 		}
 		micros = m;
+		// Back-fill the salt helper from existing sodium so it round-trips on edit.
+		saltG = m.sodium ? String(Math.round((num(m.sodium) / SALT_TO_SODIUM_MG) * 1000) / 1000) : '';
 		if (Object.keys(m).length) showMicros = true;
 	}
 
@@ -199,6 +219,21 @@
 				{#if microNutrients.length === 0}
 					<p class="text-xs text-neutral-500">Loading…</p>
 				{:else}
+					<div class="mb-3 rounded border border-neutral-800 bg-neutral-900/40 p-2.5">
+						<label class="flex flex-col text-xs text-neutral-400">
+							<span class="font-medium text-neutral-300">Salt (g) — quick fill</span>
+							<input
+								type="number"
+								step="0.01"
+								value={saltG}
+								oninput={(e) => applySalt(e.currentTarget.value)}
+								class="mt-1 w-32 rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100"
+							/>
+						</label>
+						<p class="mt-1.5 text-[11px] text-neutral-600">
+							1 g salt ≈ 393 mg sodium + 607 mg chloride. Fills the sodium & chloride fields below (per 100 {unit}).
+						</p>
+					</div>
 					<div class="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
 						{#each microNutrients as n (n.id)}
 							<label class="flex flex-col text-xs text-neutral-500">

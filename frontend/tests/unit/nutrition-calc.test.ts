@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { barWidth, kcalFromMacros, macroColor, microColor, num, pct } from '../../src/lib/nutrition/calc';
+import {
+	barWidth,
+	kcalFromMacros,
+	macroColor,
+	microColor,
+	num,
+	pct,
+	saltToSodiumChloride
+} from '../../src/lib/nutrition/calc';
 
 describe('kcalFromMacros', () => {
 	it('applies 4/4/9 factors', () => {
@@ -57,5 +65,19 @@ describe('num', () => {
 		expect(num(7)).toBe(7);
 		expect(num(null)).toBe(0);
 		expect(num('')).toBe(0);
+	});
+});
+
+describe('saltToSodiumChloride', () => {
+	it('splits NaCl into ~39% sodium and ~61% chloride', () => {
+		const { sodium, chloride } = saltToSodiumChloride(1);
+		expect(sodium).toBe(393.4);
+		expect(chloride).toBe(606.6);
+		// The two halves reconstitute the original salt mass (in mg).
+		expect(sodium + chloride).toBeCloseTo(1000, 0);
+	});
+	it('scales linearly', () => {
+		expect(saltToSodiumChloride(2.5).sodium).toBe(983.4);
+		expect(saltToSodiumChloride(0).sodium).toBe(0);
 	});
 });

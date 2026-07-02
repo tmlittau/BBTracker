@@ -960,6 +960,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nutrition/water/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        get: operations["v1_nutrition_water_list"];
+        put?: never;
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        post: operations["v1_nutrition_water_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/nutrition/water/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        get: operations["v1_nutrition_water_retrieve"];
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        put: operations["v1_nutrition_water_update"];
+        post?: never;
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        delete: operations["v1_nutrition_water_destroy"];
+        options?: never;
+        head?: never;
+        /** @description Hydration entries — quick-added in the app; the day's intake is their sum. */
+        patch: operations["v1_nutrition_water_partial_update"];
+        trace?: never;
+    };
     "/api/v1/phase-adjustments/": {
         parameters: {
             query?: never;
@@ -2868,6 +2906,7 @@ export interface components {
             };
             nutrients: components["schemas"]["SummaryNutrient"][];
             meals: components["schemas"]["MealMacro"][];
+            water: components["schemas"]["WaterSummary"];
         };
         DashboardToday: {
             date: string;
@@ -3349,6 +3388,8 @@ export interface components {
             fat_g?: string | null;
             /** Format: decimal */
             fiber_g?: string | null;
+            /** @description Daily hydration goal in millilitres. */
+            water_ml?: number | null;
             nutrient_targets?: components["schemas"]["NutrientTarget"][];
         };
         NutritionTargetRequest: {
@@ -3365,6 +3406,8 @@ export interface components {
             fat_g?: string | null;
             /** Format: decimal */
             fiber_g?: string | null;
+            /** @description Daily hydration goal in millilitres. */
+            water_ml?: number | null;
             nutrient_targets?: components["schemas"]["NutrientTargetRequest"][];
         };
         PaginatedAdherenceRowList: {
@@ -3772,6 +3815,21 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Vial"][];
         };
+        PaginatedWaterLogList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["WaterLog"][];
+        };
         PaginatedWorkoutSessionListList: {
             /** @example 123 */
             count: number;
@@ -3979,6 +4037,8 @@ export interface components {
             fat_g?: string | null;
             /** Format: decimal */
             fiber_g?: string | null;
+            /** @description Daily hydration goal in millilitres. */
+            water_ml?: number | null;
             nutrient_targets?: components["schemas"]["NutrientTargetRequest"][];
         };
         PatchedPhaseAdjustmentRequest: {
@@ -4110,6 +4170,11 @@ export interface components {
             unit?: components["schemas"]["DoseUnitEnum"];
             /** Format: decimal */
             reorder_threshold?: string;
+        };
+        PatchedWaterLogRequest: {
+            /** Format: date */
+            date?: string;
+            amount_ml?: number;
         };
         PatchedWorkoutSessionRequest: {
             day?: number | null;
@@ -4676,6 +4741,28 @@ export interface components {
          * @enum {string}
          */
         ViewEnum: "front" | "back" | "side";
+        WaterLog: {
+            readonly id: number;
+            /** Format: date */
+            date: string;
+            amount_ml: number;
+            readonly source: components["schemas"]["WaterLogSourceEnum"];
+        };
+        WaterLogRequest: {
+            /** Format: date */
+            date: string;
+            amount_ml: number;
+        };
+        /**
+         * @description * `manual` - Logged in app
+         *     * `healthkit` - Apple Health
+         * @enum {string}
+         */
+        WaterLogSourceEnum: "manual" | "healthkit";
+        WaterSummary: {
+            total_ml: number;
+            goal_ml: number | null;
+        };
         WeekPrepDay: {
             /** Format: date */
             date: string;
@@ -6970,6 +7057,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NutritionTarget"];
+                };
+            };
+        };
+    };
+    v1_nutrition_water_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedWaterLogList"];
+                };
+            };
+        };
+    };
+    v1_nutrition_water_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaterLogRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WaterLogRequest"];
+                "multipart/form-data": components["schemas"]["WaterLogRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterLog"];
+                };
+            };
+        };
+    };
+    v1_nutrition_water_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterLog"];
+                };
+            };
+        };
+    };
+    v1_nutrition_water_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaterLogRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WaterLogRequest"];
+                "multipart/form-data": components["schemas"]["WaterLogRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterLog"];
+                };
+            };
+        };
+    };
+    v1_nutrition_water_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_nutrition_water_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedWaterLogRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedWaterLogRequest"];
+                "multipart/form-data": components["schemas"]["PatchedWaterLogRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaterLog"];
                 };
             };
         };
