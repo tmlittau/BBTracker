@@ -131,6 +131,11 @@ SITE_ID = 1
 # --- Django REST Framework ---
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        # Native clients (the iOS app) authenticate with the allauth headless *app* session
+        # token in the `X-Session-Token` header — reuses the existing email login + MFA. This
+        # class returns None when the header is absent, so the web app's cookie/session flow
+        # below is unaffected (and CSRF still applies to it). See BBTracker-iOS docs SERVER_CHANGES.
+        "allauth.headless.contrib.rest_framework.authentication.XSessionTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

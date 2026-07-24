@@ -4,6 +4,7 @@ from rest_framework.test import APIClient
 pytestmark = pytest.mark.django_db
 
 SIGNUP_URL = "/_allauth/browser/v1/auth/signup"
+APP_LOGIN_URL = "/_allauth/app/v1/auth/login"
 ME_URL = "/api/v1/auth/me/"
 
 
@@ -57,6 +58,31 @@ def test_signup_marks_email_verified(api):
         format="json",
     )
     assert EmailAddress.objects.filter(email="verified@example.com", verified=True).exists()
+
+
+def test_app_session_token_authenticates_api(api):
+    """A native (app-client) session token authenticates /api/v1/ via the X-Session-Token
+    header — no session cookie needed. This is what lets the iOS app reuse the allauth login."""
+    from apps.accounts.models import User
+
+    User.objects.create_user(email="native@example.com", password="Sup3rStrongPass!")
+    login = api.post(
+        APP_LOGIN_URL,
+        {"email": "native@example.com", "password": "Sup3rStrongPass!"},
+        format="json",
+    )
+    assert login.status_code == 200, login.content
+    token = login.json()["meta"]["session_token"]
+    assert token
+
+    # A cookie-less client carrying only the app token in the header is authenticated.
+    resp = APIClient().get(ME_URL, HTTP_X_SESSION_TOKEN=token)
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["email"] == "native@example.com"
+
+    # A bogus token falls through to unauthenticated.
+    bad = APIClient().get(ME_URL, HTTP_X_SESSION_TOKEN="not-a-real-token")
+    assert bad.status_code in (401, 403)
 
 
 def test_totp_enrollment_available_after_signup(api):
