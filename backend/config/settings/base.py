@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.diary",
     "apps.notifications",
     "apps.analysis",
+    "apps.health",
 ]
 
 MIDDLEWARE = [
@@ -201,3 +202,12 @@ DIARY_MAX_UPLOAD_BYTES = env.int("DIARY_MAX_UPLOAD_BYTES", default=15 * 1024 * 1
 HA_BASE_URL = env("HA_BASE_URL", default="")  # e.g. http://192.168.1.10:8123
 HA_TOKEN = env("HA_TOKEN", default="")  # long-lived access token (keep secret)
 HA_NOTIFY_SERVICE = env("HA_NOTIFY_SERVICE", default="notify")  # e.g. mobile_app_<device>
+
+# --- Apple Push Notification service (native iOS app) ---
+# APNS_KEY_P8 accepts either the mounted .p8 path or the PEM text itself. The
+# other values come from the paid Apple Developer team/App ID configuration.
+APNS_KEY_P8 = env("APNS_KEY_P8", default="")
+APNS_KEY_ID = env("APNS_KEY_ID", default="")
+APNS_TEAM_ID = env("APNS_TEAM_ID", default="")
+APNS_BUNDLE_ID = env("APNS_BUNDLE_ID", default="com.tmlittau.bbtracker")
+APNS_TIMEOUT = env.float("APNS_TIMEOUT", default=8.0)

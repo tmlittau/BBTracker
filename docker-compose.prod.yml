@@ -75,8 +75,8 @@ services:
       retries: 10
       start_period: 40s
 
-  # Reminder worker: fires rest-timer + dose reminders via Home Assistant. Reuses
-  # the backend image; waits for the backend (migrations) before polling.
+  # Reminder worker: fires dose reminders through APNs and can keep Home Assistant
+  # as a parallel channel. Reuses the backend image and waits for migrations.
   reminders:
     build:
       context: ./backend

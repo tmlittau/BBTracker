@@ -366,6 +366,7 @@ OFF_NUTRIENT_MAP: dict[str, str] = {
     "fat": "fat",
     "saturated-fat": "saturated_fat",
     "fiber": "fiber",
+    "caffeine": "caffeine",
     # Vitamins
     "vitamin-a": "vitamin_a",
     "vitamin-c": "vitamin_c",

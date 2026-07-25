@@ -8,6 +8,8 @@ from .views import (
     HealthzView,
     PhaseAdjustmentViewSet,
     PhaseViewSet,
+    ReplicaBackupView,
+    ReplicaBootstrapView,
     WeeklyCheckInView,
 )
 
@@ -19,6 +21,8 @@ urlpatterns = [
     path("healthz/", HealthzView.as_view(), name="healthz"),
     path("dashboard/today/", DashboardTodayView.as_view(), name="dashboard-today"),
     path("checkin/weekly/", WeeklyCheckInView.as_view(), name="checkin-weekly"),
+    path("sync/bootstrap/", ReplicaBootstrapView.as_view(), name="replica-bootstrap"),
+    path("sync/backup/", ReplicaBackupView.as_view(), name="replica-backup"),
     path("export/", DataExportView.as_view(), name="data-export"),
     path("report/checkin/", CheckinReportView.as_view(), name="checkin-report"),
     *router.urls,

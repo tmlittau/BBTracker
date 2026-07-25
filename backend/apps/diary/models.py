@@ -81,6 +81,7 @@ class ProgressPhoto(TimeStampedModel):
     pose = models.ForeignKey(
         Pose, on_delete=models.SET_NULL, null=True, blank=True, related_name="photos"
     )
+    client_id = models.UUIDField(null=True, blank=True)
     taken_on = models.DateField()
     # Object-storage keys (private bucket); streamed back via the API, not public URLs.
     object_key = models.CharField(max_length=255)
@@ -94,6 +95,12 @@ class ProgressPhoto(TimeStampedModel):
     class Meta:
         ordering = ["-taken_on", "-created_at"]
         indexes = [models.Index(fields=["owner", "pose", "taken_on"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "client_id"],
+                name="uniq_progress_photo_owner_client_id",
+            )
+        ]
 
     def __str__(self):
         pose = self.pose.name if self.pose else "freeform"

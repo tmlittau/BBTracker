@@ -37,7 +37,7 @@ class ProgressPhotoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProgressPhoto
         fields = [
-            "id", "pose", "pose_name", "taken_on", "notes",
+            "id", "client_id", "pose", "pose_name", "taken_on", "notes",
             "width", "height", "bytes", "content_type",
             "image_url", "thumb_url", "created_at",
         ]
@@ -57,6 +57,7 @@ class ProgressPhotoUploadSerializer(serializers.Serializer):
     """Validates multipart upload input; the view does storage + processing."""
 
     image = serializers.ImageField(write_only=True)
+    client_id = serializers.UUIDField(required=False)
     pose = serializers.PrimaryKeyRelatedField(
         queryset=Pose.objects.all(), required=False, allow_null=True
     )

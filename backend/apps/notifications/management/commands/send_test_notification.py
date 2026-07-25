@@ -12,7 +12,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("HA_BASE_URL / HA_TOKEN are not set."))
             return
         ok, detail = ha_notify_result(
-            "BBTracker", "Test notification — Home Assistant wiring works."
+            "TML Signal", "Test notification — Home Assistant wiring works."
         )
         if ok:
             self.stdout.write(self.style.SUCCESS("Sent."))
