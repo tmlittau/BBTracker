@@ -10,11 +10,11 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-from pathlib import Path
 import time
 import urllib.error
 import urllib.request
 import zoneinfo
+from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone

@@ -1,6 +1,6 @@
+import uuid
 from datetime import date
 from io import BytesIO
-import uuid
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile

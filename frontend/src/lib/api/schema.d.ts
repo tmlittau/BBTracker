@@ -283,6 +283,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health/aggregates/ingest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_health_aggregates_ingest_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/health/ingest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["v1_health_ingest_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/healthz/": {
         parameters: {
             query?: never;
@@ -295,6 +327,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/devices/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Register or refresh this installation's APNs token. */
+        post: operations["v1_notifications_devices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/devices/{token}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Detach this installation before an explicit sign-out. */
+        delete: operations["v1_notifications_devices_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1806,6 +1872,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/backup/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Idempotently persist the latest device-authoritative structured snapshot. */
+        get: operations["v1_sync_backup_retrieve"];
+        /** @description Idempotently persist the latest device-authoritative structured snapshot. */
+        put: operations["v1_sync_backup_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/bootstrap/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Restore the latest native backup, or assemble a one-time relational import. */
+        get: operations["v1_sync_bootstrap_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/training/exercise-slots/": {
         parameters: {
             query?: never;
@@ -2901,6 +3002,17 @@ export interface components {
          * @enum {string}
          */
         DefaultRouteEnum: "im" | "subq" | "oral" | "topical" | "nasal" | "other";
+        DeviceToken: {
+            token: string;
+            readonly platform: string;
+            environment?: components["schemas"]["EnvironmentEnum"];
+            /** Format: date-time */
+            readonly last_seen: string;
+        };
+        DeviceTokenRequest: {
+            token: string;
+            environment?: components["schemas"]["EnvironmentEnum"];
+        };
         DiaryEntry: {
             readonly id: number;
             /** Format: date */
@@ -2982,6 +3094,12 @@ export interface components {
          * @enum {string}
          */
         DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule" | "serving";
+        /**
+         * @description * `sandbox` - Sandbox
+         *     * `production` - Production
+         * @enum {string}
+         */
+        EnvironmentEnum: "sandbox" | "production";
         Exercise: {
             readonly id: number;
             name: string;
@@ -3132,6 +3250,22 @@ export interface components {
          * @enum {string}
          */
         GroupEnum: "chest" | "back" | "shoulders" | "arms" | "legs" | "core" | "other";
+        HealthDailyAggregateRequest: {
+            kind: components["schemas"]["KindEnum"];
+            /** Format: date */
+            date: string;
+            /** Format: double */
+            value: number;
+            /** Format: double */
+            minimum?: number | null;
+            /** Format: double */
+            maximum?: number | null;
+            sample_count: number;
+            source: string;
+            source_fingerprint: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         Healthz: {
             status: string;
         };
@@ -3147,6 +3281,16 @@ export interface components {
             /** Format: decimal */
             y?: string;
         };
+        /**
+         * @description * `hrv` - Heart-rate variability
+         *     * `resting_hr` - Resting heart rate
+         *     * `sleep_hours` - Sleep
+         *     * `bodyweight` - Bodyweight
+         *     * `steps` - Steps
+         *     * `water_ml` - Water
+         * @enum {string}
+         */
+        KindEnum: "hrv" | "resting_hr" | "sleep_hours" | "bodyweight" | "steps" | "water_ml";
         /**
          * @description * `weight_reps` - Weight × reps
          *     * `bodyweight_reps` - Bodyweight reps
@@ -4273,6 +4417,8 @@ export interface components {
         };
         ProgressPhoto: {
             readonly id: number;
+            /** Format: uuid */
+            readonly client_id: string | null;
             readonly pose: number | null;
             readonly pose_name: string;
             /** Format: date */
@@ -4291,6 +4437,8 @@ export interface components {
         ProgressPhotoUploadRequest: {
             /** Format: binary */
             image: string;
+            /** Format: uuid */
+            client_id?: string;
             pose?: number | null;
             /** Format: date */
             taken_on: string;
@@ -5425,6 +5573,60 @@ export interface operations {
             };
         };
     };
+    v1_health_aggregates_ingest_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthDailyAggregateRequest"][];
+                "application/x-www-form-urlencoded": components["schemas"]["HealthDailyAggregateRequest"][];
+                "multipart/form-data": components["schemas"]["HealthDailyAggregateRequest"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    v1_health_ingest_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HealthDailyAggregateRequest"][];
+                "application/x-www-form-urlencoded": components["schemas"]["HealthDailyAggregateRequest"][];
+                "multipart/form-data": components["schemas"]["HealthDailyAggregateRequest"][];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     v1_healthz_retrieve: {
         parameters: {
             query?: never;
@@ -5441,6 +5643,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Healthz"];
                 };
+            };
+        };
+    };
+    v1_notifications_devices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceTokenRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DeviceTokenRequest"];
+                "multipart/form-data": components["schemas"]["DeviceTokenRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceToken"];
+                };
+            };
+        };
+    };
+    v1_notifications_devices_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8813,6 +9060,60 @@ export interface operations {
                 content: {
                     "application/pdf": string;
                 };
+            };
+        };
+    };
+    v1_sync_backup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_sync_backup_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_sync_bootstrap_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
