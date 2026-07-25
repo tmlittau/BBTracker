@@ -1,6 +1,7 @@
 from datetime import date as date_cls
 from datetime import timedelta
 
+from django.db import transaction
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -13,7 +14,8 @@ from rest_framework.views import APIView
 from apps.core.viewsets import OwnerScopedViewSet
 
 from .export import build_export
-from .models import Phase, PhaseAdjustment
+from .models import Phase, PhaseAdjustment, ReplicaBackup
+from .replica import apply_replica_health, apply_replica_settings, build_replica_snapshot
 from .report import ALL_SECTIONS, build_checkin_report_pdf
 from .serializers import (
     DashboardTodaySerializer,
@@ -127,6 +129,116 @@ class WeeklyCheckInView(APIView):
 
     def get(self, request):
         return Response(weekly_checkin(request.user, _parse_date(request, "end")))
+
+
+class ReplicaBootstrapView(APIView):
+    """Restore the latest native backup, or assemble a one-time relational import."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        backup = ReplicaBackup.objects.filter(owner=request.user).first()
+        if backup is not None:
+            return Response(
+                {
+                    "source": "backup",
+                    "revision": backup.revision,
+                    "backed_up_at": backup.updated_at,
+                    "snapshot": backup.snapshot,
+                }
+            )
+        return Response(
+            {
+                "source": "server",
+                "revision": 0,
+                "backed_up_at": None,
+                "snapshot": build_replica_snapshot(request.user),
+            }
+        )
+
+
+class ReplicaBackupView(APIView):
+    """Idempotently persist the latest device-authoritative structured snapshot."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        backup = ReplicaBackup.objects.filter(owner=request.user).first()
+        if backup is None:
+            return Response({"detail": "No native backup exists."}, status=404)
+        return Response(
+            {
+                "device_id": backup.device_id,
+                "schema_version": backup.schema_version,
+                "revision": backup.revision,
+                "backed_up_at": backup.updated_at,
+                "snapshot": backup.snapshot,
+            }
+        )
+
+    @transaction.atomic
+    def put(self, request):
+        required = ("device_id", "schema_version", "revision", "base_revision", "snapshot")
+        missing = [key for key in required if key not in request.data]
+        if missing:
+            raise ValidationError({key: "This field is required." for key in missing})
+
+        try:
+            revision = int(request.data["revision"])
+            base_revision = int(request.data["base_revision"])
+            schema_version = int(request.data["schema_version"])
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("Revision and schema values must be integers.") from exc
+        if revision < 1 or base_revision < 0 or schema_version < 1:
+            raise ValidationError("Revision and schema values are outside the valid range.")
+        snapshot = request.data["snapshot"]
+        if not isinstance(snapshot, dict):
+            raise ValidationError({"snapshot": "Expected a JSON object."})
+
+        backup = (
+            ReplicaBackup.objects.select_for_update().filter(owner=request.user).first()
+        )
+        device_id = request.data["device_id"]
+
+        if (
+            backup is not None
+            and revision == backup.revision
+            and str(backup.device_id) == str(device_id)
+        ):
+            return Response(
+                {
+                    "revision": backup.revision,
+                    "backed_up_at": backup.updated_at,
+                    "idempotent": True,
+                }
+            )
+
+        current_revision = backup.revision if backup is not None else 0
+        if base_revision != current_revision or revision <= current_revision:
+            return Response(
+                {
+                    "detail": "The server holds a newer native backup.",
+                    "server_revision": current_revision,
+                },
+                status=409,
+            )
+
+        if backup is None:
+            backup = ReplicaBackup(owner=request.user)
+        backup.device_id = device_id
+        backup.schema_version = schema_version
+        backup.revision = revision
+        backup.snapshot = snapshot
+        apply_replica_settings(request.user, snapshot)
+        apply_replica_health(request.user, snapshot)
+        backup.save()
+        return Response(
+            {
+                "revision": backup.revision,
+                "backed_up_at": backup.updated_at,
+                "idempotent": False,
+            }
+        )
 
 
 class DataExportView(APIView):

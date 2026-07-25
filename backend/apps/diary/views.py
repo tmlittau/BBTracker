@@ -82,6 +82,18 @@ class ProgressPhotoViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         upload = ProgressPhotoUploadSerializer(data=request.data)
         upload.is_valid(raise_exception=True)
+        client_id = upload.validated_data.get("client_id")
+        if client_id is not None:
+            existing = ProgressPhoto.objects.filter(
+                owner=request.user,
+                client_id=client_id,
+            ).first()
+            if existing is not None:
+                data = ProgressPhotoSerializer(
+                    existing,
+                    context=self.get_serializer_context(),
+                ).data
+                return Response(data)
         image = upload.validated_data["image"]
 
         if image.size > settings.DIARY_MAX_UPLOAD_BYTES:
@@ -102,6 +114,7 @@ class ProgressPhotoViewSet(viewsets.ModelViewSet):
 
         photo = ProgressPhoto.objects.create(
             owner=request.user,
+            client_id=client_id,
             pose=upload.validated_data.get("pose"),
             taken_on=upload.validated_data["taken_on"],
             notes=upload.validated_data.get("notes", ""),

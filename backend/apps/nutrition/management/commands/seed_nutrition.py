@@ -23,6 +23,7 @@ NUTRIENTS = [
     ("saturated_fat", "Saturated fat", C.MACRO, U.G, Decimal("20"), 13, False),
     ("fiber", "Fiber", C.MACRO, U.G, Decimal("38"), 14, False),
     ("sugar", "Sugar", C.MACRO, U.G, None, 15, False),
+    ("caffeine", "Caffeine", C.OTHER, U.MG, None, 20, False),
     # Vitamins
     ("vitamin_a", "Vitamin A", C.VITAMIN, U.MCG, Decimal("900"), 30, False),
     ("vitamin_c", "Vitamin C", C.VITAMIN, U.MG, Decimal("90"), 31, False),

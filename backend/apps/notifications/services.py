@@ -10,9 +10,11 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import time
 import urllib.error
 import urllib.request
 import zoneinfo
+from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
@@ -28,6 +30,11 @@ SLOT_ORDER = {s: i for i, s in enumerate(SLOTS)}
 # that was down doesn't blast stale slots from hours earlier when it restarts.
 SLOT_GRACE_MINUTES = 30
 HA_TIMEOUT = 8  # seconds
+APNS_INVALID_REASONS = {"BadDeviceToken", "DeviceTokenNotForTopic", "Unregistered"}
+
+_apns_client = None
+_apns_provider_token = None
+_apns_provider_token_created_at = 0.0
 
 
 def _ha_config():
@@ -84,6 +91,152 @@ def ha_notify(title: str, message: str, data: dict | None = None) -> bool:
     """Best-effort fire-and-forget notify (bool). See ha_notify_result for the
     failure reason."""
     return ha_notify_result(title, message, data)[0]
+
+
+# --- Apple Push Notification service -----------------------------------------
+
+
+def _apns_config():
+    return {
+        "key": getattr(settings, "APNS_KEY_P8", "") or "",
+        "key_id": getattr(settings, "APNS_KEY_ID", "") or "",
+        "team_id": getattr(settings, "APNS_TEAM_ID", "") or "",
+        "bundle_id": getattr(settings, "APNS_BUNDLE_ID", "") or "",
+        "timeout": getattr(settings, "APNS_TIMEOUT", 8.0) or 8.0,
+    }
+
+
+def apns_configured() -> bool:
+    config = _apns_config()
+    return all(
+        config[key]
+        for key in ("key", "key_id", "team_id", "bundle_id")
+    )
+
+
+def _apns_private_key(raw: str) -> str:
+    value = raw.strip().replace("\\n", "\n")
+    if "BEGIN PRIVATE KEY" in value:
+        return value
+    return Path(value).read_text(encoding="utf-8")
+
+
+def _apns_auth_token() -> str:
+    global _apns_provider_token, _apns_provider_token_created_at
+
+    now = time.time()
+    if (
+        _apns_provider_token is not None
+        and now - _apns_provider_token_created_at < 50 * 60
+    ):
+        return _apns_provider_token
+
+    import jwt
+
+    config = _apns_config()
+    _apns_provider_token = jwt.encode(
+        {"iss": config["team_id"], "iat": int(now)},
+        _apns_private_key(config["key"]),
+        algorithm="ES256",
+        headers={"kid": config["key_id"]},
+    )
+    _apns_provider_token_created_at = now
+    return _apns_provider_token
+
+
+def _apns_http_client():
+    global _apns_client
+
+    if _apns_client is None:
+        import httpx
+
+        _apns_client = httpx.Client(
+            http2=True,
+            timeout=float(_apns_config()["timeout"]),
+        )
+    return _apns_client
+
+
+def _send_apns_device(
+    device,
+    title: str,
+    body: str,
+    payload: dict | None = None,
+    collapse_id: str | None = None,
+) -> tuple[bool, bool, str]:
+    """Return ``(sent, token_invalid, detail)`` for one APNs device."""
+
+    config = _apns_config()
+    host = (
+        "https://api.sandbox.push.apple.com"
+        if device.environment == "sandbox"
+        else "https://api.push.apple.com"
+    )
+    custom_payload = dict(payload or {})
+    custom_payload["aps"] = {
+        "alert": {"title": title, "body": body},
+        "sound": "default",
+        "thread-id": "dose-reminders",
+    }
+    headers = {
+        "authorization": f"bearer {_apns_auth_token()}",
+        "apns-topic": config["bundle_id"],
+        "apns-push-type": "alert",
+        "apns-priority": "10",
+        "apns-expiration": "0",
+    }
+    if collapse_id:
+        headers["apns-collapse-id"] = collapse_id[:64]
+
+    response = _apns_http_client().post(
+        f"{host}/3/device/{device.token}",
+        headers=headers,
+        json=custom_payload,
+    )
+    if response.status_code == 200:
+        return True, False, "HTTP 200"
+    try:
+        reason = response.json().get("reason", f"HTTP {response.status_code}")
+    except (ValueError, AttributeError):
+        reason = f"HTTP {response.status_code}"
+    return False, reason in APNS_INVALID_REASONS, reason
+
+
+def apns_send(
+    owner,
+    title: str,
+    body: str,
+    payload: dict | None = None,
+    collapse_id: str | None = None,
+) -> int:
+    """Best-effort APNs delivery to every active iOS installation for ``owner``."""
+
+    from .models import DeviceToken
+
+    if not apns_configured():
+        return 0
+    sent = 0
+    for device in DeviceToken.objects.filter(owner=owner, platform="ios", is_active=True):
+        try:
+            ok, invalid, detail = _send_apns_device(
+                device,
+                title,
+                body,
+                payload,
+                collapse_id,
+            )
+        except Exception:
+            logger.exception("APNs delivery failed for device token %s", device.pk)
+            continue
+        if ok:
+            sent += 1
+        elif invalid:
+            device.is_active = False
+            device.save(update_fields=["is_active"])
+            logger.info("Deactivated APNs token %s: %s", device.pk, detail)
+        else:
+            logger.warning("APNs rejected token %s: %s", device.pk, detail)
+    return sent
 
 
 # --- Dose-slot reminders ------------------------------------------------------
@@ -154,10 +307,22 @@ def send_slot_reminder(user, slot, on_date) -> bool:
     if pending:
         rs = ReminderSettings.objects.filter(owner=user).first()
         label = rs.label(slot) if rs else SLOT_LABELS.get(slot, slot)
-        sent = ha_notify(
+        home_assistant_sent = ha_notify(
             "Dose reminder",
             f"{label}: don't forget {', '.join(pending)}.",
         )
+        apns_sent = apns_send(
+            user,
+            "Dose reminder",
+            f"{label}: a scheduled dose is due.",
+            payload={
+                "route": "protocols/today",
+                "slot": slot,
+                "date": on_date.isoformat(),
+            },
+            collapse_id=f"dose-{user.pk}-{on_date.isoformat()}-{slot}",
+        )
+        sent = home_assistant_sent or apns_sent > 0
     ReminderDispatch.objects.get_or_create(
         owner=user, slot=slot, sent_on=on_date, defaults={"items": ", ".join(pending)[:255]}
     )
@@ -175,7 +340,7 @@ def dispatch_rest_reminders(now=None) -> int:
     due = list(RestReminder.objects.filter(fire_at__lte=now))
     data = {"push": {"sound": "Bell.wav"}}
     for reminder in due:
-        ha_notify("BBTracker", "Rest over — time for your next set.", data=data)
+        ha_notify("TML Signal", "Rest over — time for your next set.", data=data)
         reminder.delete()
     return len(due)
 

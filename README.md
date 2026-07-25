@@ -123,7 +123,7 @@ original implementation plan is fully delivered; see [IMPLEMENTATION_PLAN.md](IM
 
 ```bash
 docker compose exec backend python manage.py seed_training    # 17 muscles, 24 exercises
-docker compose exec backend python manage.py seed_nutrition   # 26 nutrients, 12 foods
+docker compose exec backend python manage.py seed_nutrition   # 27 nutrients, 12 foods
 docker compose exec backend python manage.py seed_protocols   # 24 compounds, 12 sites, 22 markers
 docker compose exec backend python manage.py seed_diary        # 8 mandatory poses
 ```

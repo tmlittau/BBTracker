@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import ReminderDispatch, ReminderSettings, RestReminder
+from .models import DeviceToken, ReminderDispatch, ReminderSettings, RestReminder
+
+
+@admin.register(DeviceToken)
+class DeviceTokenAdmin(admin.ModelAdmin):
+    list_display = ["owner", "platform", "environment", "is_active", "last_seen"]
+    list_filter = ["platform", "environment", "is_active"]
+    search_fields = ["owner__email", "token"]
 
 
 @admin.register(ReminderSettings)

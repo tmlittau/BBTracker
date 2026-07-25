@@ -75,3 +75,27 @@ class PhaseAdjustment(models.Model):
 
     def __str__(self):
         return f"{self.phase.name} @ {self.effective_date}"
+
+
+class ReplicaBackup(models.Model):
+    """Latest device-authoritative native snapshot for one user.
+
+    The native app remains the source of truth. This row is an idempotent, revision-guarded
+    backup/restore point rather than a second set of relational write models.
+    """
+
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="replica_backup"
+    )
+    device_id = models.UUIDField()
+    schema_version = models.PositiveIntegerField(default=1)
+    revision = models.PositiveBigIntegerField(default=0)
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.owner_id}: r{self.revision} ({self.device_id})"

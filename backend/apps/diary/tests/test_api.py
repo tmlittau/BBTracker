@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from io import BytesIO
 
@@ -112,6 +113,26 @@ def test_upload_photo_processes_and_stores(api, user, pose):
     # Both objects actually landed in storage.
     assert get_storage().get(photo.object_key)[:2] == b"\xff\xd8"  # JPEG
     assert get_storage().get(photo.thumb_key)[:2] == b"\xff\xd8"
+
+
+def test_upload_photo_is_idempotent_by_client_id(api, pose):
+    client_id = str(uuid.uuid4())
+    payload = {
+        "image": _upload(),
+        "pose": pose.id,
+        "taken_on": "2026-05-31",
+        "client_id": client_id,
+    }
+
+    first = api.post("/api/v1/diary/photos/", payload, format="multipart")
+    payload["image"] = _upload()
+    second = api.post("/api/v1/diary/photos/", payload, format="multipart")
+
+    assert first.status_code == 201
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["client_id"] == client_id
+    assert ProgressPhoto.objects.count() == 1
 
 
 def test_stream_image_full_and_thumb(api, pose):

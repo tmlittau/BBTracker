@@ -1,6 +1,23 @@
 from rest_framework import serializers
 
-from .models import ReminderSettings
+from .models import DeviceToken, ReminderSettings
+
+
+class DeviceTokenSerializer(serializers.ModelSerializer):
+    token = serializers.RegexField(
+        r"^[0-9a-fA-F]+$",
+        min_length=32,
+        max_length=200,
+        trim_whitespace=True,
+    )
+
+    class Meta:
+        model = DeviceToken
+        fields = ["token", "platform", "environment", "last_seen"]
+        read_only_fields = ["platform", "last_seen"]
+
+    def validate_token(self, value):
+        return value.lower()
 
 
 class ReminderSettingsSerializer(serializers.ModelSerializer):
