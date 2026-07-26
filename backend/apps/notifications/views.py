@@ -2,55 +2,16 @@ from datetime import timedelta
 
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions
 from rest_framework.response import Response
 
-from .models import DeviceToken, ReminderSettings, RestReminder
+from .models import ReminderSettings, RestReminder
 from .serializers import (
-    DeviceTokenSerializer,
     NotifyResultSerializer,
     ReminderSettingsSerializer,
     RestScheduleSerializer,
 )
 from .services import ha_notify_result
-
-
-@extend_schema(tags=["notifications"])
-class DeviceTokenView(generics.GenericAPIView):
-    """Register or refresh this installation's APNs token."""
-
-    serializer_class = DeviceTokenSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        token = serializer.validated_data["token"]
-        environment = serializer.validated_data["environment"]
-        device, created = DeviceToken.objects.update_or_create(
-            token=token,
-            defaults={
-                "owner": request.user,
-                "platform": "ios",
-                "environment": environment,
-                "is_active": True,
-            },
-        )
-        return Response(
-            self.get_serializer(device).data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
-
-
-@extend_schema(tags=["notifications"], request=None, responses={204: None})
-class DeviceTokenDeleteView(generics.GenericAPIView):
-    """Detach this installation before an explicit sign-out."""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def delete(self, request, token):
-        DeviceToken.objects.filter(owner=request.user, token=token.lower()).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["notifications"])

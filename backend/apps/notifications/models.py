@@ -57,38 +57,6 @@ class ReminderSettings(models.Model):
         return f"ReminderSettings(owner={self.owner_id})"
 
 
-class DeviceToken(models.Model):
-    """An APNs address for one installed iOS app.
-
-    Apple may rotate a token at any time, so registration is an idempotent upsert
-    and ``last_seen`` is refreshed whenever the app launches.
-    """
-
-    class Environment(models.TextChoices):
-        SANDBOX = "sandbox", "Sandbox"
-        PRODUCTION = "production", "Production"
-
-    owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_tokens"
-    )
-    token = models.CharField(max_length=200, unique=True)
-    platform = models.CharField(max_length=8, default="ios")
-    environment = models.CharField(
-        max_length=12,
-        choices=Environment.choices,
-        default=Environment.PRODUCTION,
-    )
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_seen = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-last_seen"]
-
-    def __str__(self):
-        return f"{self.owner_id} ios/{self.environment} {self.token[:12]}…"
-
-
 class ReminderDispatch(models.Model):
     """One row per (user, slot, day) once that slot has been handled — prevents
     re-sending the same slot reminder multiple times in a day."""

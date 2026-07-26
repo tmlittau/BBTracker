@@ -17,9 +17,6 @@ pdfplumber>=0.11,<0.12
 # Shareable check-in report → PDF (HTML/CSS rendering; needs the pango/cairo libs
 # installed in the Dockerfile).
 weasyprint>=62,<66
-# Phase 7 — HTTP/2 APNs provider requests + ES256 token authentication.
-httpx[http2]>=0.27,<1
-PyJWT[crypto]>=2.9,<3
 
 # dev / test
 pytest>=8,<9

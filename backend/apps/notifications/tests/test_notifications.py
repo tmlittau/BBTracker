@@ -17,7 +17,6 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.notifications import services
 from apps.notifications.models import (
-    DeviceToken,
     ReminderDispatch,
     ReminderSettings,
     RestReminder,
@@ -151,10 +150,7 @@ def test_slot_pending_tracks_per_slot(user, compound, active_item):
 
 def test_send_slot_reminder_records_dispatch(user, active_item):
     today = timezone.now().date()
-    with (
-        mock.patch("apps.notifications.services.ha_notify", return_value=True) as m,
-        mock.patch("apps.notifications.services.apns_send", return_value=0),
-    ):
+    with mock.patch("apps.notifications.services.ha_notify", return_value=True) as m:
         assert services.send_slot_reminder(user, "waking", today) is True
     m.assert_called_once()
     assert ReminderDispatch.objects.filter(owner=user, slot="waking", sent_on=today).exists()
@@ -180,66 +176,6 @@ def test_dispatch_rest_reminders_skips_future(user):
 
 
 # --- endpoints ----------------------------------------------------------------
-
-
-def test_device_token_register_refresh_and_delete(api, user):
-    token = "a1" * 32
-    created = api.post(
-        "/api/v1/notifications/devices/",
-        {"token": token.upper(), "environment": "sandbox"},
-        format="json",
-    )
-    assert created.status_code == 201
-    device = DeviceToken.objects.get(token=token)
-    assert device.owner == user
-    assert device.environment == "sandbox"
-
-    refreshed = api.post(
-        "/api/v1/notifications/devices/",
-        {"token": token, "environment": "production"},
-        format="json",
-    )
-    assert refreshed.status_code == 200
-    device.refresh_from_db()
-    assert device.environment == "production"
-
-    removed = api.delete(f"/api/v1/notifications/devices/{token}/")
-    assert removed.status_code == 204
-    assert not DeviceToken.objects.filter(token=token).exists()
-
-
-def test_device_token_registration_rejects_non_hex(api):
-    response = api.post(
-        "/api/v1/notifications/devices/",
-        {"token": "not-a-token", "environment": "sandbox"},
-        format="json",
-    )
-    assert response.status_code == 400
-
-
-def test_apns_send_deactivates_invalid_token(settings, user):
-    settings.APNS_KEY_P8 = "configured"
-    settings.APNS_KEY_ID = "KEY"
-    settings.APNS_TEAM_ID = "TEAM"
-    settings.APNS_BUNDLE_ID = "com.example.app"
-    device = DeviceToken.objects.create(owner=user, token="ab" * 32)
-    with mock.patch(
-        "apps.notifications.services._send_apns_device",
-        return_value=(False, True, "Unregistered"),
-    ):
-        assert services.apns_send(user, "Title", "Body") == 0
-    device.refresh_from_db()
-    assert device.is_active is False
-
-
-def test_slot_reminder_counts_apns_delivery_without_home_assistant(user, active_item):
-    today = timezone.now().date()
-    with (
-        mock.patch("apps.notifications.services.ha_notify", return_value=False),
-        mock.patch("apps.notifications.services.apns_send", return_value=1) as apns,
-    ):
-        assert services.send_slot_reminder(user, "waking", today) is True
-    assert apns.call_args.kwargs["payload"]["route"] == "protocols/today"
 
 
 def test_reminder_settings_get_creates_defaults(api, user):

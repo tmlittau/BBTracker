@@ -75,8 +75,8 @@ services:
       retries: 10
       start_period: 40s
 
-  # Reminder worker: fires dose reminders through APNs and can keep Home Assistant
-  # as a parallel channel. Reuses the backend image and waits for migrations.
+  # Reminder worker: fires the web app's optional Home Assistant reminders.
+  # Native apps schedule their reminders locally on each device.
   reminders:
     build:
       context: ./backend

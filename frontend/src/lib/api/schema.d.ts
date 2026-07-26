@@ -332,40 +332,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notifications/devices/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Register or refresh this installation's APNs token. */
-        post: operations["v1_notifications_devices_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/notifications/devices/{token}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** @description Detach this installation before an explicit sign-out. */
-        delete: operations["v1_notifications_devices_destroy"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/notifications/reminder-settings/": {
         parameters: {
             query?: never;
@@ -3002,17 +2968,6 @@ export interface components {
          * @enum {string}
          */
         DefaultRouteEnum: "im" | "subq" | "oral" | "topical" | "nasal" | "other";
-        DeviceToken: {
-            token: string;
-            readonly platform: string;
-            environment?: components["schemas"]["EnvironmentEnum"];
-            /** Format: date-time */
-            readonly last_seen: string;
-        };
-        DeviceTokenRequest: {
-            token: string;
-            environment?: components["schemas"]["EnvironmentEnum"];
-        };
         DiaryEntry: {
             readonly id: number;
             /** Format: date */
@@ -3094,12 +3049,6 @@ export interface components {
          * @enum {string}
          */
         DoseUnitEnum: "mg" | "mcg" | "iu" | "ml" | "tablet" | "capsule" | "serving";
-        /**
-         * @description * `sandbox` - Sandbox
-         *     * `production` - Production
-         * @enum {string}
-         */
-        EnvironmentEnum: "sandbox" | "production";
         Exercise: {
             readonly id: number;
             name: string;
@@ -5643,51 +5592,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Healthz"];
                 };
-            };
-        };
-    };
-    v1_notifications_devices_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeviceTokenRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["DeviceTokenRequest"];
-                "multipart/form-data": components["schemas"]["DeviceTokenRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeviceToken"];
-                };
-            };
-        };
-    };
-    v1_notifications_devices_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
