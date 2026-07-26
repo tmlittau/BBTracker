@@ -36,6 +36,10 @@ class User(AbstractUser):
 
     username = None
     email = models.EmailField("email address", unique=True)
+    is_coach = models.BooleanField(
+        default=False,
+        help_text="Can take on clients and view their data (coaching interface).",
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

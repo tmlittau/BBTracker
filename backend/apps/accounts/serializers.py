@@ -16,8 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name", "profile"]
-        read_only_fields = ["id", "email"]
+        fields = ["id", "email", "first_name", "last_name", "is_coach", "profile"]
+        read_only_fields = ["id", "email", "is_coach"]
 
     def update(self, instance, validated_data):
         """Update the user and, if present, the nested one-to-one Profile.

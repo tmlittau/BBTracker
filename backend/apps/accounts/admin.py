@@ -9,8 +9,8 @@ from .services import hard_delete_user
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     ordering = ["email"]
-    list_display = ["email", "is_staff", "is_superuser", "is_active", "date_joined"]
-    list_filter = ["is_staff", "is_superuser", "is_active"]
+    list_display = ["email", "is_coach", "is_staff", "is_superuser", "is_active", "date_joined"]
+    list_filter = ["is_coach", "is_staff", "is_superuser", "is_active"]
     search_fields = ["email"]
 
     # Deleting a user can hit ProtectedError: their own dose logs / protocol items
@@ -32,7 +32,12 @@ class UserAdmin(BaseUserAdmin):
         (_("Personal info"), {"fields": ("first_name", "last_name")}),
         (
             _("Permissions"),
-            {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},
+            {
+                "fields": (
+                    "is_coach", "is_active", "is_staff", "is_superuser",
+                    "groups", "user_permissions",
+                )
+            },
         ),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )

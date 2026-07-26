@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.analysis",
     "apps.health",
+    "apps.coaching",
 ]
 
 MIDDLEWARE = [

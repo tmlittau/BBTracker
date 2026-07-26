@@ -5,8 +5,10 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+from apps.coaching.access import EffectiveOwnerMixin
 
-class OwnerScopedViewSet(viewsets.ModelViewSet):
+
+class OwnerScopedViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """Base for resources reachable from the user via `owner_path`.
 
     Subclasses set `owner_path` (ORM lookup from the model to the owning user)
@@ -23,15 +25,21 @@ class OwnerScopedViewSet(viewsets.ModelViewSet):
     parent_checks: list = []
 
     def get_queryset(self):
-        return self.queryset.filter(**{self.owner_path: self.request.user})
+        # Reads honour the effective owner (a coach acting on a client). Writes
+        # also resolve to the client only on prescription views (prescription_write);
+        # otherwise to request.user, so a coach can't reach a client's logged rows.
+        return self.queryset.filter(**{self.owner_path: self.effective_owner})
 
     def _validate_parents(self, serializer):
+        # Parents must belong to the effective owner — the client when a coach is
+        # editing a prescription, otherwise request.user (unchanged for everyone else).
+        owner_id = self.effective_owner.id
         for field, model, path in self.parent_checks:
             obj = serializer.validated_data.get(field)
             if obj is None:
                 continue
-            owner_id = model.objects.filter(pk=obj.pk).values_list(path, flat=True).first()
-            if owner_id != self.request.user.id:
+            parent_owner = model.objects.filter(pk=obj.pk).values_list(path, flat=True).first()
+            if parent_owner != owner_id:
                 raise PermissionDenied(f"That {field} does not belong to you.")
 
     def perform_create(self, serializer):

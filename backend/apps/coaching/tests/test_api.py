@@ -1,0 +1,323 @@
+"""Access-control matrix for the coaching layer — the security-critical surface.
+
+The contract: a coach can READ a client's data only via an *active* link (the
+X-Acting-Client header). For WRITES the coach may only touch the client's
+*prescriptions* (phases, nutrition targets, programs, protocols) and only when
+the link grants `can_edit_prescriptions`; logged data is never writable. A header
+that isn't authorised is a hard 403, never a silent fall back to the coach's own data.
+"""
+from datetime import date
+
+import pytest
+from rest_framework.test import APIClient
+
+from apps.accounts.models import User
+from apps.coaching.models import CoachClientLink, LinkStatus
+from apps.core.models import Phase
+from apps.diary.models import CheckIn
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def coach():
+    return User.objects.create_user(email="coach@x.com", password="x", is_coach=True)
+
+
+@pytest.fixture
+def client_user():
+    u = User.objects.create_user(email="client@x.com", password="x")
+    # Profile is auto-created by a signal; just set what body_analysis needs.
+    u.profile.height_cm = 180
+    u.profile.save(update_fields=["height_cm"])
+    Phase.objects.create(owner=u, name="Client Prep", start_date=date(2026, 1, 1))
+    CheckIn.objects.create(owner=u, date=date(2026, 1, 2), bodyweight=80)
+    return u
+
+
+@pytest.fixture
+def outsider():
+    return User.objects.create_user(email="outsider@x.com", password="x")
+
+
+def api(user):
+    c = APIClient()
+    c.force_authenticate(user)
+    return c
+
+
+def link(coach, client_user, status=LinkStatus.ACTIVE):
+    return CoachClientLink.objects.create(coach=coach, client=client_user, status=status)
+
+
+def rows(res):
+    """List payload, tolerating DRF pagination ({results: [...]}) or a bare list."""
+    j = res.json()
+    return j["results"] if isinstance(j, dict) and "results" in j else j
+
+
+# --- the effective-owner header on the read surface ---------------------------
+
+def test_active_link_coach_reads_client_data(coach, client_user):
+    link(coach, client_user)
+    c = api(coach)
+    res = c.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id))
+    assert res.status_code == 200
+    assert [p["name"] for p in rows(res)] == ["Client Prep"]  # client's phase, not coach's
+
+    dash = c.get("/api/v1/dashboard/today/", HTTP_X_ACTING_CLIENT=str(client_user.id))
+    assert dash.status_code == 200
+    assert dash.json()["phase"]["name"] == "Client Prep"
+
+
+@pytest.mark.parametrize("status", [LinkStatus.PENDING, LinkStatus.DECLINED, LinkStatus.REVOKED])
+def test_inactive_link_forbidden(coach, client_user, status):
+    link(coach, client_user, status=status)
+    res = api(coach).get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id))
+    assert res.status_code == 403
+
+
+def test_no_link_forbidden(coach, client_user):
+    res = api(coach).get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id))
+    assert res.status_code == 403
+
+
+def test_non_coach_forbidden_even_with_link(outsider, client_user):
+    # A link whose "coach" is not flagged is_coach must still be rejected.
+    CoachClientLink.objects.create(coach=outsider, client=client_user, status=LinkStatus.ACTIVE)
+    res = api(outsider).get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id))
+    assert res.status_code == 403
+
+
+def test_header_absent_is_self_scoped(coach, client_user):
+    link(coach, client_user)
+    res = api(coach).get("/api/v1/phases/")  # no header → coach's own (empty)
+    assert res.status_code == 200 and rows(res) == []
+
+
+def test_write_to_logged_data_ignores_header(coach, client_user):
+    """A POST to LOGGED data with the header writes to the coach, never the client —
+    coaches may only write prescriptions (see the prescription tests below)."""
+    link(coach, client_user)
+    res = api(coach).post(
+        "/api/v1/diary/check-ins/",
+        {"date": "2026-05-01", "bodyweight": 70},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201
+    assert not CheckIn.objects.filter(owner=client_user, date=date(2026, 5, 1)).exists()
+    assert CheckIn.objects.filter(owner=coach, date=date(2026, 5, 1)).exists()
+
+
+# --- Stage 2: a coach writes a client's PRESCRIPTIONS -------------------------
+
+def test_coach_edits_client_phase(coach, client_user):
+    link(coach, client_user)  # can_edit_prescriptions defaults to True
+    res = api(coach).post(
+        "/api/v1/phases/",
+        {"name": "Coach Block", "start_date": "2026-02-01"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201
+    assert Phase.objects.filter(owner=client_user, name="Coach Block").exists()
+    assert not Phase.objects.filter(owner=coach, name="Coach Block").exists()
+
+
+def test_coach_sets_client_nutrition_target(coach, client_user):
+    from apps.nutrition.models import NutritionTarget
+
+    link(coach, client_user)
+    res = api(coach).post(
+        "/api/v1/nutrition/targets/",
+        {"name": "Cut", "calories": "2500"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201, res.content
+    assert NutritionTarget.objects.filter(owner=client_user, name="Cut").exists()
+
+
+def test_read_only_coach_can_read_not_write(coach, client_user):
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    c = api(coach)
+    assert c.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id)).status_code == 200
+    res = c.post(
+        "/api/v1/phases/", {"name": "Nope", "start_date": "2026-02-01"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+    assert not Phase.objects.filter(name="Nope").exists()
+
+
+def test_client_toggles_write_permission(coach, client_user):
+    cl = link(coach, client_user)
+    resp = api(client_user).post(
+        f"/api/v1/coaching/links/{cl.id}/permission/",
+        {"can_edit_prescriptions": False}, format="json",
+    )
+    assert resp.status_code == 200 and resp.json()["can_edit_prescriptions"] is False
+    res = api(coach).post(
+        "/api/v1/phases/", {"name": "X", "start_date": "2026-02-01"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+
+
+def test_only_client_toggles_permission(coach, client_user):
+    cl = link(coach, client_user)
+    # the coach cannot change their own edit permission (not the link's client)
+    res = api(coach).post(
+        f"/api/v1/coaching/links/{cl.id}/permission/",
+        {"can_edit_prescriptions": False}, format="json",
+    )
+    assert res.status_code == 404
+
+
+# --- coach builds a program / protocol from scratch (full nested chain) -------
+
+def test_coach_builds_program_chain(coach, client_user):
+    from apps.training.models import Exercise, Program, TrainingDay
+
+    link(coach, client_user)
+    ex = Exercise.objects.create(name="Bench")  # global exercise (owner=None)
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    prog = c.post("/api/v1/training/programs/", {"name": "Coach Prog"}, format="json", **h)
+    assert prog.status_code == 201, prog.content
+    pid = prog.json()["id"]
+    assert Program.objects.get(id=pid).owner_id == client_user.id
+
+    day = c.post(
+        "/api/v1/training/training-days/",
+        {"program": pid, "name": "Push", "order": 0}, format="json", **h,
+    )
+    assert day.status_code == 201, day.content
+    did = day.json()["id"]
+    assert TrainingDay.objects.get(id=did).program.owner_id == client_user.id
+
+    slot = c.post(
+        "/api/v1/training/exercise-slots/",
+        {"day": did, "exercise": ex.id, "order": 0}, format="json", **h,
+    )
+    assert slot.status_code == 201, slot.content
+    sid = slot.json()["id"]
+
+    ps = c.post(
+        "/api/v1/training/planned-sets/",
+        {"slot": sid, "order": 0, "set_type": "working"}, format="json", **h,
+    )
+    assert ps.status_code == 201, ps.content
+
+
+def test_coach_builds_protocol_chain(coach, client_user):
+    from apps.protocols.models import Compound, Protocol, ProtocolItem
+
+    link(coach, client_user)
+    cmp = Compound.objects.create(name="Test E", default_unit="mg", half_life_hours="168")
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    proto = c.post("/api/v1/protocols/protocols/", {"name": "Off-season"}, format="json", **h)
+    assert proto.status_code == 201, proto.content
+    pid = proto.json()["id"]
+    assert Protocol.objects.get(id=pid).owner_id == client_user.id
+
+    item = c.post(
+        "/api/v1/protocols/protocol-items/",
+        {"protocol": pid, "compound": cmp.id, "dose_amount": "250",
+         "dose_unit": "mg", "frequency": "daily"},
+        format="json", **h,
+    )
+    assert item.status_code == 201, item.content
+    assert ProtocolItem.objects.get(id=item.json()["id"]).protocol.owner_id == client_user.id
+
+
+def test_read_only_coach_cannot_build(coach, client_user):
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    res = api(coach).post(
+        "/api/v1/training/programs/", {"name": "X"},
+        format="json", HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+
+
+def test_coach_views_client_analysis_and_training(coach, client_user):
+    """The 'view as client' drill-ins read the client's Analysis + Training data."""
+    from django.utils import timezone
+
+    from apps.training.models import WorkoutSession
+
+    link(coach, client_user)
+    WorkoutSession.objects.create(owner=client_user, name="Push", started_at=timezone.now())
+    c = api(coach)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+
+    assert c.get("/api/v1/analysis/body/", **h).status_code == 200
+    sessions = c.get("/api/v1/training/workout-sessions/", **h)
+    assert sessions.status_code == 200
+    assert any(s["name"] == "Push" for s in rows(sessions))
+
+
+# --- invite / accept / revoke lifecycle --------------------------------------
+
+def test_invite_lifecycle(coach, client_user):
+    cc = api(coach)
+    # invite by email
+    inv = cc.post("/api/v1/coaching/invites/", {"email": client_user.email}, format="json")
+    assert inv.status_code == 201
+    link_id = inv.json()["id"]
+    assert inv.json()["status"] == LinkStatus.PENDING
+    # not yet a client; header access denied
+    assert cc.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id)).status_code == 403
+
+    # client sees + accepts
+    clc = api(client_user)
+    received = clc.get("/api/v1/coaching/invites/").json()["received"]
+    assert [r["id"] for r in received] == [link_id]
+    acc = clc.post(f"/api/v1/coaching/invites/{link_id}/respond/", {"accept": True}, format="json")
+    assert acc.status_code == 200 and acc.json()["status"] == LinkStatus.ACTIVE
+
+    # now an active client + readable
+    clients = cc.get("/api/v1/coaching/clients/").json()
+    assert [c["client_id"] for c in clients] == [client_user.id]
+    assert cc.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id)).status_code == 200
+
+    # revoke kills access
+    cc.post(f"/api/v1/coaching/links/{link_id}/revoke/")
+    assert cc.get("/api/v1/coaching/clients/").json() == []
+    assert cc.get("/api/v1/phases/", HTTP_X_ACTING_CLIENT=str(client_user.id)).status_code == 403
+
+
+def test_invite_requires_coach(outsider, client_user):
+    res = api(outsider).post(
+        "/api/v1/coaching/invites/", {"email": client_user.email}, format="json"
+    )
+    assert res.status_code == 403
+
+
+def test_invite_unknown_email(coach):
+    res = api(coach).post("/api/v1/coaching/invites/", {"email": "nobody@x.com"}, format="json")
+    assert res.status_code == 400
+
+
+def test_client_list_requires_coach(outsider):
+    assert api(outsider).get("/api/v1/coaching/clients/").status_code == 403
+
+
+def test_overview_requires_active_link(coach, client_user):
+    assert api(coach).get(f"/api/v1/coaching/clients/{client_user.id}/overview/").status_code == 403
+    link(coach, client_user)
+    res = api(coach).get(f"/api/v1/coaching/clients/{client_user.id}/overview/")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["client"]["id"] == client_user.id
+    assert "dashboard" in body and "body" in body and "weekly_check_in" in body

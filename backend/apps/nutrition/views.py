@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.coaching.access import EffectiveOwnerMixin
 from apps.core.viewsets import OwnerScopedViewSet, ReorderMixin
 
 from .models import (
@@ -62,13 +63,13 @@ class NutrientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema(tags=["nutrition"])
-class FoodViewSet(viewsets.ModelViewSet):
+class FoodViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     """Global (seeded/imported) + the user's custom foods. Users edit only their own."""
 
     serializer_class = FoodSerializer
 
     def get_queryset(self):
-        qs = Food.objects.filter(Q(owner=self.request.user) | Q(owner__isnull=True))
+        qs = Food.objects.filter(Q(owner=self.effective_owner) | Q(owner__isnull=True))
         qs = qs.prefetch_related("servings", "food_nutrients__nutrient")
         q = self.request.query_params.get("q")
         if q:
@@ -160,11 +161,11 @@ class FoodViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema(tags=["nutrition"])
-class DiaryEntryViewSet(viewsets.ModelViewSet):
+class DiaryEntryViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = DiaryEntrySerializer
 
     def get_queryset(self):
-        qs = DiaryEntry.objects.filter(owner=self.request.user).select_related(
+        qs = DiaryEntry.objects.filter(owner=self.effective_owner).select_related(
             "food", "recipe", "serving"
         )
         d = self.request.query_params.get("date")
@@ -233,21 +234,22 @@ class MealViewSet(ReorderMixin, OwnerScopedViewSet):
 
 
 @extend_schema(tags=["nutrition"])
-class NutritionTargetViewSet(viewsets.ModelViewSet):
+class NutritionTargetViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = NutritionTargetSerializer
+    prescription_write = True  # a coach may set a client's calorie/macro targets
 
     def get_queryset(self):
-        return NutritionTarget.objects.filter(owner=self.request.user).prefetch_related(
+        return NutritionTarget.objects.filter(owner=self.effective_owner).prefetch_related(
             "nutrient_targets"
         )
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
 
     @action(detail=True, methods=["post"])
     def activate(self, request, pk=None):
         target = self.get_object()
-        NutritionTarget.objects.filter(owner=request.user).update(is_active=False)
+        NutritionTarget.objects.filter(owner=self.effective_owner).update(is_active=False)
         target.is_active = True
         target.save(update_fields=["is_active"])
         return Response(self.get_serializer(target).data)
@@ -259,14 +261,15 @@ class NutrientTargetViewSet(OwnerScopedViewSet):
     serializer_class = NutrientTargetSerializer
     owner_path = "target__owner"
     parent_checks = [("target", NutritionTarget, "owner")]
+    prescription_write = True
 
 
 @extend_schema(tags=["nutrition"])
-class RecipeViewSet(viewsets.ModelViewSet):
+class RecipeViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = RecipeSerializer
 
     def get_queryset(self):
-        return Recipe.objects.filter(owner=self.request.user).prefetch_related("items__food")
+        return Recipe.objects.filter(owner=self.effective_owner).prefetch_related("items__food")
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -298,7 +301,7 @@ class RecipeItemViewSet(OwnerScopedViewSet):
     parameters=[OpenApiParameter("date", str, description="ISO date (default today)")],
     responses=DailySummarySerializer,
 )
-class NutritionSummaryView(APIView):
+class NutritionSummaryView(EffectiveOwnerMixin, APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -310,15 +313,15 @@ class NutritionSummaryView(APIView):
                 raise ValidationError({"date": "must be ISO format YYYY-MM-DD"}) from exc
         else:
             day = date_cls.today()
-        return Response(daily_summary(request.user, day))
+        return Response(daily_summary(self.effective_owner, day))
 
 
 @extend_schema(tags=["nutrition"])
-class MealTemplateViewSet(viewsets.ModelViewSet):
+class MealTemplateViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
     serializer_class = MealTemplateSerializer
 
     def get_queryset(self):
-        return MealTemplate.objects.filter(owner=self.request.user).prefetch_related(
+        return MealTemplate.objects.filter(owner=self.effective_owner).prefetch_related(
             "items__food"
         )
 
