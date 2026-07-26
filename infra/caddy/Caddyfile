@@ -2,8 +2,8 @@
 #
 # TLS is terminated at the Cloudflare edge; the (already-running) cloudflared tunnel
 # forwards plain HTTP to this Caddy, which is the ONLY service published to a host
-# port. Caddy splits one same-origin host between Django and SvelteKit so session
-# cookies + CSRF work without CORS (there is no vite dev proxy in production).
+# port. The web frontend has been removed — this host now serves the Django API only
+# (REST + allauth headless + admin) for the native app. Non-API paths return 404.
 #
 # `header_up X-Forwarded-Proto https` tells Django (via SECURE_PROXY_SSL_HEADER) the
 # request is secure, so secure cookies are honoured and CSRF origin checks pass.
@@ -27,11 +27,8 @@
 		}
 	}
 
-	# Everything else: the SvelteKit app (adapter-node).
+	# The web frontend was removed; this host is API-only. Anything else → 404.
 	handle {
-		reverse_proxy frontend:3000 {
-			header_up X-Forwarded-Proto https
-			header_up X-Forwarded-Host {host}
-		}
+		respond "Not found" 404
 	}
 }
