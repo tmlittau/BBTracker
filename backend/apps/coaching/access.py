@@ -62,6 +62,18 @@ def resolve_effective_owner(request, *, for_write=False):
     return _resolve_client(request, client_id, require_write=require_write)
 
 
+def can_review_checkin(user, check_in) -> bool:
+    """True if `user` may read/comment on `check_in`: its owner, or a coach with an
+    active link to that owner. Used by the check-in review loop."""
+    from .models import CoachClientLink
+
+    if check_in.owner_id == getattr(user, "id", None):
+        return True
+    return bool(getattr(user, "is_coach", False)) and CoachClientLink.is_active(
+        user, check_in.owner_id
+    )
+
+
 def acting_as_coach(request):
     """True when the request carries an X-Acting-Client header (a coach targeting a
     client), as opposed to a user acting on their own data."""

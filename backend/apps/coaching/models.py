@@ -56,3 +56,25 @@ class CoachClientLink(models.Model):
         return cls.objects.filter(
             coach=coach, client_id=client_id, status=LinkStatus.ACTIVE
         ).first()
+
+
+class CheckInComment(models.Model):
+    """Feedback on a client's daily check-in — the coaching review loop. Either the
+    client (their own check-in) or a coach with an active link may add comments, so a
+    check-in becomes a small thread. `by_coach` is derived from author vs check-in owner."""
+
+    check_in = models.ForeignKey(
+        "diary.CheckIn", on_delete=models.CASCADE, related_name="comments"
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="check_in_comments"
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [models.Index(fields=["check_in", "created_at"])]
+
+    def __str__(self):
+        return f"comment by {self.author_id} on check-in {self.check_in_id}"

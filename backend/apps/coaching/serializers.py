@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import CoachClientLink
+from .models import CheckInComment, CoachClientLink
 
 
 def _display_name(user):
@@ -55,3 +55,36 @@ class InviteRespondSerializer(serializers.Serializer):
 
 class LinkPermissionSerializer(serializers.Serializer):
     can_edit_prescriptions = serializers.BooleanField()
+
+
+class CheckInCommentSerializer(serializers.ModelSerializer):
+    """One message in a check-in thread. `by_coach` = author is not the check-in owner."""
+
+    author_name = serializers.SerializerMethodField()
+    by_coach = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CheckInComment
+        fields = ["id", "check_in", "author", "author_name", "by_coach", "body", "created_at"]
+        read_only_fields = ["author", "created_at"]
+
+    def get_author_name(self, obj) -> str:
+        return _display_name(obj.author)
+
+    def get_by_coach(self, obj) -> bool:
+        return obj.author_id != obj.check_in.owner_id
+
+
+class CheckInReviewRowSerializer(serializers.Serializer):
+    """A row in the coach's review queue (computed, read-only)."""
+
+    id = serializers.IntegerField()
+    client_id = serializers.IntegerField()
+    client_name = serializers.CharField()
+    date = serializers.DateField()
+    bodyweight = serializers.FloatField(allow_null=True)
+    energy = serializers.IntegerField(allow_null=True)
+    sleep = serializers.IntegerField(allow_null=True)
+    has_notes = serializers.BooleanField()
+    comment_count = serializers.IntegerField()
+    reviewed = serializers.BooleanField()

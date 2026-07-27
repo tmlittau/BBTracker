@@ -464,3 +464,79 @@ def test_client_applies_meal_plan_to_diary(client_user):
     assert r.json() == {"meals": 1, "entries": 1}
     assert Meal.objects.filter(owner=client_user, date="2026-05-10", name="Lunch").exists()
     assert DiaryEntry.objects.filter(owner=client_user, date="2026-05-10", food=food).exists()
+
+
+# --- Check-in review loop -----------------------------------------------------
+
+def test_coach_review_queue_lists_client_checkins(coach, client_user, outsider):
+    from apps.diary.models import CheckIn
+
+    link(coach, client_user)
+    # an unrelated user's check-in must NOT appear
+    CheckIn.objects.create(owner=outsider, date=date(2026, 3, 1), bodyweight=90)
+    CheckIn.objects.create(
+        owner=client_user, date=date(2026, 3, 2), bodyweight=80, notes="rough week"
+    )
+
+    res = api(coach).get("/api/v1/coaching/check-ins/")
+    assert res.status_code == 200
+    rows = res.json()
+    owners = {r["client_id"] for r in rows}
+    assert client_user.id in owners and outsider.id not in owners
+    row = next(r for r in rows if r["client_id"] == client_user.id)
+    assert row["reviewed"] is False and row["has_notes"] is True
+
+
+def test_non_coach_has_no_review_queue(client_user):
+    assert api(client_user).get("/api/v1/coaching/check-ins/").status_code == 403
+
+
+def test_coach_reviews_checkin_and_comments(coach, client_user):
+    from apps.diary.models import CheckIn
+
+    link(coach, client_user)
+    ci = CheckIn.objects.create(owner=client_user, date=date(2026, 3, 3), bodyweight=79, energy=4)
+
+    detail = api(coach).get(f"/api/v1/coaching/check-ins/{ci.id}/")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["check_in"]["bodyweight"] == 79.0
+    assert body["client"]["id"] == client_user.id
+    assert "weekly" in body and body["comments"] == []
+
+    posted = api(coach).post(
+        f"/api/v1/coaching/check-ins/{ci.id}/comments/",
+        {"body": "Great adherence — hold calories, add 10 min cardio."}, format="json",
+    )
+    assert posted.status_code == 201
+    assert posted.json()["by_coach"] is True
+
+    # now the queue shows it reviewed, and the client can read the coach's feedback
+    row = next(r for r in api(coach).get("/api/v1/coaching/check-ins/").json() if r["id"] == ci.id)
+    assert row["reviewed"] is True and row["comment_count"] == 1
+    client_view = api(client_user).get(f"/api/v1/coaching/check-ins/{ci.id}/").json()
+    assert len(client_view["comments"]) == 1
+    assert client_view["comments"][0]["by_coach"] is True
+
+
+def test_outsider_cannot_review_or_comment(client_user, outsider):
+    from apps.diary.models import CheckIn
+
+    ci = CheckIn.objects.create(owner=client_user, date=date(2026, 3, 4), bodyweight=79)
+    assert api(outsider).get(f"/api/v1/coaching/check-ins/{ci.id}/").status_code == 403
+    assert (
+        api(outsider)
+        .post(f"/api/v1/coaching/check-ins/{ci.id}/comments/", {"body": "hi"}, format="json")
+        .status_code
+        == 403
+    )
+
+
+def test_client_can_reply_on_own_checkin(client_user):
+    from apps.diary.models import CheckIn
+
+    ci = CheckIn.objects.create(owner=client_user, date=date(2026, 3, 5), bodyweight=79)
+    res = api(client_user).post(
+        f"/api/v1/coaching/check-ins/{ci.id}/comments/", {"body": "Felt strong!"}, format="json",
+    )
+    assert res.status_code == 201 and res.json()["by_coach"] is False

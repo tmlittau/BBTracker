@@ -2,7 +2,7 @@
 invite / accept / revoke lifecycle. All data access to a client's records goes
 through an active CoachClientLink check (here and in `access.resolve_effective_owner`).
 """
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -19,8 +19,11 @@ from apps.core.models import Phase
 from apps.core.services import dashboard_today, weekly_checkin
 from apps.diary.models import CheckIn
 
-from .models import CoachClientLink, LinkStatus
+from .access import can_review_checkin
+from .models import CheckInComment, CoachClientLink, LinkStatus
 from .serializers import (
+    CheckInCommentSerializer,
+    CheckInReviewRowSerializer,
     ClientBriefSerializer,
     InviteCreateSerializer,
     InviteRespondSerializer,
@@ -210,3 +213,138 @@ class LinkPermissionView(APIView):
         link.can_edit_prescriptions = ser.validated_data["can_edit_prescriptions"]
         link.save(update_fields=["can_edit_prescriptions"])
         return Response(LinkSerializer(link).data)
+
+
+def _check_in_dict(c):
+    return {
+        "id": c.id,
+        "date": c.date,
+        "bodyweight": float(c.bodyweight) if c.bodyweight is not None else None,
+        "systolic": c.systolic,
+        "diastolic": c.diastolic,
+        "pulse": c.pulse,
+        "energy": c.energy,
+        "sleep": c.sleep,
+        "mood": c.mood,
+        "motivation": c.motivation,
+        "soreness": c.soreness,
+        "notes": c.notes,
+    }
+
+
+class CheckInReviewListView(APIView):
+    """Coach's review queue: recent check-ins across all active clients, newest first.
+    `?client=<id>` narrows to one client; `?status=pending` shows only those this coach
+    hasn't commented on yet."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=CheckInReviewRowSerializer(many=True))
+    def get(self, request):
+        if not getattr(request.user, "is_coach", False):
+            raise PermissionDenied("Only coaches have a review queue.")
+        client_ids = list(
+            CoachClientLink.objects.filter(
+                coach=request.user, status=LinkStatus.ACTIVE
+            ).values_list("client_id", flat=True)
+        )
+        qs = CheckIn.objects.filter(owner_id__in=client_ids)
+        client = request.query_params.get("client")
+        if client:
+            qs = qs.filter(owner_id=client)
+        qs = (
+            qs.select_related("owner")
+            .annotate(
+                n_comments=Count("comments", distinct=True),
+                is_reviewed=Exists(
+                    CheckInComment.objects.filter(
+                        check_in=OuterRef("pk"), author=request.user
+                    )
+                ),
+            )
+            .order_by("-date")
+        )
+        if request.query_params.get("status") == "pending":
+            qs = qs.filter(is_reviewed=False)
+        rows = [
+            {
+                "id": c.id,
+                "client_id": c.owner_id,
+                "client_name": _name(c.owner),
+                "date": c.date,
+                "bodyweight": float(c.bodyweight) if c.bodyweight is not None else None,
+                "energy": c.energy,
+                "sleep": c.sleep,
+                "has_notes": bool(c.notes and c.notes.strip()),
+                "comment_count": c.n_comments,
+                "reviewed": c.is_reviewed,
+            }
+            for c in qs[:100]
+        ]
+        return Response(CheckInReviewRowSerializer(rows, many=True).data)
+
+
+class CheckInReviewDetailView(APIView):
+    """One check-in with the surrounding week's aggregate + the feedback thread.
+    Readable by the check-in's owner or a coach with an active link."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        check_in = get_object_or_404(CheckIn.objects.select_related("owner"), pk=pk)
+        if not can_review_checkin(request.user, check_in):
+            raise PermissionDenied("You can't view this check-in.")
+        client = check_in.owner
+        series = list(
+            CheckIn.objects.filter(owner=client, date__lte=check_in.date)
+            .order_by("-date")
+            .values("date", "bodyweight")[:10]
+        )
+        series.reverse()
+        prev = (
+            CheckIn.objects.filter(
+                owner=client, date__lt=check_in.date, bodyweight__isnull=False
+            )
+            .order_by("-date")
+            .first()
+        )
+        comments = check_in.comments.select_related("author").all()
+        return Response(
+            {
+                "check_in": _check_in_dict(check_in),
+                "client": {"id": client.id, "name": _name(client), "email": client.email},
+                "previous_bodyweight": float(prev.bodyweight) if prev else None,
+                "weight_series": [
+                    {
+                        "date": s["date"],
+                        "bodyweight": (
+                            float(s["bodyweight"]) if s["bodyweight"] is not None else None
+                        ),
+                    }
+                    for s in series
+                ],
+                "weekly": weekly_checkin(client, check_in.date),
+                "comments": CheckInCommentSerializer(comments, many=True).data,
+            }
+        )
+
+
+class CheckInCommentCreateView(APIView):
+    """Add feedback to a check-in (coach) or reply (client). Author is the requester."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=CheckInCommentSerializer, responses=CheckInCommentSerializer)
+    def post(self, request, pk):
+        check_in = get_object_or_404(CheckIn, pk=pk)
+        if not can_review_checkin(request.user, check_in):
+            raise PermissionDenied("You can't comment on this check-in.")
+        body = (request.data.get("body") or "").strip()
+        if not body:
+            raise ValidationError({"body": "Feedback can't be empty."})
+        comment = CheckInComment.objects.create(
+            check_in=check_in, author=request.user, body=body
+        )
+        return Response(
+            CheckInCommentSerializer(comment).data, status=status.HTTP_201_CREATED
+        )

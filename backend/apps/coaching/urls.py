@@ -1,6 +1,9 @@
 from django.urls import path
 
 from .views import (
+    CheckInCommentCreateView,
+    CheckInReviewDetailView,
+    CheckInReviewListView,
     ClientOverviewView,
     CoachClientListView,
     InviteListCreateView,
@@ -15,6 +18,13 @@ urlpatterns = [
         "clients/<int:client_id>/overview/",
         ClientOverviewView.as_view(),
         name="coaching-client-overview",
+    ),
+    path("check-ins/", CheckInReviewListView.as_view(), name="coaching-checkins"),
+    path("check-ins/<int:pk>/", CheckInReviewDetailView.as_view(), name="coaching-checkin-detail"),
+    path(
+        "check-ins/<int:pk>/comments/",
+        CheckInCommentCreateView.as_view(),
+        name="coaching-checkin-comment",
     ),
     path("invites/", InviteListCreateView.as_view(), name="coaching-invites"),
     path("invites/<int:pk>/respond/", InviteRespondView.as_view(), name="coaching-invite-respond"),
