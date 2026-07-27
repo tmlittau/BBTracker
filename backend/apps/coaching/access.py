@@ -62,6 +62,20 @@ def resolve_effective_owner(request, *, for_write=False):
     return _resolve_client(request, client_id, require_write=require_write)
 
 
+def acting_as_coach(request):
+    """True when the request carries an X-Acting-Client header (a coach targeting a
+    client), as opposed to a user acting on their own data."""
+    return bool(request.META.get(ACTING_CLIENT_HEADER))
+
+
+def deny_global_write_when_acting(request, instance):
+    """Reference libraries (exercises/compounds/supplements/foods) are global-or-owned.
+    A coach acting on a client may manage that client's *own* custom items, but never
+    the shared global seeds (owner is null) — those are read-only from the console."""
+    if acting_as_coach(request) and getattr(instance, "owner_id", None) is None:
+        raise PermissionDenied("Global library items are read-only from the coach console.")
+
+
 class EffectiveOwnerMixin:
     """Owner-scoped views read their scope from `self.effective_owner` instead of
     `self.request.user`, so a coach acting on a client (safe methods) sees the

@@ -321,3 +321,74 @@ def test_overview_requires_active_link(coach, client_user):
     body = res.json()
     assert body["client"]["id"] == client_user.id
     assert "dashboard" in body and "body" in body and "weekly_check_in" in body
+
+
+# --- Stage 3: a coach curates a client's reference LIBRARY --------------------
+# Exercises / compounds / supplements / foods are global-or-owned. A coach with
+# edit access may add (and edit/delete) the *client's* own custom items so they
+# show up in that client's builders; the shared global seeds stay read-only.
+
+def test_coach_adds_custom_exercise_to_client_library(coach, client_user):
+    from apps.training.models import Exercise
+
+    link(coach, client_user)
+    res = api(coach).post(
+        "/api/v1/training/exercises/",
+        {"name": "Coach Curl"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201, res.content
+    assert Exercise.objects.filter(owner=client_user, name="Coach Curl").exists()
+    assert not Exercise.objects.filter(owner=coach, name="Coach Curl").exists()
+
+
+def test_coach_adds_custom_compound_to_client_library(coach, client_user):
+    from apps.protocols.models import Compound
+
+    link(coach, client_user)
+    res = api(coach).post(
+        "/api/v1/protocols/compounds/",
+        {"name": "Coach Compound", "compound_class": "anabolic",
+         "default_unit": "mg", "default_route": "im"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 201, res.content
+    assert Compound.objects.filter(owner=client_user, name="Coach Compound").exists()
+
+
+def test_coach_cannot_edit_or_delete_global_library_item(coach, client_user):
+    """Global seeds (owner is null) are read-only from the console — never mutate
+    shared reference data for everyone."""
+    from apps.training.models import Exercise
+
+    link(coach, client_user)
+    glob = Exercise.objects.create(name="Global Bench", owner=None)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+    patched = api(coach).patch(
+        f"/api/v1/training/exercises/{glob.id}/",
+        {"name": "Hijacked"}, format="json", **h,
+    )
+    assert patched.status_code == 403
+    deleted = api(coach).delete(f"/api/v1/training/exercises/{glob.id}/", **h)
+    assert deleted.status_code == 403
+    glob.refresh_from_db()
+    assert glob.name == "Global Bench" and glob.owner_id is None
+
+
+def test_readonly_coach_cannot_add_library_item(coach, client_user):
+    from apps.training.models import Exercise
+
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    res = api(coach).post(
+        "/api/v1/training/exercises/",
+        {"name": "Nope Exercise"},
+        format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert res.status_code == 403
+    assert not Exercise.objects.filter(name="Nope Exercise").exists()

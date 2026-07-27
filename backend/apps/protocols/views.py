@@ -10,7 +10,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.coaching.access import EffectiveOwnerMixin
+from apps.coaching.access import EffectiveOwnerMixin, deny_global_write_when_acting
 from apps.core.viewsets import OwnerScopedViewSet
 
 from .models import (
@@ -61,10 +61,12 @@ from .services import (
 
 
 class GlobalOrOwnedViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
-    """Reference items visible if global (owner=None) or owned. Single-user app:
-    seeded globals are editable + deletable too; deletion is blocked (with a clear
-    message) only when the item is still referenced by logged history."""
+    """Reference items visible if global (owner=None) or owned. A coach with edit
+    access may create/edit/delete a *client's* custom items (prescription_write);
+    the shared global seeds stay read-only from the console. Deletion is blocked
+    (with a clear message) only when the item is still referenced by logged history."""
 
+    prescription_write = True  # a coach may extend/curate a client's library
     search_fields: list[str] = ["name"]
 
     def get_queryset(self):
@@ -78,9 +80,14 @@ class GlobalOrOwnedViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
+
+    def perform_update(self, serializer):
+        deny_global_write_when_acting(self.request, serializer.instance)
+        serializer.save()
 
     def perform_destroy(self, instance):
+        deny_global_write_when_acting(self.request, instance)
         try:
             instance.delete()
         except ProtectedError:

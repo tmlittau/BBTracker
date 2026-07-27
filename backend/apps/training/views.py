@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from apps.coaching.access import EffectiveOwnerMixin
+from apps.coaching.access import EffectiveOwnerMixin, deny_global_write_when_acting
 from apps.core.viewsets import OwnerScopedViewSet, ReorderMixin
 
 from .models import (
@@ -47,8 +47,10 @@ class MuscleViewSet(viewsets.ReadOnlyModelViewSet):
 
 @extend_schema(tags=["training"])
 class ExerciseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
-    """Global (seeded) + the user's custom exercises. Users can only edit their own."""
+    """Global (seeded) + the user's custom exercises. Users can only edit their own;
+    a coach with edit access may create/edit/delete a client's custom exercises."""
 
+    prescription_write = True  # a coach may add exercises to a client's library
     serializer_class = ExerciseSerializer
     # Bounded reference data — return the whole list so the exercise picker
     # (program builder + live logger) can filter/search it client-side without
@@ -70,11 +72,16 @@ class ExerciseViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=self.effective_owner)
+
+    def perform_update(self, serializer):
+        deny_global_write_when_acting(self.request, serializer.instance)
+        serializer.save()
 
     def perform_destroy(self, instance):
         # Single-user app: seeded exercises are deletable too, but block (clearly)
         # when the exercise is still referenced by a program slot or logged set.
+        deny_global_write_when_acting(self.request, instance)
         try:
             instance.delete()
         except ProtectedError:

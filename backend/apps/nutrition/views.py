@@ -8,7 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.coaching.access import EffectiveOwnerMixin
+from apps.coaching.access import EffectiveOwnerMixin, deny_global_write_when_acting
 from apps.core.viewsets import OwnerScopedViewSet, ReorderMixin
 
 from .models import (
@@ -64,8 +64,10 @@ class NutrientViewSet(viewsets.ReadOnlyModelViewSet):
 
 @extend_schema(tags=["nutrition"])
 class FoodViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
-    """Global (seeded/imported) + the user's custom foods. Users edit only their own."""
+    """Global (seeded/imported) + the user's custom foods. Users edit only their own;
+    a coach with edit access may create/edit/delete a client's custom foods."""
 
+    prescription_write = True  # a coach may add foods to a client's library
     serializer_class = FoodSerializer
 
     def get_queryset(self):
@@ -80,11 +82,16 @@ class FoodViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user, source="custom")
+        serializer.save(owner=self.effective_owner, source="custom")
+
+    def perform_update(self, serializer):
+        deny_global_write_when_acting(self.request, serializer.instance)
+        serializer.save()
 
     def perform_destroy(self, instance):
         # Single-user app: seeded foods are deletable too, but block (clearly)
         # when the food is still referenced by a diary entry or recipe.
+        deny_global_write_when_acting(self.request, instance)
         try:
             instance.delete()
         except ProtectedError:
