@@ -15,6 +15,9 @@ from .models import (
     DiaryEntry,
     Food,
     Meal,
+    MealPlan,
+    MealPlanItem,
+    MealPlanMeal,
     MealTemplate,
     MealTemplateItem,
     Nutrient,
@@ -29,6 +32,9 @@ from .serializers import (
     DailySummarySerializer,
     DiaryEntrySerializer,
     FoodSerializer,
+    MealPlanItemSerializer,
+    MealPlanMealSerializer,
+    MealPlanSerializer,
     MealSerializer,
     MealTemplateSerializer,
     NutrientSerializer,
@@ -371,3 +377,72 @@ class MealTemplateViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
             )
             created += 1
         return Response({"created": created}, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=["nutrition"])
+class MealPlanViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
+    """A full-day meal plan (Breakfast/Lunch/…). A coach with edit access may author
+    one for a client (prescription_write → owned by the client); the client can then
+    apply it to a date for tracking, or edit it."""
+
+    serializer_class = MealPlanSerializer
+    prescription_write = True
+
+    def get_queryset(self):
+        return MealPlan.objects.filter(owner=self.effective_owner).prefetch_related(
+            "meals__items__food__food_nutrients", "meals__items__serving"
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.effective_owner)
+
+    @action(detail=True, methods=["post"])
+    def apply(self, request, pk=None):
+        """Instantiate this plan into the caller's own diary for a date: one Meal per
+        plan-meal, one DiaryEntry per item. Entries are always written for
+        `request.user` (the client importing), never a coach's acting target — logged
+        data stays client-authored."""
+        plan = self.get_object()
+        raw = request.data.get("date")
+        try:
+            day = date_cls.fromisoformat(raw) if raw else date_cls.today()
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"date": "must be ISO format YYYY-MM-DD"}) from exc
+
+        owner = request.user
+        base_order = Meal.objects.filter(owner=owner, date=day).count()
+        meals_created = 0
+        entries_created = 0
+        for offset, pm in enumerate(plan.meals.prefetch_related("items").all()):
+            meal = Meal.objects.create(
+                owner=owner, date=day, name=pm.name, order=base_order + offset
+            )
+            meals_created += 1
+            for it in pm.items.all():
+                DiaryEntry.objects.create(
+                    owner=owner, date=day, meal=meal,
+                    food_id=it.food_id, serving_id=it.serving_id, quantity=it.quantity,
+                )
+                entries_created += 1
+        return Response(
+            {"meals": meals_created, "entries": entries_created},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+@extend_schema(tags=["nutrition"])
+class MealPlanMealViewSet(ReorderMixin, OwnerScopedViewSet):
+    queryset = MealPlanMeal.objects.all()
+    serializer_class = MealPlanMealSerializer
+    owner_path = "plan__owner"
+    parent_checks = [("plan", MealPlan, "owner")]
+    prescription_write = True
+
+
+@extend_schema(tags=["nutrition"])
+class MealPlanItemViewSet(ReorderMixin, OwnerScopedViewSet):
+    queryset = MealPlanItem.objects.all()
+    serializer_class = MealPlanItemSerializer
+    owner_path = "meal__plan__owner"
+    parent_checks = [("meal", MealPlanMeal, "plan__owner")]
+    prescription_write = True

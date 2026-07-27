@@ -286,3 +286,56 @@ class MealTemplateItem(models.Model):
 
     def __str__(self):
         return f"{self.template.name}: {self.food}"
+
+
+class MealPlan(TimeStampedModel):
+    """A full-day eating template: several named meals, each a set of foods + amounts.
+    A coach can author one for a client (prescription); the client can apply it to a
+    date (creating that day's meals + entries) or edit it to their preferences.
+
+    Distinct from `MealTemplate`, which is a single-meal quick-add."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="meal_plans"
+    )
+    name = models.CharField(max_length=80)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class MealPlanMeal(models.Model):
+    """A named meal within a plan (Breakfast, Lunch, …)."""
+
+    plan = models.ForeignKey(MealPlan, on_delete=models.CASCADE, related_name="meals")
+    name = models.CharField(max_length=80)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"{self.plan.name}: {self.name}"
+
+
+class MealPlanItem(models.Model):
+    """One food + amount within a plan meal (mirrors a DiaryEntry food log)."""
+
+    meal = models.ForeignKey(MealPlanMeal, on_delete=models.CASCADE, related_name="items")
+    food = models.ForeignKey(Food, on_delete=models.PROTECT, related_name="meal_plan_items")
+    serving = models.ForeignKey(
+        ServingSize, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="meal_plan_items",
+    )
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("1"))
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"{self.meal.name}: {self.food}"

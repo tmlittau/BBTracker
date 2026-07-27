@@ -130,6 +130,40 @@ def _macro_ids():
     }
 
 
+def _macros_from_amounts(nutrient_amounts) -> dict[str, str]:
+    """Pick the macro nutrients out of a {nutrient_id: amount} map, keyed by slug and
+    stringified (energy/protein/carbohydrate/fat/fiber); missing macros → "0.0"."""
+    ids = _macro_ids()
+    return {
+        slug: str(_q(nutrient_amounts.get(nid, Decimal("0")), "0.1"))
+        for slug, nid in ids.items()
+    }
+
+
+def meal_plan_item_grams(item) -> Decimal | None:
+    """Resolved grams for one MealPlanItem (food + serving + quantity)."""
+    return resolve_entry_grams(item)
+
+
+def meal_plan_item_macros(item) -> dict[str, str]:
+    """Macro amounts (by slug) for one MealPlanItem."""
+    grams = resolve_entry_grams(item)
+    return _macros_from_amounts(food_nutrient_amounts(item.food, grams))
+
+
+def sum_food_macros(items) -> dict[str, str]:
+    """Summed macro amounts (by slug) across food items (each with .food/.serving/
+    .quantity) — used for a plan meal's and a whole plan's headline totals."""
+    ids = _macro_ids()
+    totals = {nid: Decimal("0") for nid in ids.values()}
+    for item in items:
+        grams = resolve_entry_grams(item)
+        for nid, amt in food_nutrient_amounts(item.food, grams).items():
+            if nid in totals:
+                totals[nid] += amt
+    return {slug: str(_q(totals[nid], "0.1")) for slug, nid in ids.items()}
+
+
 def daily_summary(owner, date):
     """Full day summary: per-nutrient totals vs the active target.
 

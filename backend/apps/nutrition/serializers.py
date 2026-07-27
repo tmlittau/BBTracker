@@ -7,6 +7,9 @@ from .models import (
     Food,
     FoodNutrient,
     Meal,
+    MealPlan,
+    MealPlanItem,
+    MealPlanMeal,
     MealTemplate,
     MealTemplateItem,
     Nutrient,
@@ -266,3 +269,62 @@ class MealTemplateSerializer(serializers.ModelSerializer):
             for i in items:
                 MealTemplateItem.objects.create(template=instance, **i)
         return instance
+
+
+class MealPlanItemSerializer(serializers.ModelSerializer):
+    """One food + amount in a plan meal. `meal` is writable (set on create); the
+    computed `grams`/`macros` power the coach console's per-item readout."""
+
+    food_name = serializers.CharField(source="food.name", read_only=True)
+    food_brand = serializers.CharField(source="food.brand", read_only=True)
+    food_unit = serializers.CharField(source="food.unit", read_only=True)
+    grams = serializers.SerializerMethodField()
+    macros = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MealPlanItem
+        fields = [
+            "id", "meal", "food", "food_name", "food_brand", "food_unit",
+            "serving", "quantity", "order", "grams", "macros",
+        ]
+
+    def get_grams(self, obj) -> str | None:
+        from .services import meal_plan_item_grams
+
+        g = meal_plan_item_grams(obj)
+        return str(g) if g is not None else None
+
+    def get_macros(self, obj) -> dict:
+        from .services import meal_plan_item_macros
+
+        return meal_plan_item_macros(obj)
+
+
+class MealPlanMealSerializer(serializers.ModelSerializer):
+    items = MealPlanItemSerializer(many=True, read_only=True)
+    macros = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MealPlanMeal
+        fields = ["id", "plan", "name", "order", "items", "macros"]
+
+    def get_macros(self, obj) -> dict:
+        from .services import sum_food_macros
+
+        return sum_food_macros(obj.items.all())
+
+
+class MealPlanSerializer(serializers.ModelSerializer):
+    meals = MealPlanMealSerializer(many=True, read_only=True)
+    macros = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MealPlan
+        fields = ["id", "name", "notes", "meals", "macros", "created_at"]
+        read_only_fields = ["created_at"]
+
+    def get_macros(self, obj) -> dict:
+        from .services import sum_food_macros
+
+        items = [it for meal in obj.meals.all() for it in meal.items.all()]
+        return sum_food_macros(items)

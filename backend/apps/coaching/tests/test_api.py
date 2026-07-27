@@ -392,3 +392,75 @@ def test_readonly_coach_cannot_add_library_item(coach, client_user):
     )
     assert res.status_code == 403
     assert not Exercise.objects.filter(name="Nope Exercise").exists()
+
+
+# --- Meal plans: a coach authors a full-day plan the client can import ---------
+
+def test_coach_authors_client_meal_plan(coach, client_user):
+    from apps.nutrition.models import Food, MealPlan
+
+    link(coach, client_user)
+    h = {"HTTP_X_ACTING_CLIENT": str(client_user.id)}
+    food = Food.objects.create(name="Oats", owner=None, unit="g", source="custom")
+
+    r = api(coach).post(
+        "/api/v1/nutrition/meal-plans/", {"name": "Cutting day"}, format="json", **h
+    )
+    assert r.status_code == 201, r.content
+    plan_id = r.json()["id"]
+    assert MealPlan.objects.filter(owner=client_user, name="Cutting day").exists()
+    assert not MealPlan.objects.filter(owner=coach).exists()
+
+    m = api(coach).post(
+        "/api/v1/nutrition/meal-plan-meals/",
+        {"plan": plan_id, "name": "Breakfast", "order": 0}, format="json", **h,
+    )
+    assert m.status_code == 201, m.content
+    meal_id = m.json()["id"]
+
+    it = api(coach).post(
+        "/api/v1/nutrition/meal-plan-items/",
+        {"meal": meal_id, "food": food.id, "quantity": "80"}, format="json", **h,
+    )
+    assert it.status_code == 201, it.content
+
+    got = api(coach).get(f"/api/v1/nutrition/meal-plans/{plan_id}/", **h).json()
+    assert got["meals"][0]["name"] == "Breakfast"
+    assert got["meals"][0]["items"][0]["food"] == food.id
+
+
+def test_readonly_coach_cannot_author_meal_plan(coach, client_user):
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE,
+        can_edit_prescriptions=False,
+    )
+    r = api(coach).post(
+        "/api/v1/nutrition/meal-plans/", {"name": "Nope"}, format="json",
+        HTTP_X_ACTING_CLIENT=str(client_user.id),
+    )
+    assert r.status_code == 403
+
+
+def test_client_applies_meal_plan_to_diary(client_user):
+    from apps.nutrition.models import (
+        DiaryEntry,
+        Food,
+        Meal,
+        MealPlan,
+        MealPlanItem,
+        MealPlanMeal,
+    )
+
+    food = Food.objects.create(name="Rice", owner=None, unit="g", source="custom")
+    plan = MealPlan.objects.create(owner=client_user, name="Day A")
+    meal = MealPlanMeal.objects.create(plan=plan, name="Lunch", order=0)
+    MealPlanItem.objects.create(meal=meal, food=food, quantity=150)
+
+    r = api(client_user).post(
+        f"/api/v1/nutrition/meal-plans/{plan.id}/apply/",
+        {"date": "2026-05-10"}, format="json",
+    )
+    assert r.status_code == 201, r.content
+    assert r.json() == {"meals": 1, "entries": 1}
+    assert Meal.objects.filter(owner=client_user, date="2026-05-10", name="Lunch").exists()
+    assert DiaryEntry.objects.filter(owner=client_user, date="2026-05-10", food=food).exists()
