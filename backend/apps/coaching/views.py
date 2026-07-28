@@ -348,3 +348,29 @@ class CheckInCommentCreateView(APIView):
         return Response(
             CheckInCommentSerializer(comment).data, status=status.HTTP_201_CREATED
         )
+
+
+class TemplateApplyView(APIView):
+    """Deep-copy one of the coach's own templates (a program / protocol / meal plan
+    they own) onto a client. Requires an active link with edit access."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["coaching"], responses=OpenApiTypes.OBJECT)
+    def post(self, request):
+        from .services import apply_template
+
+        if not getattr(request.user, "is_coach", False):
+            raise PermissionDenied("Only coaches can apply templates.")
+        client_id = request.data.get("client")
+        link = CoachClientLink.active_link(request.user, client_id) if client_id else None
+        if link is None:
+            raise PermissionDenied("You do not have an active coaching link with that client.")
+        if not link.can_edit_prescriptions:
+            raise PermissionDenied("You don't have edit access to this client's plan.")
+        new = apply_template(
+            request.user, request.data.get("kind"), request.data.get("id"), link.client
+        )
+        return Response(
+            {"id": new.id, "name": new.name}, status=status.HTTP_201_CREATED
+        )

@@ -540,3 +540,78 @@ def test_client_can_reply_on_own_checkin(client_user):
         f"/api/v1/coaching/check-ins/{ci.id}/comments/", {"body": "Felt strong!"}, format="json",
     )
     assert res.status_code == 201 and res.json()["by_coach"] is False
+
+
+# --- Templates: coach owns programs/protocols/meal-plans; applies them to clients ---
+
+def test_coach_applies_program_template_to_client(coach, client_user):
+    from apps.training.models import Exercise, ExerciseSlot, PlannedSet, Program, TrainingDay
+
+    link(coach, client_user)
+    # a template program owned by the coach (built with no acting header)
+    ex = Exercise.objects.create(name="Bench", owner=None)
+    tmpl = Program.objects.create(owner=coach, name="Upper/Lower", is_active=True)
+    day = TrainingDay.objects.create(program=tmpl, name="Upper", order=0)
+    slot = ExerciseSlot.objects.create(day=day, exercise=ex, order=0)
+    PlannedSet.objects.create(
+        slot=slot, set_type="working", target_reps_low=8, target_reps_high=12, order=0
+    )
+
+    res = api(coach).post(
+        "/api/v1/coaching/templates/apply/",
+        {"kind": "program", "id": tmpl.id, "client": client_user.id}, format="json",
+    )
+    assert res.status_code == 201, res.content
+
+    copy = Program.objects.get(owner=client_user, name="Upper/Lower")
+    assert copy.id != tmpl.id and copy.is_active is False
+    assert copy.days.count() == 1
+    cslot = copy.days.first().slots.first()
+    assert cslot.exercise_id == ex.id and cslot.planned_sets.count() == 1
+    # the coach's template is untouched
+    assert Program.objects.filter(owner=coach, name="Upper/Lower").count() == 1
+
+
+def test_coach_applies_meal_plan_template(coach, client_user):
+    from apps.nutrition.models import Food, MealPlan, MealPlanItem, MealPlanMeal
+
+    link(coach, client_user)
+    food = Food.objects.create(name="Oats", owner=None, unit="g", source="custom")
+    tmpl = MealPlan.objects.create(owner=coach, name="Cut day")
+    meal = MealPlanMeal.objects.create(plan=tmpl, name="Breakfast", order=0)
+    MealPlanItem.objects.create(meal=meal, food=food, quantity=80, order=0)
+
+    res = api(coach).post(
+        "/api/v1/coaching/templates/apply/",
+        {"kind": "meal_plan", "id": tmpl.id, "client": client_user.id}, format="json",
+    )
+    assert res.status_code == 201, res.content
+    copy = MealPlan.objects.get(owner=client_user, name="Cut day")
+    assert copy.meals.first().items.first().food_id == food.id
+
+
+def test_readonly_link_cannot_apply_template(coach, client_user):
+    from apps.training.models import Program
+
+    CoachClientLink.objects.create(
+        coach=coach, client=client_user, status=LinkStatus.ACTIVE, can_edit_prescriptions=False,
+    )
+    tmpl = Program.objects.create(owner=coach, name="X")
+    res = api(coach).post(
+        "/api/v1/coaching/templates/apply/",
+        {"kind": "program", "id": tmpl.id, "client": client_user.id}, format="json",
+    )
+    assert res.status_code == 403
+    assert not Program.objects.filter(owner=client_user).exists()
+
+
+def test_cannot_apply_another_coachs_template(coach, client_user, outsider):
+    from apps.training.models import Program
+
+    link(coach, client_user)
+    foreign = Program.objects.create(owner=outsider, name="Not yours")
+    res = api(coach).post(
+        "/api/v1/coaching/templates/apply/",
+        {"kind": "program", "id": foreign.id, "client": client_user.id}, format="json",
+    )
+    assert res.status_code == 404
