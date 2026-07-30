@@ -162,10 +162,11 @@ npx playwright test
 
 ```bash
 cp .env.example .env
-docker compose up --build      # db, redis, minio, backend (:8000), frontend (:5173)
+docker compose up --build      # db, redis, minio, backend (:8000), frontend (:32402)
 ```
 
-Open <http://localhost:5173>, register, enroll TOTP, land on the dashboard. API docs:
+Open <http://localhost:32402>. The coaching frontend proxies its API and authentication
+requests to Django inside the Compose network. API docs:
 <http://localhost:8000/api/docs/>. Admin user:
 `docker compose exec backend python manage.py createsuperuser`.
 
@@ -221,7 +222,7 @@ Phone/Browser ─https─▶ Cloudflare edge ─▶ cloudflared (already on the 
                                               ▼
                                   Caddy  :${CADDY_HTTP_PORT}→:80      (only published port)
                                    ├─ /api/* /_allauth/* /admin/* /static/* ─▶ backend  (gunicorn :8000)
-                                   └─ everything else                       ─▶ frontend (node :3000)
+                                   └─ everything else                       ─▶ frontend (nginx :80)
                               db · redis · minio stay internal (no host ports)
 ```
 
@@ -230,7 +231,7 @@ CSRF work without CORS (there is no vite dev proxy in production). It injects
 `X-Forwarded-Proto: https` so Django (via `SECURE_PROXY_SSL_HEADER`) treats requests as secure.
 
 **What's included:** `backend/Dockerfile.prod` (gunicorn + WhiteNoise + an entrypoint that runs
-`migrate`/`collectstatic`), `frontend/Dockerfile.prod` (`vite build` → `node build`, adapter-node),
+`migrate`/`collectstatic`), `frontend/Dockerfile` (static SvelteKit build served by Nginx),
 `infra/caddy/Caddyfile`, `docker-compose.prod.yml`, and `.env.prod.example`. The backend app code is
 unchanged from dev; `config/settings/prod.py` adds HTTPS/cookie hardening and WhiteNoise.
 
@@ -239,8 +240,8 @@ unchanged from dev; `config/settings/prod.py` adds HTTPS/cookie hardening and Wh
 ```bash
 cp .env.prod.example .env        # on the NAS, then edit:
 #  DJANGO_SECRET_KEY     → python -c "import secrets; print(secrets.token_urlsafe(64))"
-#  DJANGO_ALLOWED_HOSTS  → bbtracker.example.com,backend,localhost,127.0.0.1
-#  CSRF_TRUSTED_ORIGINS / PUBLIC_ORIGIN → https://bbtracker.example.com
+#  DJANGO_ALLOWED_HOSTS  → bodybuilding.tmlittau.com,backend,localhost,127.0.0.1
+#  CSRF_TRUSTED_ORIGINS → https://bodybuilding.tmlittau.com
 #  POSTGRES_PASSWORD (keep DATABASE_URL in sync), MINIO_ROOT_USER/PASSWORD
 #  CADDY_HTTP_PORT       → a free host port (see the port note below)
 ```
@@ -275,7 +276,7 @@ the **Zero Trust dashboard** (Tunnel → *Public Hostname* → Service `HTTP` �
 
 ```yaml
 ingress:
-  - hostname: bbtracker.example.com
+  - hostname: bodybuilding.tmlittau.com
     service: http://<nas-ip>:8080      # CADDY_HTTP_PORT
   - service: http_status:404
 ```
@@ -290,9 +291,9 @@ default ruleset doesn't cache them, but add a *Cache Rule → Bypass* to be safe
 
 ### 4. Verify
 
-From a phone on cellular, open `https://bbtracker.example.com` → register, enroll **TOTP**, log a
-workout, upload a progress photo (round-trips MinIO via the owner-scoped API), and **Add to Home
-Screen** to install the PWA. There should be no CSRF or mixed-content errors. Then:
+From a phone on cellular, open `https://bodybuilding.tmlittau.com`. The coaching console should
+load at the base URL, while `/api/v1/`, `/_allauth/`, and `/admin/` continue to reach Django.
+There should be no CSRF or mixed-content errors. Then:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec backend python manage.py check --deploy

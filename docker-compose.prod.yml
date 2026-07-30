@@ -9,10 +9,8 @@
 # MinIO stay internal to the compose network (no host ports) — progress photos are
 # streamed through the owner-scoped API, never via public MinIO URLs.
 #
-# API-only: this host serves the Django REST API (+ allauth headless + admin) for the
-# native iOS app. The SvelteKit web frontend and the Home-Assistant reminder worker
-# have been removed (the app is the client; it schedules its own reminders locally).
-# Redis stays — it is the Django cache backend, not just a reminders dependency.
+# Caddy serves the coaching frontend at `/` and proxies the Django API, allauth, and
+# admin paths to the backend. Redis remains the Django cache backend.
 name: bbtracker-prod
 
 services:
@@ -80,12 +78,29 @@ services:
       retries: 10
       start_period: 40s
 
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        # Keep API calls same-origin; Caddy routes /api and /_allauth to Django.
+        PUBLIC_API_BASE: ""
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_started
+      frontend:
+        condition: service_healthy
     # The only outward-facing port. Choose a host port NOT already in use on the NAS
     # (avoid 32400, 3000, 81, 444). Point cloudflared at http://<nas-ip>:${CADDY_HTTP_PORT}.
     ports:

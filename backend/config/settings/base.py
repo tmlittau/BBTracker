@@ -167,10 +167,10 @@ HEADLESS_ONLY = True
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# --- CORS / CSRF (SvelteKit dev server origin) ---
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:5173"])
+# --- CORS / CSRF (coaching frontend dev origin) ---
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:32402"])
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:5173"])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:32402"])
 CSRF_COOKIE_HTTPONLY = False  # frontend must read csrftoken cookie to send X-CSRFToken
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"

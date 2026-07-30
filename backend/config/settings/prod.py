@@ -16,8 +16,8 @@ DEBUG = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # HTTP->HTTPS redirect is enforced at the Cloudflare edge ("Always Use HTTPS").
-# Left OFF by default so internal SSR calls (frontend -> backend over http) aren't
-# redirected; `check --deploy` then reports only security.W008 (expected). Set
+# Left OFF because Caddy's internal hop to Django is plain HTTP; `check --deploy`
+# then reports security.W008 (expected). Set
 # DJANGO_SECURE_SSL_REDIRECT=1 if you front the app differently.
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
 

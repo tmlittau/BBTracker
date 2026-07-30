@@ -2,8 +2,8 @@
 #
 # TLS is terminated at the Cloudflare edge; the (already-running) cloudflared tunnel
 # forwards plain HTTP to this Caddy, which is the ONLY service published to a host
-# port. The web frontend has been removed — this host now serves the Django API only
-# (REST + allauth headless + admin) for the native app. Non-API paths return 404.
+# port. Caddy splits one same-origin host between Django and the coaching frontend,
+# so browser session cookies and CSRF work without CORS.
 #
 # `header_up X-Forwarded-Proto https` tells Django (via SECURE_PROXY_SSL_HEADER) the
 # request is secure, so secure cookies are honoured and CSRF origin checks pass.
@@ -27,8 +27,9 @@
 		}
 	}
 
-	# The web frontend was removed; this host is API-only. Anything else → 404.
+	# Everything else is the coaching SPA. Its Nginx server falls back to index.html
+	# for client-side routes such as /clients/123/training.
 	handle {
-		respond "Not found" 404
+		reverse_proxy frontend:80
 	}
 }

@@ -57,6 +57,21 @@ services:
       minio:
         condition: service_started
 
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-32402}:5173"
+    depends_on:
+      backend:
+        condition: service_started
+
 volumes:
   pgdata:
   miniodata:
