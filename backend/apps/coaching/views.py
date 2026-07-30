@@ -147,19 +147,30 @@ class InviteListCreateView(APIView):
         client = User.objects.filter(email__iexact=email).first()
         if client is None:
             raise ValidationError({"email": "No BBTracker account with that email."})
-        if client == request.user:
-            raise ValidationError({"email": "You can't add yourself as a client."})
+        # Self-coaching: a coach adding themselves needs no invite/accept — the link
+        # is active immediately (used to test as coach + coachee on one account).
+        is_self = client == request.user
         link, created = CoachClientLink.objects.get_or_create(
-            coach=request.user, client=client, defaults={"status": LinkStatus.PENDING}
+            coach=request.user,
+            client=client,
+            defaults={
+                "status": LinkStatus.ACTIVE if is_self else LinkStatus.PENDING,
+                "responded_at": timezone.now() if is_self else None,
+            },
         )
         if not created:
             if link.status == LinkStatus.ACTIVE:
-                raise ValidationError({"email": "Already an active client."})
-            if link.status == LinkStatus.PENDING:
+                msg = (
+                    "You're already coaching yourself."
+                    if is_self
+                    else "Already an active client."
+                )
+                raise ValidationError({"email": msg})
+            if not is_self and link.status == LinkStatus.PENDING:
                 raise ValidationError({"email": "An invite is already pending."})
-            # Re-invite after a decline/revoke.
-            link.status = LinkStatus.PENDING
-            link.responded_at = None
+            # Self re-activates directly; others get a fresh pending invite.
+            link.status = LinkStatus.ACTIVE if is_self else LinkStatus.PENDING
+            link.responded_at = timezone.now() if is_self else None
             link.save(update_fields=["status", "responded_at"])
         return Response(LinkSerializer(link).data, status=status.HTTP_201_CREATED)
 
@@ -374,3 +385,35 @@ class TemplateApplyView(APIView):
         return Response(
             {"id": new.id, "name": new.name}, status=status.HTTP_201_CREATED
         )
+
+
+class UserSearchView(APIView):
+    """Search registered users to add as clients (coach-only). Returns each match with
+    its current relationship to this coach so the UI can label / disable it:
+    'self' | 'active' | 'pending' | 'declined' | 'revoked' | 'none'."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["coaching"], responses=OpenApiTypes.OBJECT)
+    def get(self, request):
+        if not getattr(request.user, "is_coach", False):
+            raise PermissionDenied("Your account is not enabled for coaching.")
+        q = (request.query_params.get("q") or "").strip()
+        if len(q) < 2:
+            return Response([])
+        users = User.objects.filter(
+            Q(email__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q)
+        ).order_by("email")[:20]
+        links = dict(
+            CoachClientLink.objects.filter(coach=request.user).values_list("client_id", "status")
+        )
+        out = [
+            {
+                "id": u.id,
+                "email": u.email,
+                "name": _name(u),
+                "relationship": "self" if u.id == request.user.id else links.get(u.id, "none"),
+            }
+            for u in users
+        ]
+        return Response(out)

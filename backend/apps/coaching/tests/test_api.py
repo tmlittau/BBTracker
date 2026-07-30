@@ -615,3 +615,39 @@ def test_cannot_apply_another_coachs_template(coach, client_user, outsider):
         {"kind": "program", "id": foreign.id, "client": client_user.id}, format="json",
     )
     assert res.status_code == 404
+
+
+# --- User search + self-coaching ---------------------------------------------
+
+def test_user_search_labels_relationships(coach, client_user, outsider):
+    link(coach, client_user)  # active
+    res = api(coach).get("/api/v1/coaching/user-search/?q=x.com")
+    assert res.status_code == 200
+    by_email = {r["email"]: r["relationship"] for r in res.json()}
+    assert by_email["client@x.com"] == "active"
+    assert by_email["coach@x.com"] == "self"
+    assert by_email["outsider@x.com"] == "none"
+
+
+def test_user_search_requires_coach_and_min_length(coach, client_user):
+    assert api(client_user).get("/api/v1/coaching/user-search/?q=x.com").status_code == 403
+    assert api(coach).get("/api/v1/coaching/user-search/?q=x").json() == []  # < 2 chars
+
+
+def test_coach_adds_self_active_immediately(coach):
+    res = api(coach).post(
+        "/api/v1/coaching/invites/", {"email": "coach@x.com"}, format="json"
+    )
+    assert res.status_code == 201
+    assert res.json()["status"] == LinkStatus.ACTIVE
+    linkobj = CoachClientLink.objects.get(coach=coach, client=coach)
+    assert linkobj.status == LinkStatus.ACTIVE and linkobj.responded_at is not None
+    # and the coach can now act on themselves via the roster
+    roster = api(coach).get("/api/v1/coaching/clients/").json()
+    assert coach.id in [c["client_id"] for c in roster]
+
+
+def test_adding_self_twice_is_rejected(coach):
+    api(coach).post("/api/v1/coaching/invites/", {"email": "coach@x.com"}, format="json")
+    res = api(coach).post("/api/v1/coaching/invites/", {"email": "coach@x.com"}, format="json")
+    assert res.status_code == 400

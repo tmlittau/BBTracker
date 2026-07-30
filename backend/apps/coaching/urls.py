@@ -11,6 +11,7 @@ from .views import (
     LinkPermissionView,
     LinkRevokeView,
     TemplateApplyView,
+    UserSearchView,
 )
 
 urlpatterns = [
@@ -27,6 +28,7 @@ urlpatterns = [
         CheckInCommentCreateView.as_view(),
         name="coaching-checkin-comment",
     ),
+    path("user-search/", UserSearchView.as_view(), name="coaching-user-search"),
     path("templates/apply/", TemplateApplyView.as_view(), name="coaching-template-apply"),
     path("invites/", InviteListCreateView.as_view(), name="coaching-invites"),
     path("invites/<int:pk>/respond/", InviteRespondView.as_view(), name="coaching-invite-respond"),
