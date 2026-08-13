@@ -64,7 +64,7 @@ class ReminderDispatch(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reminder_dispatches"
     )
-    slot = models.CharField(max_length=12)
+    slot = models.CharField(max_length=64)
     sent_on = models.DateField()
     items = models.CharField(max_length=255, blank=True)  # what was reminded (audit)
     created_at = models.DateTimeField(auto_now_add=True)

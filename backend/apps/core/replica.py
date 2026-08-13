@@ -3,10 +3,113 @@
 The first native launch imports the existing relational data in the exact serializer shapes
 already consumed by the iOS app. After cutover, subsequent restores use ReplicaBackup instead.
 """
+import copy
 from datetime import date
 
 from django.db.models import Q
 from django.utils import timezone
+
+
+def upgrade_replica_snapshot(user, snapshot, fallback_snapshot=None):
+    """Add protocol dose slots to backups written by pre-slot app versions.
+
+    Old installed clients ignore unknown fields when decoding and omit them again
+    on their next backup. Running this on both PUT and bootstrap keeps the rolling
+    deployment safe until every device has upgraded.
+    """
+    if not isinstance(snapshot, dict):
+        return snapshot
+    upgraded = copy.deepcopy(snapshot)
+    protocols = upgraded.get("protocols")
+    if not isinstance(protocols, list):
+        return upgraded
+
+    from apps.notifications.models import ReminderSettings
+    from apps.protocols.dose_slots import DEFAULT_DOSE_SLOTS
+    from apps.protocols.models import Protocol
+
+    relational = {
+        protocol.id: protocol
+        for protocol in Protocol.objects.filter(owner=user).prefetch_related("dose_slots")
+    }
+    fallback_protocols = {
+        protocol.get("id"): protocol
+        for protocol in (
+            fallback_snapshot.get("protocols", [])
+            if isinstance(fallback_snapshot, dict)
+            else []
+        )
+        if isinstance(protocol, dict)
+    }
+    settings = ReminderSettings.objects.filter(owner=user).first()
+    used_ids = {
+        slot.get("id")
+        for protocol in protocols
+        if isinstance(protocol, dict)
+        for slot in (protocol.get("dose_slots") or [])
+        if isinstance(slot, dict) and isinstance(slot.get("id"), int)
+    }
+    next_local_id = min([value for value in used_ids if value < 0] or [0]) - 1
+
+    for protocol_data in protocols:
+        if not isinstance(protocol_data, dict):
+            continue
+        protocol_id = protocol_data.get("id")
+        if "dose_slots" not in protocol_data:
+            fallback_protocol = fallback_protocols.get(protocol_id, {})
+            fallback_slots = fallback_protocol.get("dose_slots")
+            if isinstance(fallback_slots, list) and fallback_slots:
+                slots = copy.deepcopy(fallback_slots)
+            elif (source := relational.get(protocol_id)) is not None:
+                slots = [
+                    {
+                        "id": slot.id,
+                        "protocol": protocol_id,
+                        "key": slot.key,
+                        "name": slot.name,
+                        "reminder_time": slot.reminder_time.isoformat(),
+                        "order": slot.order,
+                    }
+                    for slot in source.dose_slots.order_by("order", "id")
+                ]
+            else:
+                slots = []
+                for order, (key, default_name, default_time) in enumerate(DEFAULT_DOSE_SLOTS):
+                    name = default_name
+                    reminder_time = default_time
+                    if settings is not None:
+                        name = (
+                            (getattr(settings, f"{key}_label", "") or "").strip()
+                            or default_name
+                        )
+                        reminder_time = getattr(settings, key, default_time)
+                    slots.append(
+                        {
+                            "id": next_local_id,
+                            "protocol": protocol_id,
+                            "key": key,
+                            "name": name,
+                            "reminder_time": reminder_time.isoformat(),
+                            "order": order,
+                        }
+                    )
+                    next_local_id -= 1
+            protocol_data["dose_slots"] = slots
+        slots = protocol_data.get("dose_slots") or []
+        slots_by_key = {
+            slot["key"]: slot["id"]
+            for slot in slots
+            if isinstance(slot, dict) and "key" in slot and "id" in slot
+        }
+        for item in protocol_data.get("items") or []:
+            if not isinstance(item, dict) or "dose_slot_ids" in item:
+                continue
+            item["dose_slot_ids"] = [
+                slots_by_key[key]
+                for key in (item.get("times_of_day") or [])
+                if key in slots_by_key
+            ]
+    return upgraded
 
 
 def build_replica_snapshot(user):
@@ -78,7 +181,7 @@ def build_replica_snapshot(user):
         Q(owner__isnull=True) | Q(owner=user)
     ).prefetch_related("supplement_nutrients__nutrient")
     protocols = Protocol.objects.filter(owner=user).prefetch_related(
-        "items__compound", "items__supplement"
+        "dose_slots", "items__compound", "items__supplement", "items__dose_slots"
     )
     doses = DoseLog.objects.filter(owner=user).select_related(
         "compound", "supplement", "injection_site"

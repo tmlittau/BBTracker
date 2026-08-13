@@ -188,6 +188,34 @@ class Protocol(TimeStampedModel):
         return self.name
 
 
+class ProtocolDoseSlot(models.Model):
+    """A named reminder time owned by one protocol.
+
+    `key` is stable when the display name or reminder time changes. Historical
+    protocols use the five legacy keys so older clients can continue reading
+    `ProtocolItem.times_of_day` during the rollout.
+    """
+
+    protocol = models.ForeignKey(
+        Protocol, on_delete=models.CASCADE, related_name="dose_slots"
+    )
+    key = models.CharField(max_length=64)
+    name = models.CharField(max_length=64)
+    reminder_time = models.TimeField()
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["protocol", "key"], name="uniq_protocol_dose_slot_key"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.protocol.name} · {self.name}"
+
+
 class ProtocolItem(models.Model):
     """A scheduled compound or supplement within a protocol (exactly one of the two)."""
 
@@ -207,6 +235,12 @@ class ProtocolItem(models.Model):
     # sqlite test path works alongside Postgres.
     days_of_week = models.JSONField(default=list, blank=True)
     times_of_day = models.JSONField(default=list, blank=True)
+    dose_slots = models.ManyToManyField(
+        ProtocolDoseSlot,
+        related_name="items",
+        blank=True,
+        help_text="Protocol-owned reminder slots selected for this item.",
+    )
     target_benefit = models.CharField(max_length=200, blank=True)
     notes = models.CharField(max_length=255, blank=True)
     order = models.PositiveIntegerField(default=0)

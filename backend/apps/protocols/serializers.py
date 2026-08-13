@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 
 from .models import (
@@ -8,6 +10,7 @@ from .models import (
     DoseLog,
     InjectionSite,
     Protocol,
+    ProtocolDoseSlot,
     ProtocolItem,
     Supplement,
     SupplementNutrient,
@@ -85,16 +88,49 @@ class BloodMarkerSerializer(serializers.ModelSerializer):
         ]
 
 
+class ProtocolDoseSlotSerializer(serializers.ModelSerializer):
+    key = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = ProtocolDoseSlot
+        fields = ["id", "protocol", "key", "name", "reminder_time", "order"]
+
+    def validate_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter a dose name.")
+        return value
+
+    def validate_protocol(self, value):
+        if self.instance is not None and value.pk != self.instance.protocol_id:
+            raise serializers.ValidationError("A dose time cannot move between protocols.")
+        return value
+
+    def create(self, validated_data):
+        protocol = validated_data["protocol"]
+        while True:
+            key = f"slot_{uuid.uuid4().hex[:12]}"
+            if not ProtocolDoseSlot.objects.filter(protocol=protocol, key=key).exists():
+                break
+        return ProtocolDoseSlot.objects.create(key=key, **validated_data)
+
+
 class ProtocolItemSerializer(serializers.ModelSerializer):
     item_name = serializers.SerializerMethodField()
     compound_route = serializers.SerializerMethodField()
+    dose_slot_ids = serializers.PrimaryKeyRelatedField(
+        source="dose_slots",
+        many=True,
+        queryset=ProtocolDoseSlot.objects.all(),
+        required=False,
+    )
 
     class Meta:
         model = ProtocolItem
         fields = [
             "id", "protocol", "compound", "supplement", "item_name",
             "dose_amount", "dose_unit", "route", "compound_route", "frequency",
-            "days_of_week", "times_of_day",
+            "days_of_week", "times_of_day", "dose_slot_ids",
             "target_benefit", "notes", "order",
         ]
 
@@ -112,15 +148,40 @@ class ProtocolItemSerializer(serializers.ModelSerializer):
         supplement = attrs.get("supplement", getattr(self.instance, "supplement", None))
         if not compound and not supplement:
             raise serializers.ValidationError("A protocol item needs a compound or a supplement.")
+        protocol = attrs.get("protocol", getattr(self.instance, "protocol", None))
+        selected = attrs.get("dose_slots")
+        if selected is not None:
+            if protocol is None or any(slot.protocol_id != protocol.id for slot in selected):
+                raise serializers.ValidationError(
+                    {"dose_slot_ids": "Every dose slot must belong to this protocol."}
+                )
+            attrs["times_of_day"] = [
+                slot.key for slot in sorted(selected, key=lambda slot: (slot.order, slot.id))
+            ]
+        elif "times_of_day" in attrs and protocol is not None:
+            keys = list(dict.fromkeys(attrs["times_of_day"] or []))
+            slots = list(protocol.dose_slots.filter(key__in=keys).order_by("order", "id"))
+            found = {slot.key for slot in slots}
+            unknown = [key for key in keys if key not in found]
+            if unknown:
+                raise serializers.ValidationError(
+                    {"times_of_day": f"Unknown dose slot(s): {', '.join(unknown)}."}
+                )
+            attrs["dose_slots"] = slots
+            attrs["times_of_day"] = [slot.key for slot in slots]
         return attrs
 
 
 class ProtocolSerializer(serializers.ModelSerializer):
     items = ProtocolItemSerializer(many=True, read_only=True)
+    dose_slots = ProtocolDoseSlotSerializer(many=True, read_only=True)
 
     class Meta:
         model = Protocol
-        fields = ["id", "name", "is_active", "started_on", "ended_on", "notes", "items"]
+        fields = [
+            "id", "name", "is_active", "started_on", "ended_on", "notes",
+            "dose_slots", "items",
+        ]
 
 
 class DoseLogSerializer(serializers.ModelSerializer):

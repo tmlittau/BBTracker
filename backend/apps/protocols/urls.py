@@ -10,6 +10,7 @@ from .views import (
     DoseLogViewSet,
     InjectionSiteViewSet,
     PhaseLevelsView,
+    ProtocolDoseSlotViewSet,
     ProtocolInForceView,
     ProtocolItemViewSet,
     ProtocolViewSet,
@@ -24,6 +25,7 @@ router.register("supplements", SupplementViewSet, basename="supplement")
 router.register("injection-sites", InjectionSiteViewSet, basename="injectionsite")
 router.register("blood-markers", BloodMarkerViewSet, basename="bloodmarker")
 router.register("protocols", ProtocolViewSet, basename="protocol")
+router.register("protocol-dose-slots", ProtocolDoseSlotViewSet, basename="protocoldoseslot")
 router.register("protocol-items", ProtocolItemViewSet, basename="protocolitem")
 router.register("dose-logs", DoseLogViewSet, basename="doselog")
 router.register("vials", VialViewSet, basename="vial")

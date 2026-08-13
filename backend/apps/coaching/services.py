@@ -29,16 +29,27 @@ def clone_program(src, owner):
 
 
 def clone_protocol(src, owner):
+    from apps.protocols.dose_slots import copy_dose_slots
     from apps.protocols.models import Protocol, ProtocolItem
 
     new = Protocol.objects.create(owner=owner, name=src.name, is_active=False, notes=src.notes)
+    slot_map = copy_dose_slots(src, new)
+    target_slots_by_key = {slot.key: slot for slot in new.dose_slots.all()}
     for it in src.items.all():
-        ProtocolItem.objects.create(
+        copied = ProtocolItem.objects.create(
             protocol=new, compound_id=it.compound_id, supplement_id=it.supplement_id,
             dose_amount=it.dose_amount, dose_unit=it.dose_unit, route=it.route,
             frequency=it.frequency, days_of_week=it.days_of_week, times_of_day=it.times_of_day,
             target_benefit=it.target_benefit, notes=it.notes, order=it.order,
         )
+        selected = [slot_map[slot.id] for slot in it.dose_slots.all() if slot.id in slot_map]
+        if not selected:
+            selected = [
+                target_slots_by_key[key]
+                for key in (it.times_of_day or [])
+                if key in target_slots_by_key
+            ]
+        copied.dose_slots.set(selected)
     return new
 
 

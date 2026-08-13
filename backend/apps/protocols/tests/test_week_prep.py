@@ -128,15 +128,42 @@ def test_phase_adjustment_switches_protocol(user):
     assert "BetaPill" in _names(days["Thu"]["added"], "am")
 
 
-def test_custom_slot_labels(user):
-    from apps.notifications.models import ReminderSettings
-
+def test_protocol_owned_slot_labels(user):
     p = Protocol.objects.create(owner=user, name="Stack", is_active=True, started_on=MON)
     _item(p, compound=_oral(user, "Cardarine"), dose="10", times=["am"])
     _item(p, compound=_oral(user, "Melatonin"), dose="3", times=["night"])
-    ReminderSettings.objects.create(owner=user, am_label="Pre-workout")  # night left default
+    p.dose_slots.filter(key="am").update(name="Pre-workout")
 
     plan = week_prep_plan(user, MON)
     by_slot = {s["slot"]: s["slot_label"] for s in plan["everyday"]}
-    assert by_slot["am"] == "Pre-workout"   # custom label honoured
-    assert by_slot["night"] == "Night"      # blank → default
+    assert by_slot["am"] == "Pre-workout"
+    assert by_slot["night"] == "Night"
+
+
+def test_protocol_switch_keeps_distinct_relational_slot_identities(user):
+    first = Protocol.objects.create(owner=user, name="A", is_active=True, started_on=MON)
+    second = Protocol.objects.create(owner=user, name="B", is_active=False, started_on=MON)
+    first_slot = first.dose_slots.get(key="am")
+    second_slot = second.dose_slots.get(key="am")
+    first_slot.name = "With breakfast"
+    first_slot.save(update_fields=["name"])
+    second_slot.name = "Pre-workout"
+    second_slot.save(update_fields=["name"])
+    first_item = _item(first, compound=_oral(user, "AlphaPill"), times=["am"])
+    second_item = _item(second, compound=_oral(user, "BetaPill"), times=["am"])
+    first_item.dose_slots.set([first_slot])
+    second_item.dose_slots.set([second_slot])
+    phase = Phase.objects.create(
+        owner=user, name="Block", phase_type="bulk", start_date=MON, end_date=None
+    )
+    PhaseAdjustment.objects.create(
+        phase=phase, effective_date=date(2026, 1, 8), protocol=second
+    )
+
+    plan = week_prep_plan(user, MON)
+    days = {day["label"]: day for day in plan["days"]}
+    monday_slots = {slot["slot_label"] for slot in days["Mon"]["added"]}
+    thursday_slots = {slot["slot_label"] for slot in days["Thu"]["added"]}
+
+    assert monday_slots == {"With breakfast"}
+    assert thursday_slots == {"Pre-workout"}

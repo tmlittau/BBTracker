@@ -1,3 +1,4 @@
+import copy
 import uuid
 
 import pytest
@@ -6,6 +7,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.core.models import Phase, ReplicaBackup
 from apps.health.models import HealthDailyAggregate
+from apps.protocols.models import Compound, Protocol, ProtocolItem
 
 pytestmark = pytest.mark.django_db
 
@@ -60,6 +62,113 @@ def test_backup_is_idempotent_and_bootstrap_restores_it(api, user):
     assert ReplicaBackup.objects.get(owner=user).revision == 1
     assert restored.json()["source"] == "backup"
     assert restored.json()["snapshot"]["phases"][0]["name"] == "Offline"
+
+
+def test_old_app_backup_is_upgraded_with_protocol_slots(api, user):
+    compound = Compound.objects.create(name="Legacy compound")
+    protocol = Protocol.objects.create(owner=user, name="Legacy protocol")
+    item = ProtocolItem.objects.create(
+        protocol=protocol,
+        compound=compound,
+        dose_amount="10",
+        frequency="daily",
+        times_of_day=["am", "night"],
+    )
+    payload = {
+        "device_id": str(uuid.uuid4()),
+        "schema_version": 1,
+        "revision": 1,
+        "base_revision": 0,
+        "snapshot": {
+            "schema_version": 1,
+            "protocols": [
+                {
+                    "id": protocol.id,
+                    "name": protocol.name,
+                    "items": [
+                        {
+                            "id": item.id,
+                            "protocol": protocol.id,
+                            "times_of_day": ["am", "night"],
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+
+    response = api.put("/api/v1/sync/backup/", payload, format="json")
+    restored = api.get("/api/v1/sync/bootstrap/").json()["snapshot"]
+
+    assert response.status_code == 200
+    saved_protocol = restored["protocols"][0]
+    assert [slot["key"] for slot in saved_protocol["dose_slots"]] == [
+        "waking", "am", "noon", "pm", "night"
+    ]
+    ids_by_key = {slot["key"]: slot["id"] for slot in saved_protocol["dose_slots"]}
+    assert saved_protocol["items"][0]["dose_slot_ids"] == [
+        ids_by_key["am"], ids_by_key["night"]
+    ]
+
+
+def test_old_app_backup_preserves_newer_dynamic_slots(api, user):
+    protocol = Protocol.objects.create(owner=user, name="Four slots")
+    device_id = str(uuid.uuid4())
+    slots = [
+        {
+            "id": -100 - order,
+            "protocol": protocol.id,
+            "key": key,
+            "name": name,
+            "reminder_time": reminder_time,
+            "order": order,
+        }
+        for order, (key, name, reminder_time) in enumerate(
+            [
+                ("waking", "On waking", "06:30:00"),
+                ("am", "With breakfast", "08:15:00"),
+                ("pm", "With dinner", "19:00:00"),
+                ("night", "Before bed", "22:00:00"),
+            ]
+        )
+    ]
+    current = {
+        "device_id": device_id,
+        "schema_version": 1,
+        "revision": 1,
+        "base_revision": 0,
+        "snapshot": {
+            "schema_version": 1,
+            "protocols": [
+                {
+                    "id": protocol.id,
+                    "name": protocol.name,
+                    "dose_slots": slots,
+                    "items": [
+                        {
+                            "id": -200,
+                            "protocol": protocol.id,
+                            "times_of_day": ["am", "night"],
+                            "dose_slot_ids": [slots[1]["id"], slots[3]["id"]],
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    assert api.put("/api/v1/sync/backup/", current, format="json").status_code == 200
+
+    legacy = copy.deepcopy(current)
+    legacy["revision"] = 2
+    legacy["base_revision"] = 1
+    del legacy["snapshot"]["protocols"][0]["dose_slots"]
+    del legacy["snapshot"]["protocols"][0]["items"][0]["dose_slot_ids"]
+    response = api.put("/api/v1/sync/backup/", legacy, format="json")
+    restored = api.get("/api/v1/sync/bootstrap/").json()["snapshot"]["protocols"][0]
+
+    assert response.status_code == 200
+    assert restored["dose_slots"] == slots
+    assert restored["items"][0]["dose_slot_ids"] == [slots[1]["id"], slots[3]["id"]]
 
 
 def test_backup_rejects_stale_base_revision(api, user):

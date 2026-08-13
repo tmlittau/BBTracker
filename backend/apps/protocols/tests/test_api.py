@@ -1,4 +1,5 @@
 from datetime import timedelta
+from importlib import import_module
 
 import pytest
 from django.utils import timezone
@@ -12,6 +13,7 @@ from apps.protocols.models import (
     DoseLog,
     InjectionSite,
     Protocol,
+    ProtocolDoseSlot,
     ProtocolItem,
     Supplement,
 )
@@ -147,6 +149,166 @@ def test_build_protocol_and_log_dose(api, user, test_e):
         format="json",
     )
     assert dose.status_code == 201, dose.content
+
+
+def test_protocol_owns_dynamic_dose_slots_and_items_reference_ids(api, test_e):
+    created = api.post(
+        "/api/v1/protocols/protocols/", {"name": "Four-dose plan"}, format="json"
+    )
+    assert created.status_code == 201, created.content
+    protocol = created.json()
+    assert [slot["key"] for slot in protocol["dose_slots"]] == [
+        "waking", "am", "noon", "pm", "night"
+    ]
+
+    removed = protocol["dose_slots"][2]
+    assert api.delete(
+        f"/api/v1/protocols/protocol-dose-slots/{removed['id']}/"
+    ).status_code == 204
+    remaining = api.get(
+        f"/api/v1/protocols/protocols/{protocol['id']}/"
+    ).json()["dose_slots"]
+    assert len(remaining) == 4
+
+    first = remaining[0]
+    renamed = api.patch(
+        f"/api/v1/protocols/protocol-dose-slots/{first['id']}/",
+        {"name": "Breakfast", "reminder_time": "08:15"},
+        format="json",
+    )
+    assert renamed.status_code == 200, renamed.content
+    assert renamed.json()["name"] == "Breakfast"
+    assert renamed.json()["reminder_time"] == "08:15:00"
+
+    item = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {
+            "protocol": protocol["id"],
+            "compound": test_e.id,
+            "dose_amount": "25",
+            "frequency": "daily",
+            "dose_slot_ids": [slot["id"] for slot in remaining[:2]],
+        },
+        format="json",
+    )
+    assert item.status_code == 201, item.content
+    assert item.json()["dose_slot_ids"] == [slot["id"] for slot in remaining[:2]]
+    assert item.json()["times_of_day"] == [slot["key"] for slot in remaining[:2]]
+
+
+def test_legacy_times_sync_to_slots_and_slot_delete_syncs_back(api, test_e):
+    protocol = api.post(
+        "/api/v1/protocols/protocols/", {"name": "Legacy"}, format="json"
+    ).json()
+    item = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {
+            "protocol": protocol["id"],
+            "compound": test_e.id,
+            "dose_amount": "10",
+            "frequency": "daily",
+            "times_of_day": ["am", "night"],
+        },
+        format="json",
+    )
+    assert item.status_code == 201, item.content
+    by_key = {slot["key"]: slot for slot in protocol["dose_slots"]}
+    assert item.json()["dose_slot_ids"] == [by_key["am"]["id"], by_key["night"]["id"]]
+
+    assert api.delete(
+        f"/api/v1/protocols/protocol-dose-slots/{by_key['night']['id']}/"
+    ).status_code == 204
+    stored = ProtocolItem.objects.get(id=item.json()["id"])
+    assert stored.times_of_day == ["am"]
+    assert list(stored.dose_slots.values_list("key", flat=True)) == ["am"]
+
+
+def test_item_rejects_slot_from_another_protocol(api, test_e):
+    first = api.post(
+        "/api/v1/protocols/protocols/", {"name": "First"}, format="json"
+    ).json()
+    second = api.post(
+        "/api/v1/protocols/protocols/", {"name": "Second"}, format="json"
+    ).json()
+    response = api.post(
+        "/api/v1/protocols/protocol-items/",
+        {
+            "protocol": first["id"],
+            "compound": test_e.id,
+            "dose_amount": "10",
+            "dose_slot_ids": [second["dose_slots"][0]["id"]],
+        },
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "dose_slot_ids" in response.json()
+
+
+def test_duplicate_protocol_copies_slots_and_assignments(api, test_e):
+    source = api.post(
+        "/api/v1/protocols/protocols/", {"name": "Source"}, format="json"
+    ).json()
+    slot = source["dose_slots"][0]
+    api.patch(
+        f"/api/v1/protocols/protocol-dose-slots/{slot['id']}/",
+        {"name": "Pre-breakfast", "reminder_time": "07:45"},
+        format="json",
+    )
+    api.post(
+        "/api/v1/protocols/protocol-items/",
+        {
+            "protocol": source["id"],
+            "compound": test_e.id,
+            "dose_amount": "10",
+            "frequency": "daily",
+            "dose_slot_ids": [slot["id"]],
+        },
+        format="json",
+    )
+
+    copied = api.post(
+        f"/api/v1/protocols/protocols/{source['id']}/duplicate/",
+        {"name": "Copy", "is_active": False, "notes": ""},
+        format="json",
+    )
+    assert copied.status_code == 201, copied.content
+    data = copied.json()
+    assert data["dose_slots"][0]["name"] == "Pre-breakfast"
+    assert data["dose_slots"][0]["reminder_time"] == "07:45:00"
+    assert data["items"][0]["dose_slot_ids"] == [data["dose_slots"][0]["id"]]
+    assert ProtocolDoseSlot.objects.filter(protocol_id=data["id"]).count() == 5
+
+
+def test_data_migration_preserves_legacy_names_times_and_item_assignments(user, test_e):
+    from django.apps import apps
+
+    from apps.notifications.models import ReminderSettings
+
+    ReminderSettings.objects.create(
+        owner=user,
+        am="08:20",
+        am_label="With breakfast",
+        night="22:30",
+    )
+    protocol = Protocol.objects.create(owner=user, name="Existing")
+    protocol.dose_slots.all().delete()  # simulate a row before migration 0008
+    item = ProtocolItem.objects.create(
+        protocol=protocol,
+        compound=test_e,
+        dose_amount="10",
+        frequency="daily",
+        times_of_day=["am", "night"],
+    )
+
+    migration = import_module("apps.protocols.migrations.0008_protocol_dose_slots")
+    migration.migrate_protocol_slots(apps, None)
+
+    slots = {slot.key: slot for slot in protocol.dose_slots.all()}
+    assert len(slots) == 5
+    assert slots["am"].name == "With breakfast"
+    assert str(slots["am"].reminder_time) == "08:20:00"
+    assert str(slots["night"].reminder_time) == "22:30:00"
+    assert list(item.dose_slots.values_list("key", flat=True)) == ["am", "night"]
 
 
 def test_delete_own_dose_log(api, test_e):

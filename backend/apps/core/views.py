@@ -16,7 +16,12 @@ from apps.core.viewsets import OwnerScopedViewSet
 
 from .export import build_export
 from .models import Phase, PhaseAdjustment, ReplicaBackup
-from .replica import apply_replica_health, apply_replica_settings, build_replica_snapshot
+from .replica import (
+    apply_replica_health,
+    apply_replica_settings,
+    build_replica_snapshot,
+    upgrade_replica_snapshot,
+)
 from .report import ALL_SECTIONS, build_checkin_report_pdf
 from .serializers import (
     DashboardTodaySerializer,
@@ -149,7 +154,7 @@ class ReplicaBootstrapView(APIView):
                     "source": "backup",
                     "revision": backup.revision,
                     "backed_up_at": backup.updated_at,
-                    "snapshot": backup.snapshot,
+                    "snapshot": upgrade_replica_snapshot(request.user, backup.snapshot),
                 }
             )
         return Response(
@@ -177,7 +182,7 @@ class ReplicaBackupView(APIView):
                 "schema_version": backup.schema_version,
                 "revision": backup.revision,
                 "backed_up_at": backup.updated_at,
-                "snapshot": backup.snapshot,
+                "snapshot": upgrade_replica_snapshot(request.user, backup.snapshot),
             }
         )
 
@@ -202,6 +207,11 @@ class ReplicaBackupView(APIView):
 
         backup = (
             ReplicaBackup.objects.select_for_update().filter(owner=request.user).first()
+        )
+        snapshot = upgrade_replica_snapshot(
+            request.user,
+            snapshot,
+            fallback_snapshot=backup.snapshot if backup is not None else None,
         )
         device_id = request.data["device_id"]
 

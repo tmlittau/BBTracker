@@ -8,6 +8,7 @@ from .models import (
     DoseLog,
     InjectionSite,
     Protocol,
+    ProtocolDoseSlot,
     ProtocolItem,
     Supplement,
     SupplementNutrient,
@@ -45,10 +46,15 @@ class ProtocolItemInline(admin.TabularInline):
     extra = 0
 
 
+class ProtocolDoseSlotInline(admin.TabularInline):
+    model = ProtocolDoseSlot
+    extra = 0
+
+
 @admin.register(Protocol)
 class ProtocolAdmin(admin.ModelAdmin):
     list_display = ["name", "owner", "is_active", "started_on"]
-    inlines = [ProtocolItemInline]
+    inlines = [ProtocolDoseSlotInline, ProtocolItemInline]
 
 
 @admin.register(DoseLog)
