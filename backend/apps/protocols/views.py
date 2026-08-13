@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from django.db import transaction
 from django.db.models import ProtectedError, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -11,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.coaching.access import EffectiveOwnerMixin, deny_global_write_when_acting
-from apps.core.viewsets import OwnerScopedViewSet
+from apps.core.viewsets import OwnerScopedViewSet, ReorderMixin
 
 from .models import (
     BloodMarker,
@@ -21,6 +22,7 @@ from .models import (
     DoseLog,
     InjectionSite,
     Protocol,
+    ProtocolDoseSlot,
     ProtocolItem,
     Supplement,
     Vial,
@@ -37,6 +39,7 @@ from .serializers import (
     InjectionSiteSerializer,
     MarkerTrendPointSerializer,
     PhaseDoseMatrixSerializer,
+    ProtocolDoseSlotSerializer,
     ProtocolItemSerializer,
     ProtocolReleaseSerializer,
     ProtocolSerializer,
@@ -247,7 +250,7 @@ class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Protocol.objects.filter(owner=self.effective_owner).prefetch_related(
-            "items__compound", "items__supplement"
+            "dose_slots", "items__compound", "items__supplement", "items__dose_slots"
         )
 
     def perform_create(self, serializer):
@@ -260,6 +263,28 @@ class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         protocol.is_active = True
         protocol.save(update_fields=["is_active"])
         return Response(self.get_serializer(protocol).data)
+
+    @action(detail=True, methods=["post"])
+    def duplicate(self, request, pk=None):
+        """Deep-copy a protocol, including its dynamic dose slots and assignments."""
+        from apps.coaching.services import clone_protocol
+
+        source = self.get_object()
+        incoming = self.get_serializer(data=request.data)
+        incoming.is_valid(raise_exception=True)
+        data = incoming.validated_data
+        duplicate = clone_protocol(source, self.effective_owner)
+        duplicate.name = data["name"]
+        duplicate.started_on = data.get("started_on")
+        duplicate.ended_on = data.get("ended_on")
+        duplicate.notes = data.get("notes", source.notes)
+        duplicate.is_active = data.get("is_active", False)
+        if duplicate.is_active:
+            Protocol.objects.filter(owner=self.effective_owner).exclude(pk=duplicate.pk).update(
+                is_active=False
+            )
+        duplicate.save()
+        return Response(self.get_serializer(duplicate).data, status=201)
 
     @extend_schema(
         parameters=[OpenApiParameter("window_days", int)],
@@ -316,6 +341,29 @@ class ProtocolViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
                 status=400,
             )
         return Response(phase_dose_matrix(self.effective_owner, phase, protocol))
+
+
+@extend_schema(tags=["protocols"])
+class ProtocolDoseSlotViewSet(ReorderMixin, OwnerScopedViewSet):
+    queryset = ProtocolDoseSlot.objects.all()
+    serializer_class = ProtocolDoseSlotSerializer
+    owner_path = "protocol__owner"
+    parent_checks = [("protocol", Protocol, "owner")]
+    prescription_write = True
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        protocol = Protocol.objects.select_for_update().get(pk=instance.protocol_id)
+        dose_slots = ProtocolDoseSlot.objects.select_for_update().filter(protocol=protocol)
+        if dose_slots.count() <= 1:
+            raise ValidationError("A protocol needs at least one dose time.")
+        # Keep the legacy JSON mirror truthful for older installed clients.
+        for item in instance.items.all():
+            item.times_of_day = [
+                key for key in (item.times_of_day or []) if key != instance.key
+            ]
+            item.save(update_fields=["times_of_day"])
+        instance.delete()
 
 
 @extend_schema(tags=["protocols"])

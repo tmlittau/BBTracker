@@ -1019,11 +1019,6 @@ def is_injectable_route(route: str) -> bool:
 
 # --- Week prep: daily pill-box plan (every-day baseline + per-day diffs) -------
 
-WEEK_PREP_SLOTS = ["waking", "am", "noon", "pm", "night", "anytime"]
-_SLOT_LABELS = {
-    "waking": "Waking", "am": "AM", "noon": "Noon",
-    "pm": "PM", "night": "Night", "anytime": "Anytime",
-}
 _WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 # An item joins the "every day" baseline if dosed on at least this many of the 7
 # days, so a 6/7 item shows once with a single "skip" note instead of six rows.
@@ -1083,7 +1078,9 @@ def sync_active_protocol(owner, on_date):
 def _pillbox_items(protocol):
     """Oral compounds + supplements of a protocol (injectables / PRN excluded)."""
     out = []
-    for it in protocol.items.select_related("compound", "supplement").all():
+    for it in protocol.items.select_related("compound", "supplement").prefetch_related(
+        "dose_slots"
+    ).all():
         if it.frequency in ("prn", "as_needed"):
             continue
         route = it.route or (it.compound.default_route if it.compound_id else "")
@@ -1107,18 +1104,6 @@ def _pill_entry(item):
     return f"{kind}:{ref}:{q}:{unit}", {"amount": amount, "name": name, "kind": kind}
 
 
-def _owner_slot_labels(owner):
-    """Slot display labels for an owner: their custom names over the defaults."""
-    from apps.notifications.models import DEFAULT_SLOT_LABELS, ReminderSettings
-
-    labels = dict(_SLOT_LABELS)
-    rs = ReminderSettings.objects.filter(owner=owner).first()
-    if rs:
-        for slot in DEFAULT_SLOT_LABELS:
-            labels[slot] = rs.label(slot)
-    return labels
-
-
 def week_prep_plan(owner, start_date):
     """Weekly pill-box plan for [start_date, +6 days].
 
@@ -1126,11 +1111,11 @@ def week_prep_plan(owner, start_date):
     supplements due per time-of-day slot, then factors out an "every day" baseline
     (items dosed on >= _BASELINE_MIN_DAYS of the 7 days) so each day only lists its
     deviations: `added` (extra that day) and `removed` (baseline skipped that day).
-    Slot labels honour the owner's custom names from their reminder settings.
+    Slot labels and order come from each protocol's own dose-slot configuration.
     """
     days = [start_date + timedelta(days=i) for i in range(7)]
-    labels = _owner_slot_labels(owner)
     item_cache: dict[int, list] = {}
+    slot_meta = {"anytime": {"label": "Anytime", "order": 10_000}}
 
     def items_for(proto):
         if proto is None:
@@ -1139,8 +1124,8 @@ def week_prep_plan(owner, start_date):
             item_cache[proto.id] = _pillbox_items(proto)
         return item_cache[proto.id]
 
-    # slot -> key -> {"entry": {...}, "days": set(day_index)}
-    slots: dict[str, dict] = {s: {} for s in WEEK_PREP_SLOTS}
+    # slot key -> item key -> {"entry": {...}, "days": set(day_index)}
+    slots: dict[str, dict] = {"anytime": {}}
     day_meta = []
     protocols_seen: list[str] = []
     for i, d in enumerate(days):
@@ -1152,20 +1137,42 @@ def week_prep_plan(owner, start_date):
         )
         if proto and proto.name not in protocols_seen:
             protocols_seen.append(proto.name)
+        protocol_slots = list(proto.dose_slots.all()) if proto else []
+        protocol_slots_by_key = {slot.key: slot for slot in protocol_slots}
+        for slot in protocol_slots:
+            slot_meta.setdefault(slot.key, {"label": slot.name, "order": slot.order})
+            slots.setdefault(slot.key, {})
         anchor = dose_anchor(proto)
         for it in items_for(proto):
             if not scheduled_dose_dates(it.frequency, it.days_of_week, d, d, anchor):
                 continue
             key, entry = _pill_entry(it)
-            for t in (it.times_of_day or ["anytime"]):
-                slot = t if t in slots else "anytime"
+            assigned = list(it.dose_slots.all())
+            selected_keys = []
+            for assigned_slot in assigned:
+                identity = f"dose_slot_{assigned_slot.id}"
+                slot_meta.setdefault(
+                    identity,
+                    {"label": assigned_slot.name, "order": assigned_slot.order},
+                )
+                slots.setdefault(identity, {})
+                selected_keys.append(identity)
+            if not selected_keys:
+                selected_keys = [
+                    key for key in (it.times_of_day or []) if key in protocol_slots_by_key
+                ]
+            for slot in (selected_keys or ["anytime"]):
                 bucket = slots[slot].setdefault(key, {"entry": entry, "days": set()})
                 bucket["days"].add(i)
 
     everyday = []
     added: dict[int, dict] = {i: {} for i in range(7)}
     removed: dict[int, dict] = {i: {} for i in range(7)}
-    for slot in WEEK_PREP_SLOTS:
+    ordered_slots = sorted(
+        slots,
+        key=lambda key: (slot_meta.get(key, {"order": 10_000})["order"], key),
+    )
+    for slot in ordered_slots:
         base = []
         for info in slots[slot].values():
             present, entry = info["days"], info["entry"]
@@ -1178,12 +1185,14 @@ def week_prep_plan(owner, start_date):
                 for i in present:
                     added[i].setdefault(slot, []).append(entry)
         if base:
-            everyday.append({"slot": slot, "slot_label": labels[slot], "entries": base})
+            everyday.append(
+                {"slot": slot, "slot_label": slot_meta[slot]["label"], "entries": base}
+            )
 
     def _slots(by_day):
         return [
-            {"slot": s, "slot_label": labels[s], "entries": by_day[s]}
-            for s in WEEK_PREP_SLOTS if s in by_day
+            {"slot": s, "slot_label": slot_meta[s]["label"], "entries": by_day[s]}
+            for s in ordered_slots if s in by_day
         ]
 
     days_out = [

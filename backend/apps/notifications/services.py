@@ -92,7 +92,9 @@ def ha_notify(title: str, message: str, data: dict | None = None) -> bool:
 def _active_protocol(user):
     return (
         user.protocols.filter(is_active=True)
-        .prefetch_related("items__compound", "items__supplement")
+        .prefetch_related(
+            "dose_slots", "items__compound", "items__supplement", "items__dose_slots"
+        )
         .first()
     )
 
@@ -119,22 +121,42 @@ def slot_pending_items(user, slot, on_date) -> list[str]:
     protocol = _active_protocol(user)
     if protocol is None:
         return []
+    slot_obj = slot if hasattr(slot, "protocol_id") else next(
+        (candidate for candidate in protocol.dose_slots.all() if candidate.key == slot),
+        None,
+    )
+    slot_key = slot_obj.key if slot_obj is not None else str(slot)
     pending: list[str] = []
-    cutoff = SLOT_ORDER.get(slot, 0)
+    cutoff = slot_obj.order if slot_obj is not None else SLOT_ORDER.get(slot_key, 0)
     for item in protocol.items.all():
-        times = item.times_of_day or []
-        if slot not in times or not item_scheduled_on(item, on_date):
+        assigned = list(item.dose_slots.all())
+        if assigned:
+            if slot_obj is None or all(candidate.id != slot_obj.id for candidate in assigned):
+                continue
+            expected_by_now = sum(1 for candidate in assigned if candidate.order <= cutoff)
+        else:
+            times = item.times_of_day or []
+            if slot_key not in times:
+                continue
+            expected_by_now = sum(
+                1 for key in times if SLOT_ORDER.get(key, 0) <= cutoff
+            )
+        if not item_scheduled_on(item, on_date):
             continue
-        # Doses you should have taken by this slot = item's times at/<= this slot.
-        expected_by_now = sum(1 for t in times if SLOT_ORDER.get(t, 0) <= cutoff)
+        # Doses you should have taken by this slot = assigned slots at/before it.
+        logs = DoseLog.objects.filter(
+            owner=user,
+            taken_at__date=on_date,
+        )
+        logged = logs.filter(protocol_item=item).count()
         if item.compound_id is not None:
-            logged = DoseLog.objects.filter(
-                owner=user, taken_at__date=on_date, compound_id=item.compound_id
+            logged += logs.filter(
+                protocol_item__isnull=True, compound_id=item.compound_id
             ).count()
             name = item.compound.name
         elif item.supplement_id is not None:
-            logged = DoseLog.objects.filter(
-                owner=user, taken_at__date=on_date, supplement_id=item.supplement_id
+            logged += logs.filter(
+                protocol_item__isnull=True, supplement_id=item.supplement_id
             ).count()
             name = item.supplement.name
         else:
@@ -147,19 +169,27 @@ def slot_pending_items(user, slot, on_date) -> list[str]:
 def send_slot_reminder(user, slot, on_date) -> bool:
     """Send (if anything is pending) and record the slot reminder. Records a
     dispatch row either way, so each slot fires at most once per day."""
-    from .models import ReminderDispatch, ReminderSettings
+    from .models import ReminderDispatch
 
-    pending = slot_pending_items(user, slot, on_date)
+    protocol = _active_protocol(user)
+    slot_obj = slot if hasattr(slot, "protocol_id") else (
+        next((candidate for candidate in protocol.dose_slots.all() if candidate.key == slot), None)
+        if protocol else None
+    )
+    slot_key = slot_obj.key if slot_obj is not None else str(slot)
+    pending = slot_pending_items(user, slot_obj or slot_key, on_date)
     sent = False
     if pending:
-        rs = ReminderSettings.objects.filter(owner=user).first()
-        label = rs.label(slot) if rs else SLOT_LABELS.get(slot, slot)
+        label = slot_obj.name if slot_obj is not None else SLOT_LABELS.get(slot_key, slot_key)
         sent = ha_notify(
             "Dose reminder",
             f"{label}: don't forget {', '.join(pending)}.",
         )
     ReminderDispatch.objects.get_or_create(
-        owner=user, slot=slot, sent_on=on_date, defaults={"items": ", ".join(pending)[:255]}
+        owner=user,
+        slot=slot_key,
+        sent_on=on_date,
+        defaults={"items": ", ".join(pending)[:255]},
     )
     return sent
 
@@ -216,15 +246,16 @@ def dispatch_slot_reminders(now=None) -> int:
             continue
         local = _user_local_now(user, now)
         today = local.date()
-        for slot in SLOTS:
-            slot_time = prefs.slot_time(slot)
-            if slot_time is None:
-                continue
+        protocol = _active_protocol(user)
+        if protocol is None:
+            continue
+        for slot in protocol.dose_slots.order_by("order", "id"):
+            slot_time = slot.reminder_time
             slot_dt = datetime.datetime.combine(today, slot_time, tzinfo=local.tzinfo)
             delta = (local - slot_dt).total_seconds()
             if delta < 0 or delta > SLOT_GRACE_MINUTES * 60:
                 continue  # not yet, or past the grace window
-            if ReminderDispatch.objects.filter(owner=user, slot=slot, sent_on=today).exists():
+            if ReminderDispatch.objects.filter(owner=user, slot=slot.key, sent_on=today).exists():
                 continue
             if send_slot_reminder(user, slot, today):
                 sent += 1
