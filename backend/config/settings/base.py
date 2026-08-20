@@ -2,6 +2,7 @@
 
 Environment-driven via django-environ. See .env.example at the repo root.
 """
+
 from pathlib import Path
 
 import environ
@@ -18,6 +19,12 @@ environ.Env.read_env(BASE_DIR.parent / ".env")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-insecure-change-me")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
+# USDA FoodData Central powers generic-food search. ``DEMO_KEY`` keeps local and
+# first-time deployments functional, but has deliberately low limits; production
+# should set its own free data.gov key through the environment.
+USDA_FDC_API_KEY = env("USDA_FDC_API_KEY", default="DEMO_KEY")
+USDA_FDC_API_BASE = env("USDA_FDC_API_BASE", default="https://api.nal.usda.gov/fdc/v1")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

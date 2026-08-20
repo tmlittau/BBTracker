@@ -2,6 +2,7 @@ import re
 
 from rest_framework import serializers
 
+from .enums import FoodSource
 from .models import (
     DiaryEntry,
     Food,
@@ -51,10 +52,50 @@ class FoodSerializer(serializers.ModelSerializer):
     class Meta:
         model = Food
         fields = [
-            "id", "name", "brand", "source", "barcode", "unit", "is_verified", "is_global",
-            "servings", "food_nutrients",
+            "id",
+            "name",
+            "brand",
+            "source",
+            "source_id",
+            "barcode",
+            "unit",
+            "is_verified",
+            "is_global",
+            "servings",
+            "food_nutrients",
         ]
-        read_only_fields = ["source", "is_verified", "is_global"]
+        read_only_fields = ["is_verified", "is_global"]
+
+    def validate(self, attrs):
+        """Allow USDA provenance on creation and keep it immutable afterwards.
+
+        Other provider/source values are backend-owned. A USDA source ID is
+        copied from the reviewed lookup draft when the owned snapshot is saved.
+        """
+        source = attrs.get("source")
+        if self.instance is not None:
+            if source is not None and source != self.instance.source:
+                raise serializers.ValidationError({"source": "Food provenance cannot be changed."})
+            source_id = attrs.get("source_id")
+            if source_id is not None and source_id != self.instance.source_id:
+                raise serializers.ValidationError(
+                    {"source_id": "Food provenance cannot be changed."}
+                )
+            return attrs
+
+        if source not in (None, FoodSource.CUSTOM, FoodSource.USDA):
+            raise serializers.ValidationError(
+                {"source": "New foods may only use custom or USDA provenance."}
+            )
+        source_id = attrs.get("source_id", "")
+        if source == FoodSource.USDA and not source_id:
+            raise serializers.ValidationError(
+                {"source_id": "A USDA FoodData Central ID is required."}
+            )
+        if source != FoodSource.USDA:
+            attrs["source"] = FoodSource.CUSTOM
+            attrs["source_id"] = ""
+        return attrs
 
     def create(self, validated_data):
         servings = validated_data.pop("servings", [])
@@ -91,9 +132,7 @@ class BarcodeImportSerializer(serializers.Serializer):
     def validate_barcode(self, value: str) -> str:
         code = value.strip()
         if not re.fullmatch(r"\d{6,14}", code):
-            raise serializers.ValidationError(
-                "Enter a valid 6–14 digit barcode (UPC/EAN)."
-            )
+            raise serializers.ValidationError("Enter a valid 6–14 digit barcode (UPC/EAN).")
         return code
 
 
@@ -105,6 +144,48 @@ class BarcodeDraftSerializer(serializers.Serializer):
     unit = serializers.CharField()
     barcode = serializers.CharField()
     nutrients = serializers.DictField(child=serializers.CharField())
+
+
+class GenericFoodSearchQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(min_length=2, max_length=100)
+    page = serializers.IntegerField(min_value=1, default=1)
+    page_size = serializers.IntegerField(min_value=1, max_value=25, default=20)
+
+
+class GenericFoodLookupSerializer(serializers.Serializer):
+    fdc_id = serializers.IntegerField(min_value=1)
+
+
+class GenericFoodSearchResultSerializer(serializers.Serializer):
+    fdc_id = serializers.IntegerField()
+    description = serializers.CharField()
+    data_type = serializers.CharField()
+    food_category = serializers.CharField(allow_blank=True)
+    publication_date = serializers.CharField(allow_blank=True)
+
+
+class GenericFoodSearchPageSerializer(serializers.Serializer):
+    total_hits = serializers.IntegerField()
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    results = GenericFoodSearchResultSerializer(many=True)
+
+
+class FoodDraftServingSerializer(serializers.Serializer):
+    label = serializers.CharField()
+    grams = serializers.CharField()
+    is_default = serializers.BooleanField()
+
+
+class GenericFoodDraftSerializer(BarcodeDraftSerializer):
+    source = serializers.CharField()
+    source_id = serializers.CharField()
+    source_description = serializers.CharField()
+    data_type = serializers.CharField()
+    food_category = serializers.CharField(allow_blank=True)
+    publication_date = serializers.CharField(allow_blank=True)
+    servings = FoodDraftServingSerializer(many=True)
 
 
 class MealSerializer(serializers.ModelSerializer):
@@ -121,8 +202,16 @@ class DiaryEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = DiaryEntry
         fields = [
-            "id", "date", "meal", "food", "recipe", "serving",
-            "quantity", "grams", "item_name", "unit",
+            "id",
+            "date",
+            "meal",
+            "food",
+            "recipe",
+            "serving",
+            "quantity",
+            "grams",
+            "item_name",
+            "unit",
         ]
 
     def get_item_name(self, obj) -> str:
@@ -161,8 +250,15 @@ class NutritionTargetSerializer(serializers.ModelSerializer):
     class Meta:
         model = NutritionTarget
         fields = [
-            "id", "name", "is_active", "day_type",
-            "calories", "protein_g", "carb_g", "fat_g", "fiber_g",
+            "id",
+            "name",
+            "is_active",
+            "day_type",
+            "calories",
+            "protein_g",
+            "carb_g",
+            "fat_g",
+            "fiber_g",
             "nutrient_targets",
         ]
 
@@ -211,12 +307,8 @@ class SummaryNutrientSerializer(serializers.Serializer):
     unit = serializers.CharField()
     category = serializers.CharField()
     amount = serializers.DecimalField(max_digits=12, decimal_places=3)
-    target = serializers.DecimalField(
-        max_digits=12, decimal_places=3, allow_null=True
-    )
-    target_max = serializers.DecimalField(
-        max_digits=12, decimal_places=3, allow_null=True
-    )
+    target = serializers.DecimalField(max_digits=12, decimal_places=3, allow_null=True)
+    target_max = serializers.DecimalField(max_digits=12, decimal_places=3, allow_null=True)
     percent = serializers.IntegerField(allow_null=True)
 
 
@@ -284,8 +376,17 @@ class MealPlanItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = MealPlanItem
         fields = [
-            "id", "meal", "food", "food_name", "food_brand", "food_unit",
-            "serving", "quantity", "order", "grams", "macros",
+            "id",
+            "meal",
+            "food",
+            "food_name",
+            "food_brand",
+            "food_unit",
+            "serving",
+            "quantity",
+            "order",
+            "grams",
+            "macros",
         ]
 
     def get_grams(self, obj) -> str | None:

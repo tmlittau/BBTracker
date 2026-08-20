@@ -32,6 +32,10 @@ from .serializers import (
     DailySummarySerializer,
     DiaryEntrySerializer,
     FoodSerializer,
+    GenericFoodDraftSerializer,
+    GenericFoodLookupSerializer,
+    GenericFoodSearchPageSerializer,
+    GenericFoodSearchQuerySerializer,
     MealPlanItemSerializer,
     MealPlanMealSerializer,
     MealPlanSerializer,
@@ -44,12 +48,16 @@ from .serializers import (
     RecipeSerializer,
 )
 from .services import (
+    FoodDataCentralNotFound,
+    FoodDataCentralUnavailable,
     NoNutrimentsError,
     ProductNotFound,
     UpstreamUnavailable,
     daily_summary,
     import_food_from_barcode,
     lookup_barcode_draft,
+    lookup_fdc_food_draft,
+    search_fdc_foods,
 )
 
 
@@ -88,7 +96,9 @@ class FoodViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.effective_owner, source="custom")
+        # FoodSerializer defaults manual entries to custom while allowing a
+        # USDA draft to retain its source ID as an owned snapshot after review.
+        serializer.save(owner=self.effective_owner)
 
     def perform_update(self, serializer):
         deny_global_write_when_acting(self.request, serializer.instance)
@@ -172,6 +182,53 @@ class FoodViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
             )
         return Response(draft, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        parameters=[GenericFoodSearchQuerySerializer],
+        responses=GenericFoodSearchPageSerializer,
+    )
+    @action(detail=False, methods=["get"], url_path="search_generic")
+    def search_generic(self, request):
+        """Search USDA generic foods without creating local records."""
+        serializer = GenericFoodSearchQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = search_fdc_foods(
+                query=serializer.validated_data["q"],
+                page=serializer.validated_data["page"],
+                page_size=serializer.validated_data["page_size"],
+            )
+        except FoodDataCentralUnavailable:
+            return Response(
+                {"detail": "Couldn't reach USDA FoodData Central. Try again shortly."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(result, status=status.HTTP_200_OK)
+
+    @extend_schema(request=GenericFoodLookupSerializer, responses=GenericFoodDraftSerializer)
+    @action(detail=False, methods=["post"], url_path="lookup_generic")
+    def lookup_generic(self, request):
+        """Resolve one USDA record to an editable draft without saving it."""
+        serializer = GenericFoodLookupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            draft = lookup_fdc_food_draft(serializer.validated_data["fdc_id"])
+        except FoodDataCentralNotFound:
+            return Response(
+                {"detail": "That USDA food could not be found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except NoNutrimentsError:
+            return Response(
+                {"detail": "That USDA food has no nutrition data we can import."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except FoodDataCentralUnavailable:
+            return Response(
+                {"detail": "Couldn't reach USDA FoodData Central. Try again shortly."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(draft, status=status.HTTP_200_OK)
+
 
 @extend_schema(tags=["nutrition"])
 class DiaryEntryViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
@@ -239,9 +296,7 @@ class MealViewSet(ReorderMixin, OwnerScopedViewSet):
         if prev is not None:
             for m in Meal.objects.filter(owner=request.user, date=prev).order_by("order", "id"):
                 created.append(
-                    Meal.objects.create(
-                        owner=request.user, date=target, name=m.name, order=m.order
-                    )
+                    Meal.objects.create(owner=request.user, date=target, name=m.name, order=m.order)
                 )
         return Response(MealSerializer(created, many=True).data)
 
@@ -357,8 +412,11 @@ class MealTemplateViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
             meal.entries.filter(food__isnull=False).select_related("food", "serving")
         ):
             MealTemplateItem.objects.create(
-                template=template, food=e.food, serving=e.serving,
-                quantity=e.quantity, order=order,
+                template=template,
+                food=e.food,
+                serving=e.serving,
+                quantity=e.quantity,
+                order=order,
             )
         return Response(self.get_serializer(template).data, status=status.HTTP_201_CREATED)
 
@@ -372,8 +430,12 @@ class MealTemplateViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
         created = 0
         for it in template.items.select_related("food", "serving").all():
             DiaryEntry.objects.create(
-                owner=request.user, date=meal.date, meal=meal,
-                food=it.food, serving=it.serving, quantity=it.quantity,
+                owner=request.user,
+                date=meal.date,
+                meal=meal,
+                food=it.food,
+                serving=it.serving,
+                quantity=it.quantity,
             )
             created += 1
         return Response({"created": created}, status=status.HTTP_201_CREATED)
@@ -420,8 +482,12 @@ class MealPlanViewSet(EffectiveOwnerMixin, viewsets.ModelViewSet):
             meals_created += 1
             for it in pm.items.all():
                 DiaryEntry.objects.create(
-                    owner=owner, date=day, meal=meal,
-                    food_id=it.food_id, serving_id=it.serving_id, quantity=it.quantity,
+                    owner=owner,
+                    date=day,
+                    meal=meal,
+                    food_id=it.food_id,
+                    serving_id=it.serving_id,
+                    quantity=it.quantity,
                 )
                 entries_created += 1
         return Response(

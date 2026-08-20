@@ -3,13 +3,18 @@
 Pure helpers (Decimal in/out) are unit-tested without the ORM; DB-aware wrappers
 sit at the bottom.
 """
+
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import urllib.error
 import urllib.request
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.core.cache import cache
 
 HUNDRED = Decimal("100")
@@ -112,8 +117,13 @@ def cached_nutrients():
 
         data = [
             {
-                "id": n.id, "name": n.name, "slug": n.slug, "unit": n.unit,
-                "category": n.category, "rda": n.rda, "display_order": n.display_order,
+                "id": n.id,
+                "name": n.name,
+                "slug": n.slug,
+                "unit": n.unit,
+                "category": n.category,
+                "rda": n.rda,
+                "display_order": n.display_order,
             }
             for n in Nutrient.objects.all()
         ]
@@ -135,8 +145,7 @@ def _macros_from_amounts(nutrient_amounts) -> dict[str, str]:
     stringified (energy/protein/carbohydrate/fat/fiber); missing macros → "0.0"."""
     ids = _macro_ids()
     return {
-        slug: str(_q(nutrient_amounts.get(nid, Decimal("0")), "0.1"))
-        for slug, nid in ids.items()
+        slug: str(_q(nutrient_amounts.get(nid, Decimal("0")), "0.1")) for slug, nid in ids.items()
     }
 
 
@@ -578,9 +587,7 @@ def import_food_from_barcode(user, barcode: str):
             barcode=barcode,
             is_verified=False,
         )
-        ServingSize.objects.create(
-            food=food, label="100 g", grams=Decimal("100"), is_default=True
-        )
+        ServingSize.objects.create(food=food, label="100 g", grams=Decimal("100"), is_default=True)
         _add_off_serving(food, product)
         FoodNutrient.objects.bulk_create(
             [
@@ -630,4 +637,259 @@ def lookup_barcode_draft(user, barcode: str) -> dict:
         "unit": "g",
         "barcode": barcode,
         "nutrients": {slug: str(amount) for slug, amount in mapped.items()},
+    }
+
+
+# --- USDA FoodData Central generic-food lookup -------------------------------
+
+FDC_USER_AGENT = "BBTracker/0.1 (self-hosted; generic food search)"
+FDC_TIMEOUT = 10
+FDC_SEARCH_CACHE_TTL = 6 * 60 * 60
+FDC_DETAIL_CACHE_TTL = 7 * 24 * 60 * 60
+FDC_GENERIC_DATA_TYPES = ["Foundation", "SR Legacy", "Survey (FNDDS)"]
+
+
+class FoodDataCentralError(Exception):
+    """Base class for USDA FoodData Central failures."""
+
+
+class FoodDataCentralNotFound(FoodDataCentralError):
+    """The requested FDC food record does not exist."""
+
+
+class FoodDataCentralUnavailable(FoodDataCentralError):
+    """FoodData Central could not satisfy the request right now."""
+
+
+# USDA nutrient number -> canonical BBTracker nutrient slug. Nutrient numbers
+# are considerably more stable than display names. Vitamin D intentionally uses
+# the microgram record (328), not the parallel International Units record (324).
+FDC_NUTRIENT_MAP: dict[str, str] = {
+    "208": "energy",
+    "203": "protein",
+    "205": "carbohydrate",
+    "204": "fat",
+    "606": "saturated_fat",
+    "291": "fiber",
+    "269": "sugar",
+    "262": "caffeine",
+    "320": "vitamin_a",
+    "401": "vitamin_c",
+    "328": "vitamin_d",
+    "323": "vitamin_e",
+    "430": "vitamin_k",
+    "404": "thiamin",
+    "405": "riboflavin",
+    "406": "niacin",
+    "415": "vitamin_b6",
+    "435": "folate",
+    "418": "vitamin_b12",
+    "301": "calcium",
+    "303": "iron",
+    "304": "magnesium",
+    "305": "phosphorus",
+    "306": "potassium",
+    "307": "sodium",
+    "309": "zinc",
+    "317": "selenium",
+}
+
+
+def _fdc_request(path: str, *, body: dict | None = None) -> dict:
+    """Fetch and decode one FDC response without exposing the API key to clients."""
+    base = settings.USDA_FDC_API_BASE.rstrip("/")
+    query = urlencode({"api_key": settings.USDA_FDC_API_KEY})
+    url = f"{base}/{path.lstrip('/')}?{query}"
+    data = json.dumps(body).encode() if body is not None else None
+    headers = {"Accept": "application/json", "User-Agent": FDC_USER_AGENT}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(
+        url, data=data, headers=headers, method="POST" if data is not None else "GET"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=FDC_TIMEOUT) as response:
+            payload = json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise FoodDataCentralNotFound("FoodData Central record not found.") from exc
+        if exc.code == 429:
+            raise FoodDataCentralUnavailable(
+                "FoodData Central request limit reached. Try again shortly."
+            ) from exc
+        raise FoodDataCentralUnavailable(f"FoodData Central returned HTTP {exc.code}.") from exc
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise FoodDataCentralUnavailable("Could not reach FoodData Central.") from exc
+    if not isinstance(payload, dict):
+        raise FoodDataCentralUnavailable("FoodData Central returned an invalid response.")
+    return payload
+
+
+def _search_cache_key(query: str, page: int, page_size: int) -> str:
+    digest = hashlib.sha256(query.casefold().encode()).hexdigest()[:24]
+    return f"fdc:search:v1:{digest}:{page}:{page_size}"
+
+
+def search_fdc_foods(query: str, page: int = 1, page_size: int = 20) -> dict:
+    """Search only FDC's generic datasets and return a stable client contract."""
+    normalized = " ".join(query.split())
+    key = _search_cache_key(normalized, page, page_size)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    payload = _fdc_request(
+        "foods/search",
+        body={
+            "query": normalized,
+            "dataType": FDC_GENERIC_DATA_TYPES,
+            "pageNumber": page,
+            "pageSize": page_size,
+        },
+    )
+    total_hits = int(payload.get("totalHits") or 0)
+    results = []
+    for food in payload.get("foods") or []:
+        try:
+            fdc_id = int(food["fdcId"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        results.append(
+            {
+                "fdc_id": fdc_id,
+                "description": str(food.get("description") or "Unnamed food"),
+                "data_type": str(food.get("dataType") or ""),
+                "food_category": str(food.get("foodCategory") or ""),
+                "publication_date": str(food.get("publicationDate") or ""),
+            }
+        )
+    result = {
+        "total_hits": total_hits,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": math.ceil(total_hits / page_size) if total_hits else 0,
+        "results": results,
+    }
+    cache.set(key, result, FDC_SEARCH_CACHE_TTL)
+    return result
+
+
+def _normalise_unit(unit: str) -> str:
+    value = unit.strip().casefold().replace("μ", "µ")
+    return {"ug": "mcg", "µg": "mcg", "kcal": "kcal"}.get(value, value)
+
+
+def _convert_nutrient_unit(amount, from_unit: str, to_unit: str) -> Decimal | None:
+    """Convert FDC g/mg/µg/kcal values to the app's canonical unit."""
+    source = _normalise_unit(from_unit)
+    target = _normalise_unit(to_unit)
+    try:
+        value = Decimal(str(amount))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if source == target:
+        return _q(value, "0.0001")
+    mass_in_grams = {
+        "g": Decimal("1"),
+        "mg": Decimal("0.001"),
+        "mcg": Decimal("0.000001"),
+    }
+    if source not in mass_in_grams or target not in mass_in_grams:
+        return None
+    converted = value * mass_in_grams[source] / mass_in_grams[target]
+    return _q(converted, "0.0001")
+
+
+def map_fdc_nutrients(
+    food_nutrients: list[dict], units_by_slug: dict[str, str]
+) -> dict[str, Decimal]:
+    """Map present FDC nutrients; absent values stay absent rather than becoming zero."""
+    mapped: dict[str, Decimal] = {}
+    for row in food_nutrients:
+        nutrient = row.get("nutrient") or {}
+        slug = FDC_NUTRIENT_MAP.get(str(nutrient.get("number") or ""))
+        if not slug or slug in mapped or slug not in units_by_slug:
+            continue
+        amount = row.get("amount")
+        if amount is None:
+            continue
+        converted = _convert_nutrient_unit(
+            amount, str(nutrient.get("unitName") or ""), units_by_slug[slug]
+        )
+        if converted is not None:
+            mapped[slug] = converted
+    return mapped
+
+
+def _fdc_servings(food: dict) -> list[dict]:
+    servings = [{"label": "100 g", "grams": "100", "is_default": True}]
+    seen = {("100 g", Decimal("100"))}
+    for portion in food.get("foodPortions") or []:
+        try:
+            grams = _q(Decimal(str(portion.get("gramWeight"))), "0.01")
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+        if grams <= 0:
+            continue
+        description = (
+            portion.get("portionDescription")
+            or portion.get("modifier")
+            or (portion.get("measureUnit") or {}).get("name")
+            or "serving"
+        )
+        try:
+            amount = Decimal(str(portion.get("amount") or 1))
+        except (InvalidOperation, TypeError, ValueError):
+            amount = Decimal("1")
+        amount_text = "" if amount == 1 else f"{amount.normalize()} "
+        label = f"{amount_text}{str(description).strip()}"[:80]
+        identity = (label.casefold(), grams)
+        if not label or identity in seen:
+            continue
+        seen.add(identity)
+        servings.append({"label": label, "grams": str(grams), "is_default": False})
+    return servings[:12]
+
+
+def lookup_fdc_food_draft(fdc_id: int) -> dict:
+    """Return an editable per-100 g draft for one FDC record without persisting it."""
+    from .models import Nutrient
+
+    key = f"fdc:detail:v1:{fdc_id}"
+    food = cache.get(key)
+    if food is None:
+        food = _fdc_request(f"food/{fdc_id}")
+        cache.set(key, food, FDC_DETAIL_CACHE_TTL)
+    if not food.get("fdcId"):
+        raise FoodDataCentralNotFound("FoodData Central record not found.")
+
+    nutrients = {n.slug: n for n in Nutrient.objects.all()}
+    units_by_slug = {slug: nutrient.unit for slug, nutrient in nutrients.items()}
+    mapped = map_fdc_nutrients(food.get("foodNutrients") or [], units_by_slug)
+    if not (mapped.keys() & REQUIRED_ANY):
+        raise NoNutrimentsError("That USDA food has no usable nutrition data.")
+
+    data_type = str(food.get("dataType") or "")
+    publication_date = str(food.get("publicationDate") or "")
+    description_parts = ["USDA FoodData Central"]
+    if data_type:
+        description_parts.append(data_type)
+    if publication_date:
+        description_parts.append(f"published {publication_date}")
+    category = food.get("foodCategory") or ""
+    if isinstance(category, dict):
+        category = category.get("description") or ""
+    return {
+        "name": str(food.get("description") or f"USDA food {fdc_id}")[:160],
+        "brand": "",
+        "unit": "g",
+        "barcode": "",
+        "nutrients": {slug: str(amount) for slug, amount in mapped.items()},
+        "source": "usda",
+        "source_id": str(fdc_id),
+        "source_description": " · ".join(description_parts),
+        "data_type": data_type,
+        "food_category": str(category),
+        "publication_date": publication_date,
+        "servings": _fdc_servings(food),
     }
